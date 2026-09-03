@@ -1,0 +1,8 @@
+{
+  "name": "Dapodik Kemendikbudristek",
+  "description": "Sistem Data Pokok Pendidikan Terintegrasi dengan sinkronisasi Google Sheets real-time, manajemen Data Siswa, PTK, Sarpras, Rapor, dan Laporan.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
