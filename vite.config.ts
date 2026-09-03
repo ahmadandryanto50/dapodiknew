@@ -11,12 +11,12 @@ export default defineConfig(() => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['favicon.ico', 'icon.svg', 'apple-touch-icon.png'],
+        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png', 'logo_smpn11palu.jpg'],
         manifest: {
           id: '/',
-          name: 'Dapodik Kemendikbudristek',
-          short_name: 'Dapodik',
-          description: 'Sistem Data Pokok Pendidikan Terintegrasi dengan sinkronisasi Google Sheets real-time, manajemen Data Siswa, PTK, Sarpras, Rapor, dan Laporan.',
+          name: 'Dapodik SMPN 11 Palu',
+          short_name: 'Dapodik 11',
+          description: 'Sistem Data Pokok Pendidikan SMP Negeri 11 Palu terintegrasi dengan Google Sheets real-time.',
           theme_color: '#0284c7',
           background_color: '#0f172a',
           display: 'standalone',
@@ -24,15 +24,21 @@ export default defineConfig(() => {
           scope: '/',
           icons: [
             {
-              src: '/icon.svg',
-              sizes: '192x192 512x512',
-              type: 'image/svg+xml',
+              src: '/pwa-192x192.png',
+              sizes: '192x192',
+              type: 'image/png',
               purpose: 'any'
             },
             {
-              src: '/icon.svg',
-              sizes: '192x192 512x512',
-              type: 'image/svg+xml',
+              src: '/pwa-512x512.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'any'
+            },
+            {
+              src: '/pwa-maskable-512x512.png',
+              sizes: '512x512',
+              type: 'image/png',
               purpose: 'maskable'
             }
           ]

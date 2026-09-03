@@ -472,11 +472,42 @@ export default function App() {
       
       if (pengaturan && pengaturan.length > 0) {
         const configMap: any = {};
+        const profileMap: any = {};
         pengaturan.forEach((item: any) => {
-          if (item.key) configMap[item.key] = item.value;
+          if (item.key) {
+            configMap[item.key] = item.value;
+            profileMap[item.key] = item.value;
+          }
         });
         if (Object.keys(configMap).length > 0) {
-          setDisplayConfig(prev => ({ ...prev, ...configMap }));
+          setDisplayConfig(prev => {
+            const merged = { ...prev };
+            Object.keys(configMap).forEach(key => {
+              if ((key === 'logoCustomUrl' || key === 'welcomeCustomIconUrl' || key === 'operatorAvatarUrl') && !configMap[key]) {
+                return;
+              }
+              if (key in merged || ['appName', 'appVersion', 'appSubtitle', 'logoCustomUrl', 'welcomeGreeting', 'welcomeTitle', 'welcomeSubtitle', 'welcomeIconType', 'welcomeCustomIconUrl', 'curriculumBadge', 'curriculumBadgeIcon', 'footerVersionText', 'operatorTitle', 'operatorName', 'operatorAvatarUrl'].includes(key)) {
+                (merged as any)[key] = configMap[key];
+              }
+            });
+            return merged;
+          });
+
+          setSchoolProfile(prev => {
+            const merged = { ...prev };
+            if (configMap.logoCustomUrl || configMap.logoSekolah) {
+              merged.logoSekolah = configMap.logoCustomUrl || configMap.logoSekolah;
+            }
+            if (configMap.operatorName || configMap.operatorSekolah) {
+              merged.operatorSekolah = configMap.operatorName || configMap.operatorSekolah;
+            }
+            Object.keys(profileMap).forEach(key => {
+              if (key in merged) {
+                (merged as any)[key] = profileMap[key];
+              }
+            });
+            return sanitizeSchoolProfileDates(merged);
+          });
         }
       }
 
@@ -617,8 +648,12 @@ export default function App() {
             
             if (pengaturan && pengaturan.length > 0) {
               const configMap: any = {};
+              const profileMap: any = {};
               pengaturan.forEach((item: any) => {
-                if (item.key) configMap[item.key] = item.value;
+                if (item.key) {
+                  configMap[item.key] = item.value;
+                  profileMap[item.key] = item.value;
+                }
               });
               if (Object.keys(configMap).length > 0) {
                 setDisplayConfig(prev => {
@@ -627,9 +662,25 @@ export default function App() {
                     if ((key === 'logoCustomUrl' || key === 'welcomeCustomIconUrl' || key === 'operatorAvatarUrl') && !configMap[key]) {
                       return;
                     }
-                    merged[key] = configMap[key];
+                    (merged as any)[key] = configMap[key];
                   });
                   return merged;
+                });
+
+                setSchoolProfile(prev => {
+                  const merged = { ...prev };
+                  if (configMap.logoCustomUrl || configMap.logoSekolah) {
+                    merged.logoSekolah = configMap.logoCustomUrl || configMap.logoSekolah;
+                  }
+                  if (configMap.operatorName || configMap.operatorSekolah) {
+                    merged.operatorSekolah = configMap.operatorName || configMap.operatorSekolah;
+                  }
+                  Object.keys(profileMap).forEach(key => {
+                    if (key in merged) {
+                      (merged as any)[key] = profileMap[key];
+                    }
+                  });
+                  return sanitizeSchoolProfileDates(merged);
                 });
               }
             }
@@ -829,7 +880,7 @@ export default function App() {
       { key: 'curriculumBadgeIcon', value: dConfig.curriculumBadgeIcon || 'check' },
       { key: 'footerVersionText', value: dConfig.footerVersionText },
       { key: 'operatorTitle', value: dConfig.operatorTitle || 'Operator Sekolah' },
-      { key: 'operatorName', value: dConfig.operatorName || sProfile.namaSekolah || '' },
+      { key: 'operatorName', value: dConfig.operatorName || sProfile.operatorSekolah || sProfile.namaSekolah || '' },
       { key: 'operatorAvatarUrl', value: dConfig.operatorAvatarUrl || '' },
       // 1. Identitas & Legalitas
       { key: 'npsn', value: sProfile.npsn || '' },
