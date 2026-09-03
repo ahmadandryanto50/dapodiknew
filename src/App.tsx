@@ -263,6 +263,7 @@ export default function App() {
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [isNotifDrawerOpen, setIsNotifDrawerOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [settingsInitialFilter, setSettingsInitialFilter] = useState<'all' | '1' | '2' | '3' | '4' | '5'>('all');
 
@@ -282,6 +283,7 @@ export default function App() {
     customAdministrators = administrators,
     customNotifications = notifications
   ) => {
+    if (!isInitialized) return;
     try {
       await fetch('/api/app-data', {
         method: 'POST',
@@ -304,6 +306,7 @@ export default function App() {
 
   // Save sync config to server so that it is shared across all browsers/devices
   const saveSyncConfigToServer = async (newConfig: SyncConfig) => {
+    if (!isInitialized) return;
     try {
       await fetch('/api/sync-config', {
         method: 'POST',
@@ -317,49 +320,58 @@ export default function App() {
 
   // Save to LocalStorage & Server Cache
   useEffect(() => {
+    if (!isInitialized) return;
     localStorage.setItem('dapodik_students', JSON.stringify(students));
     saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notifications);
-  }, [students]);
+  }, [students, isInitialized]);
 
   useEffect(() => {
+    if (!isInitialized) return;
     localStorage.setItem('dapodik_teachers', JSON.stringify(teachers));
     saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notifications);
-  }, [teachers]);
+  }, [teachers, isInitialized]);
 
   useEffect(() => {
+    if (!isInitialized) return;
     localStorage.setItem('dapodik_sarpras', JSON.stringify(sarpras));
     saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notifications);
-  }, [sarpras]);
+  }, [sarpras, isInitialized]);
 
   useEffect(() => {
+    if (!isInitialized) return;
     localStorage.setItem('dapodik_reports', JSON.stringify(reports));
     saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notifications);
-  }, [reports]);
+  }, [reports, isInitialized]);
 
   useEffect(() => {
+    if (!isInitialized) return;
     localStorage.setItem('dapodik_display_config', JSON.stringify(displayConfig));
     saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notifications);
-  }, [displayConfig]);
+  }, [displayConfig, isInitialized]);
 
   useEffect(() => {
+    if (!isInitialized) return;
     localStorage.setItem('dapodik_administrators', JSON.stringify(administrators));
     saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notifications);
-  }, [administrators]);
+  }, [administrators, isInitialized]);
 
   useEffect(() => {
+    if (!isInitialized) return;
     localStorage.setItem('dapodik_school_profile', JSON.stringify(schoolProfile));
     saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notifications);
-  }, [schoolProfile]);
+  }, [schoolProfile, isInitialized]);
 
   useEffect(() => {
+    if (!isInitialized) return;
     localStorage.setItem('dapodik_sync_config', JSON.stringify(syncConfig));
     saveSyncConfigToServer(syncConfig);
-  }, [syncConfig]);
+  }, [syncConfig, isInitialized]);
 
   useEffect(() => {
+    if (!isInitialized) return;
     localStorage.setItem('dapodik_notifications', JSON.stringify(notifications));
     saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notifications);
-  }, [notifications]);
+  }, [notifications, isInitialized]);
 
   // Auth Handlers
   const handleLogin = (user: AdminUser) => {
@@ -564,8 +576,10 @@ export default function App() {
             showToast('Sinkronisasi otomatis dari Database berhasil!');
           }
         }
+        setIsInitialized(true);
       } catch (err) {
         console.error('Error fetching shared server data:', err);
+        setIsInitialized(true);
       }
     };
     
