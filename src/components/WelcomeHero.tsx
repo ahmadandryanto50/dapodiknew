@@ -431,8 +431,6 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
 
             {/* Quick Action Buttons */}
             <div className="flex flex-wrap items-center justify-center gap-3 pt-5">
-              <PWAInstallButton variant="hero" />
-
               <button
                 id="hero-enter-siswa-btn"
                 onClick={() => onNavigate('siswa')}

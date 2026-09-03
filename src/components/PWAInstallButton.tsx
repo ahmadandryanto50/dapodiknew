@@ -100,14 +100,14 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({ variant = 'h
     <>
       <button
         onClick={handleClick}
-        className={`relative flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-extrabold text-white bg-gradient-to-r from-sky-500 via-indigo-600 to-blue-600 hover:from-sky-400 hover:to-indigo-500 shadow-md shadow-sky-500/20 active:scale-95 transition-all border border-sky-400/30 ${className}`}
+        className={`relative shrink-0 flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold text-white bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 shadow-sm shadow-sky-500/20 active:scale-95 transition-all border border-sky-400/30 whitespace-nowrap cursor-pointer ${className}`}
         title="Download & Instal Aplikasi di HP (APK)"
       >
-        <div className="relative">
-          <Download className="w-3.5 h-3.5 text-sky-200" />
-          <span className="absolute -top-1 -right-1 w-2 h-2 bg-amber-400 rounded-full animate-ping" />
+        <div className="relative shrink-0 flex items-center justify-center">
+          <Download className="w-3.5 h-3.5 text-sky-100" />
+          <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-amber-400 rounded-full animate-ping" />
         </div>
-        <span className="hidden sm:inline">Download APK / Instal HP</span>
+        <span className="hidden sm:inline">Instal APK HP</span>
         <span className="sm:hidden">Instal APK</span>
       </button>
 

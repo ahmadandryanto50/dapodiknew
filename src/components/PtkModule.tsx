@@ -638,7 +638,7 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
 
       {/* Modal Preview Impor PTK */}
       {isImportPreviewOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fadeIn">
+        <div className="fixed inset-x-0 top-16 bottom-0 z-50 flex items-start justify-center p-3 sm:p-5 pt-3 sm:pt-6 bg-slate-900/50 backdrop-blur-sm overflow-y-auto animate-fadeIn">
           <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
             <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50/80">
               <div className="flex items-center gap-3">
@@ -732,16 +732,16 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
 
       {/* Modal Detail PTK (51 Kolom Profil) */}
       {selectedPtkDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
-            <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50/80">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center font-bold text-sm">
+        <div className="fixed inset-x-0 top-16 bottom-0 z-50 flex items-start justify-center p-3 sm:p-5 pt-3 sm:pt-6 bg-slate-900/50 backdrop-blur-sm overflow-y-auto animate-fadeIn">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-2xl max-h-[85vh] sm:max-h-[82vh] overflow-hidden shadow-2xl flex flex-col">
+            <div className="p-3.5 sm:p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/80 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center font-bold text-sm shrink-0">
                   {selectedPtkDetail.nama.charAt(0)}
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-slate-900">{selectedPtkDetail.nama}</h3>
-                  <p className="text-xs text-amber-700 font-mono">
+                  <h3 className="text-sm font-bold text-slate-900">{selectedPtkDetail.nama}</h3>
+                  <p className="text-[11px] text-amber-700 font-mono">
                     NUPTK: {selectedPtkDetail.nuptk} &bull; NIP: {selectedPtkDetail.nip || '-'}
                   </p>
                 </div>
@@ -754,7 +754,7 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
               </button>
             </div>
 
-            <div className="p-5 overflow-y-auto space-y-4 text-xs text-slate-700">
+            <div className="p-4 flex-1 overflow-y-auto space-y-3.5 text-xs text-slate-700">
               {/* Seksi Kepegawaian */}
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
                 <div className="font-bold text-amber-800 flex items-center gap-2 border-b border-slate-200 pb-2">
@@ -824,19 +824,19 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
 
       {/* Modal Add/Edit */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-4xl max-h-[90vh] shadow-2xl flex flex-col overflow-hidden">
+        <div className="fixed inset-x-0 top-16 bottom-0 z-50 flex items-start justify-center p-3 sm:p-5 pt-3 sm:pt-6 bg-slate-900/50 backdrop-blur-sm overflow-y-auto animate-fadeIn">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-3xl max-h-[85vh] sm:max-h-[82vh] shadow-2xl flex flex-col overflow-hidden">
             {/* Header */}
-            <div className="flex items-center justify-between p-5 border-b border-slate-200 bg-slate-50/80 shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-600">
-                  <GraduationCap className="w-6 h-6" />
+            <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-slate-200 bg-slate-50/80 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-600 shrink-0">
+                  <GraduationCap className="w-5 h-5" />
                 </div>
                 <div>
-                  <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                     {editingTeacher ? 'Edit Data PTK' : 'Tambah Data PTK Baru'}
                   </h2>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-[11px] text-slate-500">
                     Kelola data identitas, kepegawaian, kualifikasi, keluarga, dan dokumen finansial PTK.
                   </p>
                 </div>
@@ -844,18 +844,18 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Tab Header Navigation */}
-            <div className="flex items-center gap-1 sm:gap-2 px-6 pt-3 border-b border-slate-200 bg-slate-50 overflow-x-auto text-xs whitespace-nowrap scrollbar-none shrink-0">
+            <div className="flex items-center gap-1 sm:gap-1.5 px-4 pt-2 border-b border-slate-200 bg-slate-50 overflow-x-auto text-xs whitespace-nowrap scrollbar-none shrink-0">
               <button
                 type="button"
                 onClick={() => setFormActiveTab('identitas')}
-                className={`pb-2.5 px-3 font-semibold border-b-2 transition-all shrink-0 ${
+                className={`pb-2 px-2.5 font-semibold border-b-2 transition-all shrink-0 ${
                   formActiveTab === 'identitas' ? 'border-amber-500 text-amber-700' : 'border-transparent text-slate-500 hover:text-slate-900'
                 }`}
               >
@@ -864,7 +864,7 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
               <button
                 type="button"
                 onClick={() => setFormActiveTab('kepegawaian')}
-                className={`pb-2.5 px-3 font-semibold border-b-2 transition-all shrink-0 ${
+                className={`pb-2 px-2.5 font-semibold border-b-2 transition-all shrink-0 ${
                   formActiveTab === 'kepegawaian' ? 'border-amber-500 text-amber-700' : 'border-transparent text-slate-500 hover:text-slate-900'
                 }`}
               >
@@ -873,7 +873,7 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
               <button
                 type="button"
                 onClick={() => setFormActiveTab('kualifikasi')}
-                className={`pb-2.5 px-3 font-semibold border-b-2 transition-all shrink-0 ${
+                className={`pb-2 px-2.5 font-semibold border-b-2 transition-all shrink-0 ${
                   formActiveTab === 'kualifikasi' ? 'border-amber-500 text-amber-700' : 'border-transparent text-slate-500 hover:text-slate-900'
                 }`}
               >
@@ -882,7 +882,7 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
               <button
                 type="button"
                 onClick={() => setFormActiveTab('keluarga')}
-                className={`pb-2.5 px-3 font-semibold border-b-2 transition-all shrink-0 ${
+                className={`pb-2 px-2.5 font-semibold border-b-2 transition-all shrink-0 ${
                   formActiveTab === 'keluarga' ? 'border-amber-500 text-amber-700' : 'border-transparent text-slate-500 hover:text-slate-900'
                 }`}
               >
@@ -891,7 +891,7 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
               <button
                 type="button"
                 onClick={() => setFormActiveTab('finansial')}
-                className={`pb-2.5 px-3 font-semibold border-b-2 transition-all shrink-0 ${
+                className={`pb-2 px-2.5 font-semibold border-b-2 transition-all shrink-0 ${
                   formActiveTab === 'finansial' ? 'border-amber-500 text-amber-700' : 'border-transparent text-slate-500 hover:text-slate-900'
                 }`}
               >
@@ -900,7 +900,7 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
             </div>
 
             {/* Form Body */}
-            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4 text-xs">
+            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 space-y-3.5 text-xs">
               {/* TAB 1: Identitas & Domisili PTK */}
               {formActiveTab === 'identitas' && (
                 <div className="space-y-4">
@@ -1573,7 +1573,7 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
 
       {/* Modal Konfirmasi Hapus PTK */}
       {deletingPtk && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fadeIn">
+        <div className="fixed inset-x-0 top-16 bottom-0 z-50 flex items-start justify-center p-3 sm:p-5 pt-8 bg-slate-900/50 backdrop-blur-sm overflow-y-auto animate-fadeIn">
           <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl p-6 text-center space-y-4">
             <div className="w-14 h-14 rounded-full bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center mx-auto">
               <Trash2 className="w-7 h-7" />

@@ -38,7 +38,6 @@ import { AplikasiModule } from './components/AplikasiModule';
 import { GoogleSheetModal } from './components/GoogleSheetModal';
 import { QuickSearchModal } from './components/QuickSearchModal';
 import { NotificationDrawer } from './components/NotificationDrawer';
-import { PWAInstallButton } from './components/PWAInstallButton';
 import { SafeImage } from './components/SafeImage';
 import { formatDateIndonesian } from './utils/dateUtils';
 import { 
@@ -1533,8 +1532,6 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2.5">
-            <PWAInstallButton />
-            
             <button
               onClick={() => {
                 if (currentUser?.role === 'Administrator' || currentUser?.role === 'Operator') {
@@ -1870,9 +1867,6 @@ export default function App() {
           </div>
         </div>
       )}
-
-      {/* Floating Mobile PWA Install Banner */}
-      <PWAInstallButton variant="floating" />
 
     </div>
   );

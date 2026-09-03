@@ -1069,7 +1069,7 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
 
       {/* Modal Import Preview */}
       {isImportPreviewOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
+        <div className="fixed inset-x-0 top-16 bottom-0 z-50 flex items-start justify-center p-3 sm:p-5 pt-3 sm:pt-6 bg-slate-900/50 backdrop-blur-sm overflow-y-auto">
           <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
             <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50/80">
               <div className="flex items-center gap-3">
@@ -1171,34 +1171,34 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
 
       {/* Modal Detail Student (66 Kolom Dapodik) */}
       {selectedStudentForDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
-          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
-            <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50/80">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-xl bg-sky-100 border border-sky-200 flex items-center justify-center font-extrabold text-sky-700 text-lg">
+        <div className="fixed inset-x-0 top-16 bottom-0 z-50 flex items-start justify-center p-3 sm:p-5 pt-3 sm:pt-6 bg-slate-900/50 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-3xl max-h-[85vh] sm:max-h-[82vh] overflow-hidden shadow-2xl flex flex-col">
+            <div className="p-3.5 sm:p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/80 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-lg bg-sky-100 border border-sky-200 flex items-center justify-center font-extrabold text-sky-700 text-base shrink-0">
                   {String(selectedStudentForDetail.nama || '').charAt(0) || '?'}
                 </div>
                 <div>
-                  <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                     <span>{selectedStudentForDetail.nama}</span>
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-800 border border-sky-200">
                       {selectedStudentForDetail.rombel}
                     </span>
                   </h2>
-                  <p className="text-xs text-slate-500 font-mono">
+                  <p className="text-[11px] text-slate-500 font-mono">
                     NISN: <span className="text-sky-700 font-bold">{selectedStudentForDetail.nisn}</span> &bull; NIK: {selectedStudentForDetail.nik} &bull; NIS: {selectedStudentForDetail.nis || '-'}
                   </p>
                 </div>
               </div>
               <button 
                 onClick={() => setSelectedStudentForDetail(null)}
-                className="text-slate-400 hover:text-slate-700 p-2 rounded-lg"
+                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-6 flex-1 overflow-y-auto space-y-6 text-xs text-slate-700">
+            <div className="p-4 flex-1 overflow-y-auto space-y-4 text-xs text-slate-700">
               {/* Grid 1: Biodata & Alamat */}
               <div className="space-y-3">
                 <h3 className="font-bold text-sm text-sky-800 flex items-center gap-2 border-b border-slate-200 pb-2">
@@ -1416,11 +1416,11 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
 
       {/* Modal Add / Edit Student with Full 66 Columns Tabs */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
-            <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50/70">
-              <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
-                <Users className="w-5 h-5 text-sky-600" />
+        <div className="fixed inset-x-0 top-16 bottom-0 z-50 flex items-start justify-center p-3 sm:p-5 pt-3 sm:pt-6 bg-slate-900/50 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-2xl max-h-[85vh] sm:max-h-[82vh] overflow-hidden shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-slate-100 bg-slate-50/70 shrink-0">
+              <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <Users className="w-4 h-4 text-sky-600" />
                 <span>{editingStudent ? 'Edit Data Peserta Didik (Dapodik 66 Kolom)' : 'Tambah Peserta Didik Baru (Dapodik 66 Kolom)'}</span>
               </h2>
               <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors">
@@ -1429,11 +1429,11 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
             </div>
 
             {/* Form Tabs */}
-            <div className="flex items-center border-b border-slate-200 bg-slate-50/50 px-5 pt-2 gap-2 overflow-x-auto text-xs">
+            <div className="flex items-center border-b border-slate-200 bg-slate-50/50 px-4 pt-2 gap-1.5 overflow-x-auto text-xs shrink-0">
               <button
                 type="button"
                 onClick={() => setFormActiveTab('biodata')}
-                className={`pb-2.5 px-3 font-semibold border-b-2 transition-all shrink-0 ${
+                className={`pb-2 px-2.5 font-semibold border-b-2 transition-all shrink-0 ${
                   formActiveTab === 'biodata' ? 'border-sky-600 text-sky-700 bg-white rounded-t-lg' : 'border-transparent text-slate-500 hover:text-slate-800'
                 }`}
               >
@@ -1442,7 +1442,7 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
               <button
                 type="button"
                 onClick={() => setFormActiveTab('orangtua')}
-                className={`pb-2.5 px-3 font-semibold border-b-2 transition-all shrink-0 ${
+                className={`pb-2 px-2.5 font-semibold border-b-2 transition-all shrink-0 ${
                   formActiveTab === 'orangtua' ? 'border-sky-600 text-sky-700 bg-white rounded-t-lg' : 'border-transparent text-slate-500 hover:text-slate-800'
                 }`}
               >
@@ -1451,7 +1451,7 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
               <button
                 type="button"
                 onClick={() => setFormActiveTab('bantuan')}
-                className={`pb-2.5 px-3 font-semibold border-b-2 transition-all shrink-0 ${
+                className={`pb-2 px-2.5 font-semibold border-b-2 transition-all shrink-0 ${
                   formActiveTab === 'bantuan' ? 'border-sky-600 text-sky-700 bg-white rounded-t-lg' : 'border-transparent text-slate-500 hover:text-slate-800'
                 }`}
               >
@@ -1460,7 +1460,7 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
               <button
                 type="button"
                 onClick={() => setFormActiveTab('periodik')}
-                className={`pb-2.5 px-3 font-semibold border-b-2 transition-all shrink-0 ${
+                className={`pb-2 px-2.5 font-semibold border-b-2 transition-all shrink-0 ${
                   formActiveTab === 'periodik' ? 'border-sky-600 text-sky-700 bg-white rounded-t-lg' : 'border-transparent text-slate-500 hover:text-slate-800'
                 }`}
               >
@@ -1468,7 +1468,7 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4 text-xs">
+            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 space-y-3.5 text-xs">
               {/* TAB 1: Biodata & Domisili */}
               {formActiveTab === 'biodata' && (
                 <div className="space-y-4">
@@ -2126,7 +2126,7 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
 
       {/* Modal Student Card Preview */}
       {selectedStudentForCard && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+        <div className="fixed inset-x-0 top-16 bottom-0 z-50 flex items-start justify-center p-3 sm:p-5 pt-6 bg-slate-900/50 backdrop-blur-sm overflow-y-auto">
           <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md p-6 shadow-2xl text-xs space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <h3 className="font-bold text-sm text-slate-800">Kartu Pelajar Siswa</h3>
@@ -2193,7 +2193,7 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
 
       {/* Modal Konfirmasi Hapus Siswa */}
       {deletingStudent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
+        <div className="fixed inset-x-0 top-16 bottom-0 z-50 flex items-start justify-center p-3 sm:p-5 pt-8 bg-slate-900/50 backdrop-blur-sm overflow-y-auto animate-fadeIn">
           <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl p-6 text-center space-y-4">
             <div className="w-14 h-14 rounded-full bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center mx-auto">
               <Trash2 className="w-7 h-7" />
@@ -2230,7 +2230,7 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
 
       {/* Modal Proses Siswa Keluar / Mutasi */}
       {movingStudent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+        <div className="fixed inset-x-0 top-16 bottom-0 z-50 flex items-start justify-center p-3 sm:p-5 pt-8 bg-slate-900/50 backdrop-blur-sm overflow-y-auto">
           <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
               <div className="flex items-center gap-2">
@@ -2291,7 +2291,7 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
 
       {/* Modal Proses Kelulusan Siswa (Pindah ke Alumni) */}
       {graduatingStudent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
+        <div className="fixed inset-x-0 top-16 bottom-0 z-50 flex items-start justify-center p-3 sm:p-5 pt-8 bg-slate-900/50 backdrop-blur-sm overflow-y-auto animate-fadeIn">
           <div className="bg-white border border-emerald-200 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col">
             <div className="p-5 border-b border-emerald-100 flex items-center justify-between bg-emerald-50/70">
               <div className="flex items-center gap-2.5">
