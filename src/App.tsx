@@ -242,13 +242,23 @@ export default function App() {
 
   const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => {
     const saved = localStorage.getItem('dapodik_sync_config');
-    return saved ? JSON.parse(saved) : {
-      spreadsheetUrl: '',
-      webAppUrl: '',
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.webAppUrl) {
+          return parsed;
+        }
+      } catch (e) {
+        // Fallback to hardcoded default
+      }
+    }
+    return {
+      spreadsheetUrl: '1XmLmshCOhSktRfzW8uG_8RqxlxVCQt5eUVekEFLwj_M',
+      webAppUrl: 'https://script.google.com/macros/s/AKfycbwHOEkfJ7iJVAlTKUVboM7ZHd13dX9Z6adJBH6N2UwA-LbDmTrJvxPHuBB8T4kePUmJAQ/exec',
       sheetId: '',
       autoSync: true,
       lastSynced: null,
-      status: 'disconnected',
+      status: 'connected',
       mode: 'appscript'
     };
   });
@@ -504,13 +514,28 @@ export default function App() {
   useEffect(() => {
     const fetchSharedServerData = async () => {
       try {
-        // 1. Fetch sync configuration from server
-        const configRes = await fetch('/api/sync-config');
-        const serverConfig = await configRes.json();
+        let serverConfig = null;
+        let serverData = null;
+
+        // 1. Fetch sync configuration from server (if server backend exists, e.g., in developer preview container)
+        try {
+          const configRes = await fetch('/api/sync-config');
+          if (configRes.ok && configRes.headers.get('content-type')?.includes('application/json')) {
+            serverConfig = await configRes.json();
+          }
+        } catch (e) {
+          console.log('Using pre-baked sync config defaults (Vercel/GitHub static hosting environment detected)');
+        }
         
-        // 2. Fetch data cache from server
-        const dataRes = await fetch('/api/app-data');
-        const serverData = await dataRes.json();
+        // 2. Fetch data cache from server (if server backend exists)
+        try {
+          const dataRes = await fetch('/api/app-data');
+          if (dataRes.ok && dataRes.headers.get('content-type')?.includes('application/json')) {
+            serverData = await dataRes.json();
+          }
+        } catch (e) {
+          console.log('Using cached data from Google Sheets API directly (Vercel/GitHub static hosting environment detected)');
+        }
         
         // Apply sync configuration from server if valid
         let activeConfig = syncConfig;
@@ -639,101 +664,113 @@ export default function App() {
       if (isPolling) return;
       isPolling = true;
       try {
-        const configRes = await fetch('/api/sync-config');
-        if (configRes.ok) {
-          const serverConfig = await configRes.json();
-          if (serverConfig && serverConfig.webAppUrl) {
-            setSyncConfig(prev => {
-              if (JSON.stringify(prev) !== JSON.stringify(serverConfig)) {
-                return serverConfig;
+        let serverConfig = null;
+        try {
+          const configRes = await fetch('/api/sync-config');
+          if (configRes.ok && configRes.headers.get('content-type')?.includes('application/json')) {
+            serverConfig = await configRes.json();
+          }
+        } catch (e) {
+          // Backend offline or non-existent (Vercel/GitHub Pages)
+        }
+
+        if (serverConfig && serverConfig.webAppUrl) {
+          setSyncConfig(prev => {
+            if (JSON.stringify(prev) !== JSON.stringify(serverConfig)) {
+              return serverConfig;
+            }
+            return prev;
+          });
+        }
+
+        let serverData = null;
+        try {
+          const dataRes = await fetch('/api/app-data');
+          if (dataRes.ok && dataRes.headers.get('content-type')?.includes('application/json')) {
+            serverData = await dataRes.json();
+          }
+        } catch (e) {
+          // Backend offline or non-existent
+        }
+
+        if (serverData && Object.keys(serverData).length > 0) {
+          // Compare and update only if different to prevent redundant writes or feedback loops
+          if (serverData.students) {
+            setStudents(prev => {
+              const incoming = sanitizeStudentDates(serverData.students);
+              if (JSON.stringify(prev) !== JSON.stringify(incoming)) {
+                return incoming;
               }
               return prev;
             });
           }
-        }
-
-        const dataRes = await fetch('/api/app-data');
-        if (dataRes.ok) {
-          const serverData = await dataRes.json();
-          if (serverData && Object.keys(serverData).length > 0) {
-            // Compare and update only if different to prevent redundant writes or feedback loops
-            if (serverData.students) {
-              setStudents(prev => {
-                const incoming = sanitizeStudentDates(serverData.students);
-                if (JSON.stringify(prev) !== JSON.stringify(incoming)) {
-                  return incoming;
-                }
-                return prev;
-              });
-            }
-            if (serverData.teachers) {
-              setTeachers(prev => {
-                const incoming = sanitizeTeacherDates(serverData.teachers);
-                if (JSON.stringify(prev) !== JSON.stringify(incoming)) {
-                  return incoming;
-                }
-                return prev;
-              });
-            }
-            if (serverData.sarpras) {
-              setSarpras(prev => {
-                if (JSON.stringify(prev) !== JSON.stringify(serverData.sarpras)) {
-                  return serverData.sarpras;
-                }
-                return prev;
-              });
-            }
-            if (serverData.reports) {
-              setReports(prev => {
-                const incoming = sanitizeReports(serverData.reports);
-                if (JSON.stringify(prev) !== JSON.stringify(incoming)) {
-                  return incoming;
-                }
-                return prev;
-              });
-            }
-            if (serverData.displayConfig) {
-              setDisplayConfig(prev => {
-                if (JSON.stringify(prev) !== JSON.stringify(serverData.displayConfig)) {
-                  return serverData.displayConfig;
-                }
-                return prev;
-              });
-            }
-            if (serverData.schoolProfile) {
-              setSchoolProfile(prev => {
-                const incoming = sanitizeSchoolProfileDates(serverData.schoolProfile);
-                if (JSON.stringify(prev) !== JSON.stringify(incoming)) {
-                  return incoming;
-                }
-                return prev;
-              });
-            }
-            if (serverData.administrators) {
-              setAdministrators(prev => {
-                if (JSON.stringify(prev) !== JSON.stringify(serverData.administrators)) {
-                  return serverData.administrators;
-                }
-                return prev;
-              });
-            }
-            if (serverData.notifications) {
-              setNotifications(prev => {
-                if (JSON.stringify(prev) !== JSON.stringify(serverData.notifications)) {
-                  return serverData.notifications;
-                }
-                return prev;
-              });
-            }
-            if (serverData.aplikasiLinks && Array.isArray(serverData.aplikasiLinks)) {
-              setAplikasiLinks(prev => {
-                if (JSON.stringify(prev) !== JSON.stringify(serverData.aplikasiLinks)) {
-                  localStorage.setItem('dapodik_aplikasi_links', JSON.stringify(serverData.aplikasiLinks));
-                  return serverData.aplikasiLinks;
-                }
-                return prev;
-              });
-            }
+          if (serverData.teachers) {
+            setTeachers(prev => {
+              const incoming = sanitizeTeacherDates(serverData.teachers);
+              if (JSON.stringify(prev) !== JSON.stringify(incoming)) {
+                return incoming;
+              }
+              return prev;
+            });
+          }
+          if (serverData.sarpras) {
+            setSarpras(prev => {
+              if (JSON.stringify(prev) !== JSON.stringify(serverData.sarpras)) {
+                return serverData.sarpras;
+              }
+              return prev;
+            });
+          }
+          if (serverData.reports) {
+            setReports(prev => {
+              const incoming = sanitizeReports(serverData.reports);
+              if (JSON.stringify(prev) !== JSON.stringify(incoming)) {
+                return incoming;
+              }
+              return prev;
+            });
+          }
+          if (serverData.displayConfig) {
+            setDisplayConfig(prev => {
+              if (JSON.stringify(prev) !== JSON.stringify(serverData.displayConfig)) {
+                return serverData.displayConfig;
+              }
+              return prev;
+            });
+          }
+          if (serverData.schoolProfile) {
+            setSchoolProfile(prev => {
+              const incoming = sanitizeSchoolProfileDates(serverData.schoolProfile);
+              if (JSON.stringify(prev) !== JSON.stringify(incoming)) {
+                return incoming;
+              }
+              return prev;
+            });
+          }
+          if (serverData.administrators) {
+            setAdministrators(prev => {
+              if (JSON.stringify(prev) !== JSON.stringify(serverData.administrators)) {
+                return serverData.administrators;
+              }
+              return prev;
+            });
+          }
+          if (serverData.notifications) {
+            setNotifications(prev => {
+              if (JSON.stringify(prev) !== JSON.stringify(serverData.notifications)) {
+                return serverData.notifications;
+              }
+              return prev;
+            });
+          }
+          if (serverData.aplikasiLinks && Array.isArray(serverData.aplikasiLinks)) {
+            setAplikasiLinks(prev => {
+              if (JSON.stringify(prev) !== JSON.stringify(serverData.aplikasiLinks)) {
+                localStorage.setItem('dapodik_aplikasi_links', JSON.stringify(serverData.aplikasiLinks));
+                return serverData.aplikasiLinks;
+              }
+              return prev;
+            });
           }
         }
       } catch (err) {
