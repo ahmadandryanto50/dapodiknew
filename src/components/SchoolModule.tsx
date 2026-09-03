@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { formatDateIndonesian } from '../utils/dateUtils';
+import { compressImage } from '../utils/imageCompressor';
 import { 
   School, 
   Edit3, 
@@ -792,14 +793,20 @@ export const SchoolModule: React.FC<SchoolModuleProps> = ({
                             type="file"
                             accept="image/*"
                             className="hidden"
-                            onChange={(e) => {
+                            onChange={async (e) => {
                               const file = e.target.files?.[0];
                               if (file) {
-                                const reader = new FileReader();
-                                reader.onloadend = () => {
-                                  setEditFormData({ ...editFormData, logoSekolah: reader.result as string });
-                                };
-                                reader.readAsDataURL(file);
+                                try {
+                                  const compressed = await compressImage(file);
+                                  setEditFormData({ ...editFormData, logoSekolah: compressed });
+                                } catch (err) {
+                                  console.error('Failed to compress, using fallback:', err);
+                                  const reader = new FileReader();
+                                  reader.onloadend = () => {
+                                    setEditFormData({ ...editFormData, logoSekolah: reader.result as string });
+                                  };
+                                  reader.readAsDataURL(file);
+                                }
                               }
                             }}
                           />
@@ -983,14 +990,20 @@ export const SchoolModule: React.FC<SchoolModuleProps> = ({
                               type="file"
                               accept="image/*"
                               className="hidden"
-                              onChange={(e) => {
+                              onChange={async (e) => {
                                 const file = e.target.files?.[0];
                                 if (file) {
-                                  const reader = new FileReader();
-                                  reader.onloadend = () => {
-                                    setEditFormData({ ...editFormData, fotoKepalaSekolah: reader.result as string });
-                                  };
-                                  reader.readAsDataURL(file);
+                                  try {
+                                    const compressed = await compressImage(file);
+                                    setEditFormData({ ...editFormData, fotoKepalaSekolah: compressed });
+                                  } catch (err) {
+                                    console.error('Failed to compress, using fallback:', err);
+                                    const reader = new FileReader();
+                                    reader.onloadend = () => {
+                                      setEditFormData({ ...editFormData, fotoKepalaSekolah: reader.result as string });
+                                    };
+                                    reader.readAsDataURL(file);
+                                  }
                                 }
                               }}
                             />

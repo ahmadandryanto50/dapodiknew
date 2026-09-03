@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { formatDateIndonesian } from '../utils/dateUtils';
+import { compressImage } from '../utils/imageCompressor';
 import { 
   Settings, 
   ArrowLeft, 
@@ -190,16 +191,22 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
       setTimeout(() => setIsSaved(false), 3000);
   };
 
-  // Helper for image file upload -> Base64
-  const handleFileUpload = (field: 'logoCustomUrl' | 'welcomeCustomIconUrl' | 'operatorAvatarUrl', file: File | null) => {
+  // Helper for image file upload -> Base64 with compression
+  const handleFileUpload = async (field: 'logoCustomUrl' | 'welcomeCustomIconUrl' | 'operatorAvatarUrl', file: File | null) => {
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      if (e.target?.result) {
-        setFormData(prev => ({ ...prev, [field]: e.target?.result as string }));
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      const compressed = await compressImage(file);
+      setFormData(prev => ({ ...prev, [field]: compressed }));
+    } catch (e) {
+      console.error('Failed to compress image, using fallback:', e);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        if (e.target?.result) {
+          setFormData(prev => ({ ...prev, [field]: e.target?.result as string }));
+        }
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   return (
@@ -1545,14 +1552,20 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                               type="file"
                               accept="image/*"
                               className="hidden"
-                              onChange={(e) => {
+                              onChange={async (e) => {
                                 const file = e.target.files?.[0];
                                 if (file) {
-                                  const reader = new FileReader();
-                                  reader.onloadend = () => {
-                                    setSchoolData({ ...schoolData, logoSekolah: reader.result as string });
-                                  };
-                                  reader.readAsDataURL(file);
+                                  try {
+                                    const compressed = await compressImage(file);
+                                    setSchoolData({ ...schoolData, logoSekolah: compressed });
+                                  } catch (err) {
+                                    console.error('Failed to compress, using fallback:', err);
+                                    const reader = new FileReader();
+                                    reader.onloadend = () => {
+                                      setSchoolData({ ...schoolData, logoSekolah: reader.result as string });
+                                    };
+                                    reader.readAsDataURL(file);
+                                  }
                                 }
                               }}
                             />
@@ -1957,14 +1970,20 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                               type="file"
                               accept="image/*"
                               className="hidden"
-                              onChange={(e) => {
+                              onChange={async (e) => {
                                 const file = e.target.files?.[0];
                                 if (file) {
-                                  const reader = new FileReader();
-                                  reader.onloadend = () => {
-                                    setSchoolData({ ...schoolData, fotoKepalaSekolah: reader.result as string });
-                                  };
-                                  reader.readAsDataURL(file);
+                                  try {
+                                    const compressed = await compressImage(file);
+                                    setSchoolData({ ...schoolData, fotoKepalaSekolah: compressed });
+                                  } catch (err) {
+                                    console.error('Failed to compress, using fallback:', err);
+                                    const reader = new FileReader();
+                                    reader.onloadend = () => {
+                                      setSchoolData({ ...schoolData, fotoKepalaSekolah: reader.result as string });
+                                    };
+                                    reader.readAsDataURL(file);
+                                  }
                                 }
                               }}
                             />
