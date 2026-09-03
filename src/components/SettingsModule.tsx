@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { formatDateIndonesian } from '../utils/dateUtils';
 import { compressImage } from '../utils/imageCompressor';
+import { SafeImage } from './SafeImage';
 import { 
   Settings, 
   ArrowLeft, 
@@ -897,11 +898,11 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                     <div className="flex items-center gap-3 pb-3 border-b border-white/15">
                       <div className="w-11 h-11 rounded-xl bg-white p-1.5 shadow-md flex items-center justify-center shrink-0 overflow-hidden">
                         {formData.logoCustomUrl ? (
-                          <img 
+                          <SafeImage 
                             src={formData.logoCustomUrl} 
+                            fallbackSrc="/logo_smpn11palu.jpg"
                             alt="Logo Preview" 
                             className="w-full h-full object-contain"
-                            referrerPolicy="no-referrer"
                           />
                         ) : (
                           <div className="w-8 h-8 rounded-full border-[3px] border-blue-600 border-t-amber-500 border-r-amber-500 flex items-center justify-center transform -rotate-45">
@@ -928,14 +929,20 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                     <div className="text-center space-y-2 py-3 bg-white/10 rounded-xl p-3 border border-white/15 backdrop-blur-md">
                       <div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-white to-sky-100 p-2.5 shadow-lg flex items-center justify-center text-[#0284c7] overflow-hidden border border-white/60">
                         {formData.welcomeCustomIconUrl ? (
-                          <img 
+                          <SafeImage 
                             src={formData.welcomeCustomIconUrl} 
+                            fallbackSrc="/logo_smpn11palu.jpg"
+                            fallbackNode={
+                              formData.welcomeIconType === 'graduation' ? <GraduationCap className="w-7 h-7" /> :
+                              formData.welcomeIconType === 'award' ? <Award className="w-7 h-7" /> :
+                              formData.welcomeIconType === 'book' ? <BookOpen className="w-7 h-7" /> :
+                              formData.welcomeIconType === 'star' ? <Star className="w-7 h-7 text-amber-500" /> :
+                              formData.welcomeIconType === 'shield' ? <ShieldCheck className="w-7 h-7 text-[#0284c7]" /> :
+                              formData.welcomeIconType === 'landmark' ? <Landmark className="w-7 h-7 text-[#0284c7]" /> :
+                              <School className="w-8 h-8 text-[#0284c7]" />
+                            }
                             alt="Banner Icon" 
                             className="w-full h-full object-contain"
-                            referrerPolicy="no-referrer"
-                            onError={(e) => {
-                              (e.target as HTMLElement).style.display = 'none';
-                            }}
                           />
                         ) : formData.welcomeIconType === 'graduation' ? (
                           <GraduationCap className="w-7 h-7" />
@@ -986,15 +993,19 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                     <div className="p-3 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 text-xs flex items-center gap-3">
                       <div className="w-9 h-9 rounded-lg bg-gradient-to-tr from-amber-400 to-orange-500 flex items-center justify-center font-bold text-slate-900 shadow-md overflow-hidden shrink-0">
                         {formData.operatorAvatarUrl ? (
-                          <img 
+                          <SafeImage 
                             src={formData.operatorAvatarUrl} 
+                            fallbackNode={
+                              <span className="text-[11px] font-black">
+                                {(formData.operatorTitle || 'OP').replace(/[^a-zA-Z0-9]/g, '').substring(0, 2).toUpperCase() || 'OP'}
+                              </span>
+                            }
                             alt="Operator" 
                             className="w-full h-full object-cover"
-                            referrerPolicy="no-referrer"
                           />
                         ) : (
                           <span className="text-[11px] font-black">
-                            {(formData.operatorTitle || 'OP').substring(0, 2).toUpperCase()}
+                            {(formData.operatorTitle || 'OP').replace(/[^a-zA-Z0-9]/g, '').substring(0, 2).toUpperCase() || 'OP'}
                           </span>
                         )}
                       </div>

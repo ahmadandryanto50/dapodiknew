@@ -1,130 +1,117 @@
 import React, { useState } from 'react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
-import { Smartphone, Download, X, HelpCircle, ArrowUpRight } from 'lucide-react';
+import { Smartphone, Download, Sparkles } from 'lucide-react';
+import { APKDownloadModal } from './APKDownloadModal';
 
-export const PWAInstallButton: React.FC = () => {
-  const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
-  const [showIOSGuide, setShowIOSGuide] = useState(false);
-  const [showTooltip, setShowTooltip] = useState(true);
+interface PWAInstallButtonProps {
+  variant?: 'header' | 'hero' | 'floating' | 'compact';
+  className?: string;
+}
 
-  // If already running as an installed PWA / Standalone, do not display installation option
-  if (isInstalled) {
-    return null;
-  }
+export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({ variant = 'header', className = '' }) => {
+  const { isInstallable, isInstalled, install } = usePWAInstall();
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Chromium / Android / Desktop flow
-  if (isInstallable) {
-    return (
-      <div className="relative flex items-center">
-        <button
-          onClick={install}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white shadow-lg shadow-sky-500/10 hover:shadow-sky-500/20 active:scale-95 transition-all focus:outline-none"
-          title="Instal Aplikasi di HP / Desktop"
-        >
-          <Smartphone className="w-3.5 h-3.5 animate-bounce" />
-          <span>Pasang Aplikasi</span>
-        </button>
-        
-        {showTooltip && (
-          <div className="absolute top-full mt-2 right-0 z-50 w-64 p-3 bg-slate-800 border border-slate-700 rounded-xl shadow-xl text-slate-200 text-[11px] leading-relaxed">
-            <div className="flex items-start justify-between gap-1.5">
-              <span className="font-bold text-sky-400">Instal Aplikasi di HP (APK)!</span>
-              <button onClick={() => setShowTooltip(false)} className="text-slate-400 hover:text-white">
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-            <p className="mt-1">
-              Klik tombol ini untuk memasang Dapodik langsung di HP Anda. Aplikasi otomatis terupdate saat web diperbarui!
-            </p>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // iOS Safari flow (since iOS does not support beforeinstallprompt)
-  if (isIOS) {
+  // If already installed in standalone mode, still allow opening modal if clicked, or render subtle badge
+  if (isInstalled && variant !== 'floating') {
     return (
       <>
         <button
-          onClick={() => setShowIOSGuide(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800/80 hover:bg-slate-800 border border-slate-700 text-sky-200 transition-all focus:outline-none"
+          onClick={() => setIsModalOpen(true)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 transition-all ${className}`}
+          title="Aplikasi Dapodik Terpasang"
         >
-          <Smartphone className="w-3.5 h-3.5" />
-          <span>Pasang di iOS</span>
+          <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+          <span>Aplikasi Terpasang</span>
         </button>
-
-        {showIOSGuide && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
-            <div className="w-full max-w-sm rounded-2xl bg-slate-900 border border-slate-800 p-6 shadow-2xl relative">
-              <button
-                onClick={() => setShowIOSGuide(false)}
-                className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2.5 bg-sky-500/10 text-sky-400 rounded-xl">
-                  <Smartphone className="w-6 h-6" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-extrabold text-white">Instal di iPhone / iPad</h3>
-                  <p className="text-[11px] text-slate-400">Ikuti langkah mudah di bawah ini</p>
-                </div>
-              </div>
-
-              <div className="space-y-4 text-xs text-slate-300 bg-slate-950/40 p-4 rounded-xl border border-slate-950">
-                <div className="flex gap-3">
-                  <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center bg-slate-800 rounded-full font-bold text-[10px] text-sky-400">1</span>
-                  <p className="leading-relaxed">
-                    Ketuk tombol <strong>Bagikan (Share)</strong> <span className="inline-flex items-center justify-center bg-slate-800 p-1 rounded"><ArrowUpRight className="w-3 h-3 text-sky-300" /></span> di bilah navigasi bawah Safari.
-                  </p>
-                </div>
-                <div className="flex gap-3">
-                  <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center bg-slate-800 rounded-full font-bold text-[10px] text-sky-400">2</span>
-                  <p className="leading-relaxed">
-                    Gulir ke bawah lalu ketuk pilihan <strong>Tambahkan ke Layar Utama (Add to Home Screen)</strong>.
-                  </p>
-                </div>
-                <div className="flex gap-3">
-                  <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center bg-slate-800 rounded-full font-bold text-[10px] text-sky-400">3</span>
-                  <p className="leading-relaxed">
-                    Buka aplikasi dari layar utama HP Anda. Aplikasi akan terupdate otomatis saat ada pembaruan!
-                  </p>
-                </div>
-              </div>
-
-              <button
-                onClick={() => setShowIOSGuide(false)}
-                className="mt-5 w-full py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs transition-colors"
-              >
-                Selesai
-              </button>
-            </div>
-          </div>
-        )}
+        <APKDownloadModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
       </>
     );
   }
 
-  // Fallback banner for generic desktop / unsupported browsers to show custom install instructions
+  const handleClick = async () => {
+    if (isInstallable) {
+      const res = await install();
+      if (!res) {
+        setIsModalOpen(true);
+      }
+    } else {
+      setIsModalOpen(true);
+    }
+  };
+
+  if (variant === 'hero') {
+    return (
+      <>
+        <button
+          onClick={handleClick}
+          className={`relative group inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl font-extrabold text-xs sm:text-sm text-white bg-gradient-to-r from-emerald-500 via-teal-500 to-sky-600 hover:from-emerald-400 hover:to-sky-500 shadow-lg shadow-emerald-500/25 active:scale-95 transition-all duration-200 border border-emerald-400/30 ${className}`}
+        >
+          <div className="p-1 bg-white/20 rounded-lg">
+            <Download className="w-4 h-4 text-white animate-bounce" />
+          </div>
+          <span>Download & Instal APK HP</span>
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-white/20 text-white">
+            PWA
+          </span>
+        </button>
+
+        <APKDownloadModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+      </>
+    );
+  }
+
+  if (variant === 'floating') {
+    if (isInstalled) return null;
+    return (
+      <>
+        <div className="fixed bottom-4 left-4 right-4 z-[90] md:hidden animate-slideUp">
+          <div className="p-3 bg-slate-900/95 border border-sky-500/40 rounded-2xl shadow-2xl backdrop-blur-md flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <img
+                src="/logo_smpn11palu.jpg"
+                alt="Logo Dapodik"
+                className="w-10 h-10 rounded-xl object-cover border border-sky-400/30 flex-shrink-0"
+                referrerPolicy="no-referrer"
+              />
+              <div className="overflow-hidden">
+                <p className="text-xs font-extrabold text-white truncate">Instal Aplikasi Dapodik</p>
+                <p className="text-[10px] text-sky-300 truncate">Pasang di HP tanpa Play Store</p>
+              </div>
+            </div>
+
+            <button
+              onClick={handleClick}
+              className="flex-shrink-0 px-3.5 py-2 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-extrabold text-xs rounded-xl shadow-lg active:scale-95 transition-all flex items-center gap-1.5"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Instal APK</span>
+            </button>
+          </div>
+        </div>
+
+        <APKDownloadModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+      </>
+    );
+  }
+
+  // Header default variant
   return (
-    <div className="relative group">
+    <>
       <button
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 text-slate-300 transition-all focus:outline-none"
-        title="Petunjuk Pasang Aplikasi"
+        onClick={handleClick}
+        className={`relative flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-extrabold text-white bg-gradient-to-r from-sky-500 via-indigo-600 to-blue-600 hover:from-sky-400 hover:to-indigo-500 shadow-md shadow-sky-500/20 active:scale-95 transition-all border border-sky-400/30 ${className}`}
+        title="Download & Instal Aplikasi di HP (APK)"
       >
-        <Smartphone className="w-3.5 h-3.5 text-slate-400" />
-        <span>Instal Aplikasi</span>
+        <div className="relative">
+          <Download className="w-3.5 h-3.5 text-sky-200" />
+          <span className="absolute -top-1 -right-1 w-2 h-2 bg-amber-400 rounded-full animate-ping" />
+        </div>
+        <span className="hidden sm:inline">Download APK / Instal HP</span>
+        <span className="sm:hidden">Instal APK</span>
       </button>
-      
-      <div className="absolute top-full mt-2 right-0 z-50 w-64 p-3 bg-slate-800 border border-slate-700 rounded-xl shadow-xl text-slate-200 text-[11px] leading-relaxed hidden group-hover:block">
-        <span className="font-bold text-sky-400">Cara Instal Aplikasi:</span>
-        <p className="mt-1">
-          Buka situs ini melalui browser <strong>Chrome</strong> di Android atau <strong>Safari</strong> di iOS, lalu pilih opsi <strong>Instal Aplikasi</strong> atau <strong>Add to Home Screen</strong> untuk mendapatkan versi aplikasi HP!
-        </p>
-      </div>
-    </div>
+
+      <APKDownloadModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+    </>
   );
 };

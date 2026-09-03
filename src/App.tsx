@@ -39,6 +39,7 @@ import { GoogleSheetModal } from './components/GoogleSheetModal';
 import { QuickSearchModal } from './components/QuickSearchModal';
 import { NotificationDrawer } from './components/NotificationDrawer';
 import { PWAInstallButton } from './components/PWAInstallButton';
+import { SafeImage } from './components/SafeImage';
 import { formatDateIndonesian } from './utils/dateUtils';
 import { 
   Home, 
@@ -1399,25 +1400,12 @@ export default function App() {
               className="flex items-center gap-2.5 text-left group cursor-pointer"
             >
               <div className="w-9 h-9 rounded-xl bg-white p-1 shadow-lg shadow-sky-950/20 flex items-center justify-center overflow-hidden shrink-0 border border-white/40 group-hover:scale-105 transition-transform">
-                {(displayConfig.logoCustomUrl || schoolProfile.logoSekolah) ? (
-                  <img
-                    src={displayConfig.logoCustomUrl || schoolProfile.logoSekolah}
-                    alt={displayConfig.appName ?? 'Logo'}
-                    className="w-full h-full object-contain"
-                    referrerPolicy="no-referrer"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.src = '/logo_smpn11palu.jpg';
-                    }}
-                  />
-                ) : (
-                  <img
-                    src="/logo_smpn11palu.jpg"
-                    alt={displayConfig.appName ?? 'Logo'}
-                    className="w-full h-full object-contain"
-                    referrerPolicy="no-referrer"
-                  />
-                )}
+                <SafeImage
+                  src={displayConfig.logoCustomUrl || schoolProfile.logoSekolah}
+                  fallbackSrc="/logo_smpn11palu.jpg"
+                  alt={displayConfig.appName ?? 'Logo'}
+                  className="w-full h-full object-contain"
+                />
               </div>
               <div>
                 <div className="font-extrabold text-sm text-white group-hover:text-cyan-200 transition-colors tracking-wide">
@@ -1882,6 +1870,9 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Floating Mobile PWA Install Banner */}
+      <PWAInstallButton variant="floating" />
 
     </div>
   );

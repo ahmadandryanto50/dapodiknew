@@ -1,4 +1,5 @@
 import React, { useState, useRef, useMemo } from 'react';
+import { SafeImage } from './SafeImage';
 import { 
   Users, 
   Plus, 
@@ -2140,22 +2141,12 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
               <div className="flex items-center justify-between border-b border-white/20 pb-3 mb-3">
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-lg bg-white p-1 flex items-center justify-center shadow overflow-hidden shrink-0">
-                    {(displayConfig?.logoCustomUrl || schoolProfile?.logoSekolah) ? (
-                      <img
-                        src={displayConfig?.logoCustomUrl || schoolProfile?.logoSekolah}
-                        alt="Logo"
-                        className="w-full h-full object-contain"
-                        referrerPolicy="no-referrer"
-                        onError={(e) => {
-                          const parent = (e.target as HTMLElement).parentElement;
-                          if (parent) {
-                            parent.innerHTML = '<span class="text-slate-900 font-bold text-xs">D</span>';
-                          }
-                        }}
-                      />
-                    ) : (
-                      <span className="text-slate-900 font-bold text-xs">D</span>
-                    )}
+                    <SafeImage
+                      src={displayConfig?.logoCustomUrl || schoolProfile?.logoSekolah}
+                      fallbackNode={<span className="text-slate-900 font-bold text-xs">D</span>}
+                      alt="Logo"
+                      className="w-full h-full object-contain"
+                    />
                   </div>
                   <div className="overflow-hidden">
                     <div className="font-extrabold tracking-wide text-xs truncate leading-tight">

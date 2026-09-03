@@ -35,6 +35,8 @@ import {
   Menu
 } from 'lucide-react';
 import { ActiveTab, SyncConfig, Student, TeacherStaff, SarprasItem, StudentReport, AppDisplayConfig, SchoolProfile, AdminUser } from '../types';
+import { PWAInstallButton } from './PWAInstallButton';
+import { SafeImage } from './SafeImage';
 
 interface WelcomeHeroProps {
   onNavigate: (tab: ActiveTab) => void;
@@ -218,25 +220,12 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
               className="w-11 h-11 rounded-xl bg-white p-1.5 shadow-lg shadow-sky-950/20 flex items-center justify-center overflow-hidden shrink-0 cursor-default transition-all"
               title="Logo Aplikasi"
             >
-              {(displayConfig.logoCustomUrl || schoolProfile.logoSekolah) ? (
-                <img 
-                  src={displayConfig.logoCustomUrl || schoolProfile.logoSekolah} 
-                  alt="Logo" 
-                  className="w-full h-full object-contain"
-                  referrerPolicy="no-referrer"
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.src = '/logo_smpn11palu.jpg';
-                  }}
-                />
-              ) : (
-                <img 
-                  src="/logo_smpn11palu.jpg" 
-                  alt="Logo" 
-                  className="w-full h-full object-contain"
-                  referrerPolicy="no-referrer"
-                />
-              )}
+              <SafeImage 
+                src={displayConfig.logoCustomUrl || schoolProfile.logoSekolah} 
+                fallbackSrc="/logo_smpn11palu.jpg"
+                alt="Logo" 
+                className="w-full h-full object-contain"
+              />
             </div>
             <div>
               <div className="flex items-center gap-1.5">
@@ -300,10 +289,10 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
                 title={`Keluar ke Halaman Login (${currentUser.nama})`}
               >
                 <div className="w-6 h-6 rounded-full bg-amber-400 text-slate-950 font-bold text-[10px] flex items-center justify-center shadow-sm">
-                  {currentUser.nama.substring(0, 1).toUpperCase()}
+                  {(currentUser.nama.replace(/[^a-zA-Z0-9]/g, '').substring(0, 1) || 'A').toUpperCase()}
                 </div>
-                <span className="text-xs font-bold text-white hidden lg:inline max-w-[100px] truncate">
-                  {currentUser.nama}
+                <span className="text-xs font-bold text-white hidden lg:inline max-w-[120px] truncate">
+                  {currentUser.nama.replace(/^\(|\)$/g, '')}
                 </span>
                 <LogOut className="w-3.5 h-3.5 text-sky-200 group-hover:text-rose-300 transition-colors ml-0.5" />
               </button>
@@ -393,14 +382,20 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
               >
                 <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-br from-white via-sky-50 to-sky-100 p-2.5 sm:p-3 flex items-center justify-center shadow-lg overflow-hidden border-2 border-white/80">
                   {displayConfig.welcomeCustomIconUrl ? (
-                    <img 
+                    <SafeImage 
                       src={displayConfig.welcomeCustomIconUrl} 
+                      fallbackSrc="/logo_smpn11palu.jpg"
+                      fallbackNode={
+                        displayConfig.welcomeIconType === 'graduation' ? <GraduationCap className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" /> :
+                        displayConfig.welcomeIconType === 'award' ? <Award className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" /> :
+                        displayConfig.welcomeIconType === 'book' ? <BookOpen className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" /> :
+                        displayConfig.welcomeIconType === 'star' ? <Star className="w-10 h-10 sm:w-12 sm:h-12 text-amber-500" /> :
+                        displayConfig.welcomeIconType === 'shield' ? <ShieldCheck className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" /> :
+                        displayConfig.welcomeIconType === 'landmark' ? <Landmark className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" /> :
+                        <School className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" />
+                      }
                       alt="Custom Banner Icon" 
                       className="w-full h-full object-contain rounded-full"
-                      referrerPolicy="no-referrer"
-                      onError={(e) => {
-                        (e.target as HTMLElement).style.display = 'none';
-                      }}
                     />
                   ) : displayConfig.welcomeIconType === 'graduation' ? (
                     <GraduationCap className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" />
@@ -436,6 +431,8 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
 
             {/* Quick Action Buttons */}
             <div className="flex flex-wrap items-center justify-center gap-3 pt-5">
+              <PWAInstallButton variant="hero" />
+
               <button
                 id="hero-enter-siswa-btn"
                 onClick={() => onNavigate('siswa')}
@@ -452,7 +449,7 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
                 className="px-4 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white font-semibold text-sm backdrop-blur-md border border-white/30 hover:border-white/50 transition-all flex items-center gap-2 active:scale-95 cursor-pointer"
               >
                 <RefreshCw className={`w-4 h-4 text-cyan-300 ${isSyncing ? 'animate-spin' : ''}`} />
-                <span>{isSyncing ? 'Sinkronisasi...' : 'Sinkronkan Data'}</span>
+                <span>{isSyncing ? 'Sinkronkan Data' : 'Sinkronkan Data'}</span>
               </button>
             </div>
 
@@ -499,15 +496,19 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
               <div className="flex items-center gap-3 overflow-hidden">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-400 to-orange-500 flex items-center justify-center font-bold text-slate-950 shadow-md overflow-hidden shrink-0">
                   {displayConfig.operatorAvatarUrl ? (
-                    <img 
+                    <SafeImage 
                       src={displayConfig.operatorAvatarUrl} 
+                      fallbackNode={
+                        <span className="text-xs font-black">
+                          {(displayConfig.operatorTitle ?? 'OP').replace(/[^a-zA-Z0-9]/g, '').substring(0, 2).toUpperCase() || 'OP'}
+                        </span>
+                      }
                       alt="Operator" 
                       className="w-full h-full object-cover"
-                      referrerPolicy="no-referrer"
                     />
                   ) : (
                     <span className="text-xs font-black">
-                      {(displayConfig.operatorTitle ?? 'OP').substring(0, 2).toUpperCase()}
+                      {(displayConfig.operatorTitle ?? 'OP').replace(/[^a-zA-Z0-9]/g, '').substring(0, 2).toUpperCase() || 'OP'}
                     </span>
                   )}
                 </div>

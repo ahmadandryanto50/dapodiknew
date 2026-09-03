@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { SafeImage } from './SafeImage';
 import { 
   User, 
   Lock, 
@@ -205,25 +206,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         <div className="flex items-center gap-3">
           {/* Distinct Dapodik Brand Logo (Arrow Swoosh in Rounded Shield) */}
           <div className="w-12 h-12 rounded-2xl bg-white p-1.5 shadow-xl shadow-sky-950/20 flex items-center justify-center overflow-hidden shrink-0 border border-white/40">
-            {(displayConfig.logoCustomUrl || schoolProfile?.logoSekolah) ? (
-              <img 
-                src={displayConfig.logoCustomUrl || schoolProfile?.logoSekolah} 
-                alt="Logo" 
-                className="w-full h-full object-contain"
-                referrerPolicy="no-referrer"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.src = '/logo_smpn11palu.jpg';
-                }}
-              />
-            ) : (
-              <img 
-                src="/logo_smpn11palu.jpg" 
-                alt="Logo" 
-                className="w-full h-full object-contain"
-                referrerPolicy="no-referrer"
-              />
-            )}
+            <SafeImage 
+              src={displayConfig.logoCustomUrl || schoolProfile?.logoSekolah} 
+              fallbackSrc="/logo_smpn11palu.jpg"
+              alt="Logo" 
+              className="w-full h-full object-contain"
+            />
           </div>
           <div>
             <h1 className="text-xl font-black text-white tracking-wider flex items-center gap-1.5 drop-shadow-md">

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { SafeImage } from './SafeImage';
 import { formatDateIndonesian } from '../utils/dateUtils';
 import { compressImage } from '../utils/imageCompressor';
 import { 
@@ -163,14 +164,11 @@ export const SchoolModule: React.FC<SchoolModuleProps> = ({
             <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-3xl bg-gradient-to-tr from-sky-500 via-blue-500 to-indigo-500 p-1 flex items-center justify-center shrink-0 shadow-md shadow-sky-500/20 overflow-hidden">
               <div className="w-full h-full bg-white rounded-[22px] flex items-center justify-center p-2 overflow-hidden shadow-inner">
                 {schoolProfile.logoSekolah ? (
-                  <img
+                  <SafeImage
                     src={schoolProfile.logoSekolah}
+                    fallbackNode={<Landmark className="w-10 h-10 text-sky-600" />}
                     alt={schoolProfile.namaSekolah}
                     className="w-full h-full object-contain"
-                    referrerPolicy="no-referrer"
-                    onError={(e) => {
-                      (e.target as HTMLElement).style.display = 'none';
-                    }}
                   />
                 ) : (
                   <Landmark className="w-10 h-10 text-sky-600" />
@@ -477,14 +475,15 @@ export const SchoolModule: React.FC<SchoolModuleProps> = ({
                 <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-400 to-orange-500 p-0.5 flex items-center justify-center shadow-md shrink-0 overflow-hidden">
                   <div className="w-full h-full bg-white rounded-[14px] overflow-hidden flex items-center justify-center font-extrabold text-amber-700 text-lg">
                     {schoolProfile.fotoKepalaSekolah ? (
-                      <img
+                      <SafeImage
                         src={schoolProfile.fotoKepalaSekolah}
+                        fallbackNode={
+                          <span className="font-extrabold text-amber-700 text-lg">
+                            {schoolProfile.kepalaSekolah.substring(0, 1) || 'K'}
+                          </span>
+                        }
                         alt={schoolProfile.kepalaSekolah}
                         className="w-full h-full object-cover"
-                        referrerPolicy="no-referrer"
-                        onError={(e) => {
-                          (e.target as HTMLElement).style.display = 'none';
-                        }}
                       />
                     ) : (
                       schoolProfile.kepalaSekolah.substring(0, 1) || 'K'
@@ -768,11 +767,11 @@ export const SchoolModule: React.FC<SchoolModuleProps> = ({
                     <div className="flex gap-3 items-center">
                       <div className="w-12 h-12 rounded-xl bg-white p-1 shadow-xs flex items-center justify-center shrink-0 overflow-hidden border border-slate-200">
                         {editFormData.logoSekolah ? (
-                          <img
+                          <SafeImage
                             src={editFormData.logoSekolah}
+                            fallbackNode={<Landmark className="w-6 h-6 text-slate-400" />}
                             alt="Preview Logo"
                             className="w-full h-full object-contain"
-                            referrerPolicy="no-referrer"
                           />
                         ) : (
                           <Landmark className="w-6 h-6 text-slate-400" />
@@ -958,14 +957,15 @@ export const SchoolModule: React.FC<SchoolModuleProps> = ({
                     <div className="flex items-center gap-3">
                       <div className="w-12 h-12 rounded-xl bg-white border border-slate-200 flex items-center justify-center shrink-0 overflow-hidden shadow-xs">
                         {editFormData.fotoKepalaSekolah ? (
-                          <img
+                          <SafeImage
                             src={editFormData.fotoKepalaSekolah}
+                            fallbackNode={
+                              <span className="font-bold text-amber-700 text-sm">
+                                {editFormData.kepalaSekolah.substring(0, 1) || 'K'}
+                              </span>
+                            }
                             alt="Foto"
                             className="w-full h-full object-cover"
-                            referrerPolicy="no-referrer"
-                            onError={(e) => {
-                              (e.target as HTMLElement).style.display = 'none';
-                            }}
                           />
                         ) : (
                           <span className="font-bold text-amber-700 text-sm">

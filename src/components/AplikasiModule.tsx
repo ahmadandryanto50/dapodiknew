@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { PWAInstallButton } from './PWAInstallButton';
 import { 
   Laptop, 
   Database, 
@@ -226,6 +227,34 @@ export const AplikasiModule: React.FC<AplikasiModuleProps> = ({
         <div className="flex items-center gap-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-2xl text-xs font-bold shadow-sm animate-pulse">
           <CheckCircle2 className="w-4 h-4 text-emerald-600" />
           <span>Pengaturan tautan berhasil disimpan ke lokal dan dikirim ke database cloud secara otomatis!</span>
+        </div>
+      )}
+
+      {/* PWA / APK INSTALLATION HERO BANNER */}
+      {!isSettingsMode && (
+        <div className="bg-gradient-to-r from-sky-900 via-indigo-900 to-slate-900 p-5 sm:p-6 rounded-3xl border border-sky-500/30 text-white shadow-xl flex flex-col sm:flex-row items-center justify-between gap-5 relative overflow-hidden">
+          <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-sky-500/10 rounded-full blur-2xl pointer-events-none" />
+          <div className="flex items-center gap-4 z-10">
+            <img
+              src="/logo_smpn11palu.jpg"
+              alt="Logo 3D Dapodik SMPN 11 Palu"
+              className="w-16 h-16 rounded-2xl object-cover border-2 border-white/20 shadow-lg shrink-0"
+              referrerPolicy="no-referrer"
+            />
+            <div>
+              <span className="inline-block text-[10px] uppercase font-black tracking-widest text-sky-300 bg-sky-500/20 px-2.5 py-0.5 rounded-full border border-sky-500/30 mb-1">
+                Aplikasi HP Android & iOS
+              </span>
+              <h2 className="text-base sm:text-lg font-black text-white">Instal Dapodik SMPN 11 Palu di HP</h2>
+              <p className="text-xs text-slate-300 mt-0.5">
+                Gunakan sebagai aplikasi native HP tanpa perlu download file APK dari sumber tidak dikenal.
+              </p>
+            </div>
+          </div>
+
+          <div className="z-10 w-full sm:w-auto shrink-0 flex items-center justify-center">
+            <PWAInstallButton variant="hero" />
+          </div>
         </div>
       )}
 
