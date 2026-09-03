@@ -258,6 +258,18 @@ export default function App() {
     return saved ? JSON.parse(saved) : initialNotifications;
   });
 
+  const [aplikasiLinks, setAplikasiLinks] = useState<any[]>(() => {
+    const saved = localStorage.getItem('dapodik_aplikasi_links');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        // Fallback to default in module
+      }
+    }
+    return [];
+  });
+
   // UI Modals
   const [isSheetsModalOpen, setIsSheetsModalOpen] = useState(false);
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
@@ -281,7 +293,8 @@ export default function App() {
     customDisplayConfig = displayConfig,
     customSchoolProfile = schoolProfile,
     customAdministrators = administrators,
-    customNotifications = notifications
+    customNotifications = notifications,
+    customAplikasiLinks = aplikasiLinks
   ) => {
     if (!isInitialized) return;
     try {
@@ -296,7 +309,8 @@ export default function App() {
           displayConfig: customDisplayConfig,
           schoolProfile: customSchoolProfile,
           administrators: customAdministrators,
-          notifications: customNotifications
+          notifications: customNotifications,
+          aplikasiLinks: customAplikasiLinks
         })
       });
     } catch (err) {
@@ -372,6 +386,12 @@ export default function App() {
     localStorage.setItem('dapodik_notifications', JSON.stringify(notifications));
     saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notifications);
   }, [notifications, isInitialized]);
+
+  useEffect(() => {
+    if (!isInitialized) return;
+    localStorage.setItem('dapodik_aplikasi_links', JSON.stringify(aplikasiLinks));
+    saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notifications, aplikasiLinks);
+  }, [aplikasiLinks, isInitialized]);
 
   // Auth Handlers
   const handleLogin = (user: AdminUser) => {
@@ -509,6 +529,10 @@ export default function App() {
           if (serverData.schoolProfile) setSchoolProfile(sanitizeSchoolProfileDates(serverData.schoolProfile));
           if (serverData.administrators) setAdministrators(serverData.administrators);
           if (serverData.notifications) setNotifications(serverData.notifications);
+          if (serverData.aplikasiLinks && Array.isArray(serverData.aplikasiLinks) && serverData.aplikasiLinks.length > 0) {
+            setAplikasiLinks(serverData.aplikasiLinks);
+            localStorage.setItem('dapodik_aplikasi_links', JSON.stringify(serverData.aplikasiLinks));
+          }
         }
         
         // 3. If spreadsheet is configured, automatically perform a pull to make sure everything is absolutely in sync
@@ -521,6 +545,7 @@ export default function App() {
             const { siswa, ptk, sarpras: pulledSarpras, rapor, pengaturan, administrator, profilSekolah, aplikasi } = res.data;
             
             if (Array.isArray(aplikasi) && aplikasi.length > 0) {
+              setAplikasiLinks(aplikasi);
               localStorage.setItem('dapodik_aplikasi_links', JSON.stringify(aplikasi));
             }
             
@@ -552,7 +577,16 @@ export default function App() {
                 }
               });
               if (Object.keys(profileMap).length > 0) {
-                setSchoolProfile(prev => sanitizeSchoolProfileDates({ ...prev, ...profileMap }));
+                setSchoolProfile(prev => {
+                  const merged = { ...prev };
+                  Object.keys(profileMap).forEach(key => {
+                    if ((key === 'logoSekolah' || key === 'fotoKepalaSekolah') && !profileMap[key]) {
+                      return;
+                    }
+                    merged[key] = profileMap[key];
+                  });
+                  return sanitizeSchoolProfileDates(merged);
+                });
               }
             }
             
@@ -562,7 +596,16 @@ export default function App() {
                 if (item.key) configMap[item.key] = item.value;
               });
               if (Object.keys(configMap).length > 0) {
-                setDisplayConfig(prev => ({ ...prev, ...configMap }));
+                setDisplayConfig(prev => {
+                  const merged = { ...prev };
+                  Object.keys(configMap).forEach(key => {
+                    if ((key === 'logoCustomUrl' || key === 'welcomeCustomIconUrl' || key === 'operatorAvatarUrl') && !configMap[key]) {
+                      return;
+                    }
+                    merged[key] = configMap[key];
+                  });
+                  return merged;
+                });
               }
             }
             
@@ -585,6 +628,135 @@ export default function App() {
     
     fetchSharedServerData();
   }, []);
+
+  // Synchronize data in real-time across preview, browser, and mobile tabs
+  useEffect(() => {
+    if (!isInitialized) return;
+
+    let isPolling = false;
+
+    const revalidateData = async () => {
+      if (isPolling) return;
+      isPolling = true;
+      try {
+        const configRes = await fetch('/api/sync-config');
+        if (configRes.ok) {
+          const serverConfig = await configRes.json();
+          if (serverConfig && serverConfig.webAppUrl) {
+            setSyncConfig(prev => {
+              if (JSON.stringify(prev) !== JSON.stringify(serverConfig)) {
+                return serverConfig;
+              }
+              return prev;
+            });
+          }
+        }
+
+        const dataRes = await fetch('/api/app-data');
+        if (dataRes.ok) {
+          const serverData = await dataRes.json();
+          if (serverData && Object.keys(serverData).length > 0) {
+            // Compare and update only if different to prevent redundant writes or feedback loops
+            if (serverData.students) {
+              setStudents(prev => {
+                const incoming = sanitizeStudentDates(serverData.students);
+                if (JSON.stringify(prev) !== JSON.stringify(incoming)) {
+                  return incoming;
+                }
+                return prev;
+              });
+            }
+            if (serverData.teachers) {
+              setTeachers(prev => {
+                const incoming = sanitizeTeacherDates(serverData.teachers);
+                if (JSON.stringify(prev) !== JSON.stringify(incoming)) {
+                  return incoming;
+                }
+                return prev;
+              });
+            }
+            if (serverData.sarpras) {
+              setSarpras(prev => {
+                if (JSON.stringify(prev) !== JSON.stringify(serverData.sarpras)) {
+                  return serverData.sarpras;
+                }
+                return prev;
+              });
+            }
+            if (serverData.reports) {
+              setReports(prev => {
+                const incoming = sanitizeReports(serverData.reports);
+                if (JSON.stringify(prev) !== JSON.stringify(incoming)) {
+                  return incoming;
+                }
+                return prev;
+              });
+            }
+            if (serverData.displayConfig) {
+              setDisplayConfig(prev => {
+                if (JSON.stringify(prev) !== JSON.stringify(serverData.displayConfig)) {
+                  return serverData.displayConfig;
+                }
+                return prev;
+              });
+            }
+            if (serverData.schoolProfile) {
+              setSchoolProfile(prev => {
+                const incoming = sanitizeSchoolProfileDates(serverData.schoolProfile);
+                if (JSON.stringify(prev) !== JSON.stringify(incoming)) {
+                  return incoming;
+                }
+                return prev;
+              });
+            }
+            if (serverData.administrators) {
+              setAdministrators(prev => {
+                if (JSON.stringify(prev) !== JSON.stringify(serverData.administrators)) {
+                  return serverData.administrators;
+                }
+                return prev;
+              });
+            }
+            if (serverData.notifications) {
+              setNotifications(prev => {
+                if (JSON.stringify(prev) !== JSON.stringify(serverData.notifications)) {
+                  return serverData.notifications;
+                }
+                return prev;
+              });
+            }
+            if (serverData.aplikasiLinks && Array.isArray(serverData.aplikasiLinks)) {
+              setAplikasiLinks(prev => {
+                if (JSON.stringify(prev) !== JSON.stringify(serverData.aplikasiLinks)) {
+                  localStorage.setItem('dapodik_aplikasi_links', JSON.stringify(serverData.aplikasiLinks));
+                  return serverData.aplikasiLinks;
+                }
+                return prev;
+              });
+            }
+          }
+        }
+      } catch (err) {
+        // Silently handle polling errors
+      } finally {
+        isPolling = false;
+      }
+    };
+
+    // Poll every 5 seconds for fast cross-tab and device synchronization
+    const pollInterval = setInterval(revalidateData, 5000);
+
+    // Refresh immediately on window focus
+    const handleFocus = () => {
+      revalidateData();
+    };
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      clearInterval(pollInterval);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [isInitialized]);
 
   // Keyboard shortcut ⌘K for search
   useEffect(() => {
@@ -715,10 +887,16 @@ export default function App() {
   };
 
   const buildAplikasiPayload = () => {
+    if (aplikasiLinks && aplikasiLinks.length > 0) {
+      return aplikasiLinks;
+    }
     const saved = localStorage.getItem('dapodik_aplikasi_links');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
       } catch (e) {
         // Fallback default
       }
@@ -1459,6 +1637,8 @@ export default function App() {
               onBackToHome={() => setActiveTab('home')}
               onSync={handleManualSync}
               isSyncing={isSyncing}
+              aplikasiLinks={aplikasiLinks}
+              setAplikasiLinks={setAplikasiLinks}
             />
           </div>
         )}

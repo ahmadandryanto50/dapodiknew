@@ -35,6 +35,8 @@ interface AplikasiModuleProps {
   onBackToHome: () => void;
   onSync: () => void;
   isSyncing?: boolean;
+  aplikasiLinks?: any[];
+  setAplikasiLinks?: React.Dispatch<React.SetStateAction<any[]>>;
 }
 
 // Map string icon name to Lucide Icon component
@@ -75,19 +77,34 @@ const defaultAplikasiLinks: AplikasiLink[] = [
 export const AplikasiModule: React.FC<AplikasiModuleProps> = ({
   onBackToHome,
   onSync,
-  isSyncing = false
+  isSyncing = false,
+  aplikasiLinks,
+  setAplikasiLinks
 }) => {
   const [links, setLinks] = useState<AplikasiLink[]>(() => {
+    if (aplikasiLinks && aplikasiLinks.length > 0) {
+      return aplikasiLinks;
+    }
     const saved = localStorage.getItem('dapodik_aplikasi_links');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
       } catch (e) {
-        return defaultAplikasiLinks;
+        // Fallback
       }
     }
     return defaultAplikasiLinks;
   });
+
+  // Watch for external updates (e.g., loaded from database on startup)
+  React.useEffect(() => {
+    if (aplikasiLinks && aplikasiLinks.length > 0) {
+      setLinks(aplikasiLinks);
+    }
+  }, [aplikasiLinks]);
 
   const [isSettingsMode, setIsSettingsMode] = useState(false);
   const [editLinks, setEditLinks] = useState<AplikasiLink[]>([]);
@@ -127,6 +144,9 @@ export const AplikasiModule: React.FC<AplikasiModuleProps> = ({
   const handleSaveSettings = () => {
     setLinks(editLinks);
     localStorage.setItem('dapodik_aplikasi_links', JSON.stringify(editLinks));
+    if (setAplikasiLinks) {
+      setAplikasiLinks(editLinks);
+    }
     
     // Auto sync logic
     setIsSettingsMode(false);
