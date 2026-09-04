@@ -190,7 +190,7 @@ export const initialTeachers: TeacherStaff[] = [
     nuptk: '5678901234567890',
     nama: 'Agus Setiawan, A.Md.',
     jenisKelamin: 'L',
-    statusKepegawaian: 'Honor Sekolah',
+    statusKepegawaian: 'Tenaga Honor Sekolah',
     jenisPtk: 'Tenaga Administrasi',
     mapel: 'Operator Dapodik / TU',
     pendidikanTerakhir: 'D3 Administrasi Perkantoran',

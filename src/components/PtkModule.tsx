@@ -128,6 +128,12 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
 
   const [deletingPtk, setDeletingPtk] = useState<{ id: string; name: string } | null>(null);
 
+  const totalGuru = teachers.filter(t => {
+    const j = String(t.jenisPtk || '').toLowerCase();
+    return (['Guru Mapel', 'Guru Kelas'].includes(t.jenisPtk) || j.includes('guru')) && !j.includes('kepala');
+  }).length;
+  const totalTendik = teachers.length - totalGuru;
+
   const filteredTeachers = teachers.filter(t => {
     const namaStr = String(t.nama || '');
     const nuptkStr = String(t.nuptk || '');
@@ -142,7 +148,9 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
     const matchStatus = filterStatus === 'ALL' || 
                         t.statusKepegawaian === filterStatus ||
                         (filterStatus === 'GTY' && String(t.statusKepegawaian).toUpperCase().includes('GTY')) ||
-                        (filterStatus === 'GTT' && String(t.statusKepegawaian).toUpperCase().includes('GTT'));
+                        (filterStatus === 'GTT' && String(t.statusKepegawaian).toUpperCase().includes('GTT')) ||
+                        (filterStatus === 'Tenaga Honor Sekolah' && (t.statusKepegawaian === 'Tenaga Honor Sekolah' || t.statusKepegawaian === 'Honor Sekolah')) ||
+                        (filterStatus === 'Guru Honor Sekolah' && (t.statusKepegawaian === 'Guru Honor Sekolah' || t.statusKepegawaian === 'Honor Sekolah'));
     const matchJenis = filterJenis === 'ALL' || 
                        t.jenisPtk === filterJenis ||
                        (filterJenis === 'Tenaga Kependidikan' && !['Guru Mapel', 'Guru Kelas'].includes(t.jenisPtk) && !t.jenisPtk.toLowerCase().includes('guru'));
@@ -377,13 +385,13 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-slate-900">Pendidik & Tenaga Kependidikan (PTK)</h1>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                {teachers.length} Guru & Tendik
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h1 className="text-xl font-bold text-slate-900">Pendidik & Tendik</h1>
+              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200/80 whitespace-nowrap shrink-0">
+                {totalGuru} Guru &bull; {totalTendik} Tendik (Total {teachers.length} PTK)
               </span>
             </div>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-500 mt-0.5">
               Pengelolaan biodata standar Dapodik
             </p>
           </div>
@@ -506,9 +514,11 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
             <option value="ALL">Semua Status Kepegawaian</option>
             <option value="PNS">PNS</option>
             <option value="PPPK">PPPK</option>
+            <option value="PPPK Paruh Waktu">PPPK Paruh Waktu</option>
             <option value="GTY">GTY (Tetap Yayasan)</option>
             <option value="GTT">GTT (Tidak Tetap)</option>
-            <option value="Honor Sekolah">Honor Sekolah</option>
+            <option value="Guru Honor Sekolah">Guru Honor Sekolah</option>
+            <option value="Tenaga Honor Sekolah">Tenaga Honor Sekolah</option>
           </select>
         </div>
 
@@ -1131,9 +1141,11 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
                       >
                         <option value="PNS">PNS</option>
                         <option value="PPPK">PPPK</option>
+                        <option value="PPPK Paruh Waktu">PPPK Paruh Waktu</option>
                         <option value="GTY">GTY (Tetap Yayasan)</option>
                         <option value="GTT">GTT (Tidak Tetap)</option>
-                        <option value="Honor Sekolah">Honor Sekolah</option>
+                        <option value="Guru Honor Sekolah">Guru Honor Sekolah</option>
+                        <option value="Tenaga Honor Sekolah">Tenaga Honor Sekolah</option>
                       </select>
                     </div>
 

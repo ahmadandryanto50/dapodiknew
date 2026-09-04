@@ -27,7 +27,8 @@ import {
   Info,
   ChevronDown,
   RotateCcw,
-  GraduationCap
+  GraduationCap,
+  Calendar
 } from 'lucide-react';
 import { Student } from '../types';
 import { formatDateIndonesian, formatDateForInput } from '../utils/dateUtils';
@@ -39,6 +40,17 @@ import {
   DAPODIK_STUDENT_HEADERS,
   exportStudentsToExcel
 } from '../utils/studentTemplateHelper';
+
+export const normalizeTahunLulus = (val?: any): string => {
+  if (!val) return '2025';
+  const str = String(val).trim();
+  if (!str) return '2025';
+  if (str.includes('/')) {
+    const parts = str.split('/').map(p => p.trim());
+    return parts[parts.length - 1] || parts[0] || '2025';
+  }
+  return str;
+};
 
 interface StudentModuleProps {
   students: Student[];
@@ -78,11 +90,12 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
   const [activeSubTab, setActiveSubTab] = useState<'aktif' | 'keluar' | 'alumni'>('aktif');
   const [movingStudent, setMovingStudent] = useState<Student | null>(null);
   const [graduatingStudent, setGraduatingStudent] = useState<Student | null>(null);
-  const [graduationTahunLulus, setGraduationTahunLulus] = useState<string>('2024/2025');
+  const [graduationTahunLulus, setGraduationTahunLulus] = useState<string>('2025');
   const [graduationNoSeriIjazah, setGraduationNoSeriIjazah] = useState<string>('');
   const [search, setSearch] = useState('');
   const [filterRombel, setFilterRombel] = useState('ALL');
   const [filterStatus, setFilterStatus] = useState('ALL');
+  const [filterTahunLulus, setFilterTahunLulus] = useState('ALL');
   
   // Modals
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -176,24 +189,26 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
     tahunLulus: ''
   });
 
+  const safeStudents = useMemo(() => Array.isArray(students) ? students : [], [students]);
+  const safeStudentsKeluar = useMemo(() => Array.isArray(studentsKeluar) ? studentsKeluar : [], [studentsKeluar]);
+  const safeAlumni = useMemo(() => Array.isArray(alumni) ? alumni : [], [alumni]);
+
   const currentStudentsList = useMemo(() => {
-    if (activeSubTab === 'aktif') return students;
-    if (activeSubTab === 'keluar') return studentsKeluar;
-    return alumni;
-  }, [activeSubTab, students, studentsKeluar, alumni]);
+    if (activeSubTab === 'aktif') return safeStudents;
+    if (activeSubTab === 'keluar') return safeStudentsKeluar;
+    return safeAlumni;
+  }, [activeSubTab, safeStudents, safeStudentsKeluar, safeAlumni]);
 
   const rombelOptions = useMemo(() => {
     const set = new Set<string>();
     if (Array.isArray(currentStudentsList)) {
       currentStudentsList.forEach(s => {
-        if (s.rombel && s.rombel.trim()) set.add(s.rombel.trim());
-        if (s.rombelSaatIni && s.rombelSaatIni.trim()) set.add(s.rombelSaatIni.trim());
+        const r1 = String(s.rombel || '').trim();
+        const r2 = String(s.rombelSaatIni || '').trim();
+        if (r1) set.add(r1);
+        if (r2) set.add(r2);
       });
     }
-
-    // Default rombels list
-    const defaults = ['VII. Soekarno', 'VII. Hatta', 'VIII. Soekarno', 'VIII. Moh Hatta', 'IX. Soekarno', 'IX. Moh Hatta'];
-    defaults.forEach(d => set.add(d));
 
     const sorted = Array.from(set).sort((a, b) =>
       a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
@@ -201,6 +216,40 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
 
     return ['ALL', ...sorted];
   }, [currentStudentsList]);
+
+  const modalRombelOptions = useMemo(() => {
+    const set = new Set<string>();
+    [...safeStudents, ...safeStudentsKeluar, ...safeAlumni].forEach(s => {
+      const r1 = String(s.rombel || '').trim();
+      const r2 = String(s.rombelSaatIni || '').trim();
+      if (r1) set.add(r1);
+      if (r2) set.add(r2);
+    });
+    const rForm = String(formData.rombel || '').trim();
+    if (rForm) set.add(rForm);
+
+    if (set.size === 0) {
+      ['Kelas 7A', 'Kelas 8A', 'Kelas 9A'].forEach(d => set.add(d));
+    }
+
+    return Array.from(set).sort((a, b) =>
+      a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
+    );
+  }, [safeStudents, safeStudentsKeluar, safeAlumni, formData.rombel]);
+
+  const tahunLulusOptions = useMemo(() => {
+    const set = new Set<string>();
+    safeAlumni.forEach(s => {
+      const yearStr = normalizeTahunLulus(s.tahunLulus);
+      if (yearStr) {
+        set.add(yearStr);
+      }
+    });
+    // Add default graduation years (single 4-digit years)
+    ['2026', '2025', '2024', '2023', '2022', '2021', '2020'].forEach(y => set.add(y));
+    const sorted = Array.from(set).sort((a, b) => b.localeCompare(a));
+    return ['ALL', ...sorted];
+  }, [safeAlumni]);
 
   const filteredStudents = useMemo(() => {
     return currentStudentsList.filter(s => {
@@ -240,14 +289,18 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
 
       const matchRombel = filterRombel === 'ALL' || s.rombel === filterRombel || s.rombelSaatIni === filterRombel;
       const matchStatus = filterStatus === 'ALL' || s.status === filterStatus;
-      return matchSearch && matchRombel && matchStatus;
+      const matchTahunLulus = filterTahunLulus === 'ALL' || 
+                              (s.tahunLulus && String(s.tahunLulus).trim().includes(filterTahunLulus));
+
+      return matchSearch && matchRombel && matchStatus && matchTahunLulus;
     });
-  }, [currentStudentsList, search, filterRombel, filterStatus]);
+  }, [currentStudentsList, search, filterRombel, filterStatus, filterTahunLulus]);
 
   const handleResetFilters = () => {
     setSearch('');
     setFilterRombel('ALL');
     setFilterStatus('ALL');
+    setFilterTahunLulus('ALL');
   };
 
   const handleOpenAddModal = () => {
@@ -776,7 +829,7 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
       {/* Filter & Search Bar */}
       <div className="space-y-2">
         <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 bg-white/95 p-4 rounded-xl border border-slate-200 shadow-sm backdrop-blur-md">
-          <div className="sm:col-span-5 relative">
+          <div className={`${activeSubTab === 'alumni' ? 'sm:col-span-4' : 'sm:col-span-5'} relative`}>
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -797,7 +850,7 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
             )}
           </div>
 
-          <div className="sm:col-span-4 flex items-center gap-2">
+          <div className={`${activeSubTab === 'alumni' ? 'sm:col-span-3' : 'sm:col-span-4'} flex items-center gap-2`}>
             <Filter className="w-4 h-4 text-slate-400 shrink-0" />
             <select
               value={filterRombel}
@@ -812,7 +865,7 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
             </select>
           </div>
 
-          <div className="sm:col-span-3">
+          <div className={`${activeSubTab === 'alumni' ? 'sm:col-span-2' : 'sm:col-span-3'}`}>
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
@@ -835,16 +888,32 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
                 </>
               ) : (
                 <>
-                  <option value="ALL">Semua Status Alumni ({alumni.length})</option>
+                  <option value="ALL">Semua Status ({alumni.length})</option>
                   <option value="Lulus">Lulus</option>
                 </>
               )}
             </select>
           </div>
+
+          {activeSubTab === 'alumni' && (
+            <div className="sm:col-span-3 flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <select
+                value={filterTahunLulus}
+                onChange={(e) => setFilterTahunLulus(e.target.value)}
+                className="w-full py-2 px-3 bg-emerald-50 border border-emerald-300 rounded-xl text-xs font-bold text-emerald-900 focus:bg-white focus:outline-none focus:border-emerald-600 transition-colors"
+              >
+                <option value="ALL">Semua Tahun Lulus</option>
+                {tahunLulusOptions.filter(y => y !== 'ALL').map(y => (
+                  <option key={y} value={y}>Tahun Lulus: {y}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         {/* Filter status & clear filter banner */}
-        {(search || filterRombel !== 'ALL' || filterStatus !== 'ALL') && (
+        {(search || filterRombel !== 'ALL' || filterStatus !== 'ALL' || filterTahunLulus !== 'ALL') && (
           <div className="flex items-center justify-between px-3.5 py-2 bg-sky-50 border border-sky-200 rounded-xl text-xs text-sky-800">
             <div className="flex items-center gap-2">
               <Sparkles className="w-3.5 h-3.5 text-sky-600 shrink-0" />
@@ -972,7 +1041,7 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
                       <td className="py-3 px-4">
                         <span className="px-2.5 py-1 rounded-lg bg-emerald-50 font-bold text-emerald-800 border border-emerald-200 flex items-center gap-1.5 w-fit">
                           <GraduationCap className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>{student.tahunLulus || '2024/2025'}</span>
+                          <span>{normalizeTahunLulus(student.tahunLulus) || '2025'}</span>
                         </span>
                       </td>
                     )}
@@ -1004,7 +1073,7 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
                             <button
                               onClick={() => {
                                 setGraduatingStudent(student);
-                                setGraduationTahunLulus(student.tahunLulus || '2024/2025');
+                                setGraduationTahunLulus(normalizeTahunLulus(student.tahunLulus) || '2025');
                                 setGraduationNoSeriIjazah(student.noSeriIjazah || '');
                               }}
                               className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition-colors"
@@ -1492,7 +1561,7 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
                         onChange={(e) => setFormData({ ...formData, rombel: e.target.value, rombelSaatIni: e.target.value })}
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:bg-white focus:border-sky-500 focus:outline-none"
                       >
-                        {rombelOptions.filter(r => r !== 'ALL').map(r => (
+                        {modalRombelOptions.map(r => (
                           <option key={r} value={r}>{r}</option>
                         ))}
                       </select>
@@ -2328,11 +2397,11 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
                     type="text"
                     value={graduationTahunLulus}
                     onChange={(e) => setGraduationTahunLulus(e.target.value)}
-                    placeholder="Contoh: 2024/2025 atau 2025"
+                    placeholder="Contoh: 2025, 2024, 2023..."
                     className="w-full px-3.5 py-2.5 bg-white border border-emerald-300 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-500 transition-colors font-medium shadow-sm"
                   />
-                  <div className="flex gap-1.5 mt-2">
-                    {['2024/2025', '2023/2024', '2022/2023'].map((thn) => (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {['2026', '2025', '2024', '2023', '2022', '2021', '2020'].map((thn) => (
                       <button
                         key={thn}
                         type="button"

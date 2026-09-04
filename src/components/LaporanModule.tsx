@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   BarChart3, 
   ArrowLeft, 
@@ -17,7 +17,10 @@ import {
   Map,
   Calendar,
   UserCheck,
-  UserX
+  UserX,
+  Search,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -51,8 +54,75 @@ export const LaporanModule: React.FC<LaporanModuleProps> = ({
   reports,
   onBackToHome
 }) => {
+  // Defensive array checks
+  const allStudents = Array.isArray(students) ? students : [];
+  const allTeachers = Array.isArray(teachers) ? teachers : [];
+  const allSarpras = Array.isArray(sarpras) ? sarpras : [];
+  const allReports = Array.isArray(reports) ? reports : [];
+
+  // State for Alumni Year Filter & Collapsible Detail
+  const [selectedAlumniYear, setSelectedAlumniYear] = useState<string>('ALL');
+  const [alumniSearchQuery, setAlumniSearchQuery] = useState<string>('');
+  const [isAlumniDetailOpen, setIsAlumniDetailOpen] = useState<boolean>(false);
+
+  const normalizeTahunLulus = (val?: any): string => {
+    if (!val) return '2025';
+    const str = String(val).trim();
+    if (!str) return '2025';
+    if (str.includes('/')) {
+      const parts = str.split('/').map(p => p.trim());
+      return parts[parts.length - 1] || parts[0] || '2025';
+    }
+    return str;
+  };
+
   // Active students only for standard student statistics
-  const activeStudents = students.filter(s => !s.status || s.status === 'Aktif');
+  const activeStudents = allStudents.filter(s => s && (!s.status || s.status === 'Aktif'));
+
+  // Alumni / Graduated students statistics by year
+  const alumniStudents = allStudents.filter(s => s && (s.status === 'Lulus' || Boolean(s.tahunLulus && String(s.tahunLulus).trim())));
+
+  const alumniByYearCounts: Record<string, { total: number; male: number; female: number }> = {};
+
+  alumniStudents.forEach(s => {
+    const year = normalizeTahunLulus(s.tahunLulus);
+    if (!alumniByYearCounts[year]) {
+      alumniByYearCounts[year] = { total: 0, male: 0, female: 0 };
+    }
+    alumniByYearCounts[year].total += 1;
+    if (s.jenisKelamin === 'L') {
+      alumniByYearCounts[year].male += 1;
+    } else if (s.jenisKelamin === 'P') {
+      alumniByYearCounts[year].female += 1;
+    }
+  });
+
+  const sortedAlumniYears = Object.keys(alumniByYearCounts).sort((a, b) => b.localeCompare(a));
+
+  const alumniChartData = sortedAlumniYears.map(year => ({
+    tahun: year,
+    jumlah: alumniByYearCounts[year].total,
+    laki: alumniByYearCounts[year].male,
+    perempuan: alumniByYearCounts[year].female,
+  }));
+
+  // Filtered alumni students based on dropdown year selection & search query
+  const filteredAlumniList = alumniStudents.filter(s => {
+    const y = normalizeTahunLulus(s.tahunLulus);
+    const matchYear = selectedAlumniYear === 'ALL' || y === selectedAlumniYear;
+    if (!alumniSearchQuery.trim()) return matchYear;
+    const q = alumniSearchQuery.toLowerCase().trim();
+    const nameStr = String(s.nama || '').toLowerCase();
+    const nisnStr = String(s.nisn || '').toLowerCase();
+    const nisStr = String(s.nis || '').toLowerCase();
+    const rombelStr = String(s.rombel || s.rombelSaatIni || '').toLowerCase();
+    const ijazahStr = String(s.noSeriIjazah || '').toLowerCase();
+    return matchYear && (nameStr.includes(q) || nisnStr.includes(q) || nisStr.includes(q) || rombelStr.includes(q) || ijazahStr.includes(q));
+  });
+
+  const selectedYearTotal = filteredAlumniList.length;
+  const selectedYearMale = filteredAlumniList.filter(s => s.jenisKelamin === 'L').length;
+  const selectedYearFemale = filteredAlumniList.filter(s => s.jenisKelamin === 'P').length;
 
   // Compute Stats
   const maleStudents = activeStudents.filter(s => s.jenisKelamin === 'L').length;
@@ -67,7 +137,8 @@ export const LaporanModule: React.FC<LaporanModuleProps> = ({
   // Rombel breakdown
   const rombelCounts: Record<string, number> = {};
   activeStudents.forEach(s => {
-    rombelCounts[s.rombel] = (rombelCounts[s.rombel] || 0) + 1;
+    const key = (s.rombel && s.rombel.trim()) ? s.rombel.trim() : 'Belum Terplot';
+    rombelCounts[key] = (rombelCounts[key] || 0) + 1;
   });
   const rombelData = Object.keys(rombelCounts).map(rombel => ({
     name: rombel,
@@ -126,7 +197,7 @@ export const LaporanModule: React.FC<LaporanModuleProps> = ({
   let tendikL = 0;
   let tendikP = 0;
 
-  teachers.forEach(t => {
+  allTeachers.forEach(t => {
     if (!t) return;
     const jenisPtkStr = String(t.jenisPtk || '').toLowerCase();
     const isPendidik = (['Guru Mapel', 'Guru Kelas'].includes(t.jenisPtk) || jenisPtkStr.includes('guru')) && 
@@ -146,8 +217,10 @@ export const LaporanModule: React.FC<LaporanModuleProps> = ({
 
   // PTK breakdown
   const ptkStatusCounts: Record<string, number> = {};
-  teachers.forEach(t => {
-    ptkStatusCounts[t.statusKepegawaian] = (ptkStatusCounts[t.statusKepegawaian] || 0) + 1;
+  allTeachers.forEach(t => {
+    if (!t) return;
+    const stKey = (t.statusKepegawaian && t.statusKepegawaian.trim()) ? t.statusKepegawaian.trim() : 'Lainnya';
+    ptkStatusCounts[stKey] = (ptkStatusCounts[stKey] || 0) + 1;
   });
   const ptkData = Object.keys(ptkStatusCounts).map(st => ({
     name: st,
@@ -437,7 +510,12 @@ export const LaporanModule: React.FC<LaporanModuleProps> = ({
             <GraduationCap className="w-6 h-6" />
           </div>
           <div>
-            <div className="text-2xl font-black text-slate-900">{teachers.length}</div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-black text-slate-900">{teachers.length}</span>
+              <span className="text-[11px] font-bold text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200 shadow-2xs">
+                {totalPendidik} Guru &bull; {totalTendik} Tendik
+              </span>
+            </div>
             <div className="text-xs text-slate-500 font-medium">Pendidik & Tendik (PTK)</div>
           </div>
         </div>
@@ -708,6 +786,292 @@ export const LaporanModule: React.FC<LaporanModuleProps> = ({
           </div>
         </div>
 
+      </div>
+
+      {/* REKAPITULASI JUMLAH SISWA LULUS BERDASARKAN TAHUN LULUSNYA */}
+      <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm space-y-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+          <div className="space-y-1">
+            <h2 className="text-lg font-black text-slate-900 flex items-center gap-2.5">
+              <GraduationCap className="w-5 h-5 text-emerald-600" />
+              <span>Jumlah Siswa Lulus Berdasarkan Tahun Lulusnya (Alumni)</span>
+            </h2>
+            <p className="text-xs text-slate-500">
+              Rekapitulasi historis kelulusan peserta didik berdasarkan tahun kelulusan
+            </p>
+          </div>
+          <div className="flex items-center gap-2 text-xs bg-emerald-50 px-3.5 py-2 rounded-xl border border-emerald-200 text-emerald-800 font-bold">
+            <Users className="w-4 h-4 text-emerald-600" />
+            <span>Total {alumniStudents.length} Siswa Lulus</span>
+          </div>
+        </div>
+
+        {/* INTERACTIVE YEAR FILTER SELECTOR */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+              <Calendar className="w-5 h-5" />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-emerald-950 block">Pilihan Tahun Kelulusan Alumni:</label>
+              <p className="text-[11px] text-emerald-700">Pilih tahun untuk melihat rincian jumlah & data siswa lulus</p>
+            </div>
+          </div>
+          <div className="w-full sm:w-auto min-w-[240px]">
+            <select
+              value={selectedAlumniYear}
+              onChange={(e) => {
+                setSelectedAlumniYear(e.target.value);
+                setIsAlumniDetailOpen(true);
+              }}
+              className="w-full py-2.5 px-4 bg-white border border-emerald-300 rounded-xl text-xs font-extrabold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-xs cursor-pointer"
+            >
+              <option value="ALL">Semua Tahun Kelulusan ({alumniStudents.length} Siswa)</option>
+              {sortedAlumniYears.map(year => (
+                <option key={year} value={year}>
+                  Tahun Kelulusan {year} ({alumniByYearCounts[year].total} Siswa)
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* 3 STAT CARDS FOR SELECTED YEAR */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-xs space-y-1">
+            <div className="text-[11px] font-bold text-emerald-100 uppercase tracking-wider">
+              {selectedAlumniYear === 'ALL' ? 'Total Alumni (Semua Tahun)' : `Siswa Lulus Tahun ${selectedAlumniYear}`}
+            </div>
+            <div className="text-2xl font-black font-mono">{selectedYearTotal} <span className="text-xs font-normal text-emerald-100">Siswa</span></div>
+          </div>
+          <div className="p-4 rounded-2xl bg-sky-50 border border-sky-200 text-sky-950 shadow-xs space-y-1">
+            <div className="text-[11px] font-bold text-sky-700 uppercase tracking-wider">Laki-Laki (L)</div>
+            <div className="text-2xl font-black font-mono text-sky-900">{selectedYearMale} <span className="text-xs font-normal text-sky-600">Siswa</span></div>
+          </div>
+          <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-950 shadow-xs space-y-1">
+            <div className="text-[11px] font-bold text-rose-700 uppercase tracking-wider">Perempuan (P)</div>
+            <div className="text-2xl font-black font-mono text-rose-900">{selectedYearFemale} <span className="text-xs font-normal text-rose-600">Siswa</span></div>
+          </div>
+        </div>
+
+        {/* REKAP GRAFIK & TABEL TAHUNAN */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-2">
+          {/* Bar Chart Siswa Lulus */}
+          <div className="p-5 rounded-2xl bg-slate-50/80 border border-slate-200/80 space-y-3">
+            <h3 className="text-sm font-bold text-slate-900 flex items-center justify-between">
+              <span>Grafik Kelulusan per Tahun</span>
+              <span className="text-[11px] font-mono text-slate-500">{sortedAlumniYears.length} Periode Kelulusan</span>
+            </h3>
+            <div className="h-64 w-full">
+              {alumniChartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={alumniChartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="tahun" stroke="#64748b" fontSize={11} />
+                    <YAxis stroke="#64748b" fontSize={11} />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: '12px', color: '#0f172a' }} 
+                      formatter={(val: any, name: any) => [
+                        `${val} Siswa`, 
+                        name === 'laki' ? 'Laki-Laki' : name === 'perempuan' ? 'Perempuan' : 'Total Lulus'
+                      ]}
+                    />
+                    <Legend />
+                    <Bar dataKey="laki" name="Laki-Laki" fill="#38bdf8" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="perempuan" name="Perempuan" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-full text-slate-400 text-xs">
+                  Belum ada data siswa lulus
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Tabel Rincian Siswa Lulus per Tahun */}
+          <div className="overflow-x-auto border border-slate-200 rounded-2xl">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                  <th className="py-3 px-3.5 text-center">No</th>
+                  <th className="py-3 px-4">Tahun Lulus</th>
+                  <th className="py-3 px-3 text-center text-sky-700">Laki-Laki (L)</th>
+                  <th className="py-3 px-3 text-center text-rose-700">Perempuan (P)</th>
+                  <th className="py-3 px-4 text-center font-bold text-slate-900 bg-slate-200/50">Total Lulus</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {sortedAlumniYears.length > 0 ? (
+                  sortedAlumniYears.map((year, idx) => {
+                    const row = alumniByYearCounts[year];
+                    const isSelected = selectedAlumniYear === year;
+                    return (
+                      <tr 
+                        key={year} 
+                        onClick={() => setSelectedAlumniYear(year)}
+                        className={`cursor-pointer transition-colors ${
+                          isSelected ? 'bg-emerald-50/80 font-semibold' : 'hover:bg-slate-50'
+                        }`}
+                      >
+                        <td className="py-2.5 px-3.5 text-center font-mono text-slate-400">{idx + 1}</td>
+                        <td className="py-2.5 px-4 font-bold text-slate-800 flex items-center justify-between">
+                          <span>Tahun {year}</span>
+                          {isSelected && <span className="text-[10px] text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md font-bold">Terpilih</span>}
+                        </td>
+                        <td className="py-2.5 px-3 text-center font-mono text-sky-700 font-semibold">{row.male}</td>
+                        <td className="py-2.5 px-3 text-center font-mono text-rose-700 font-semibold">{row.female}</td>
+                        <td className="py-2.5 px-4 text-center font-mono font-black text-slate-900 bg-slate-50">{row.total}</td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-slate-400">
+                      Belum ada rekapitulasi data alumni/tahun lulus.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+              {sortedAlumniYears.length > 0 && (
+                <tfoot>
+                  <tr className="bg-slate-100 font-black text-slate-900 border-t border-slate-200">
+                    <td className="py-3 px-3.5 text-center">Σ</td>
+                    <td className="py-3 px-4">TOTAL KESELURUHAN</td>
+                    <td className="py-3 px-3 text-center font-mono text-sky-700">
+                      {alumniStudents.filter(s => s.jenisKelamin === 'L').length}
+                    </td>
+                    <td className="py-3 px-3 text-center font-mono text-rose-700">
+                      {alumniStudents.filter(s => s.jenisKelamin === 'P').length}
+                    </td>
+                    <td className="py-3 px-4 text-center font-mono font-black text-emerald-700 bg-emerald-100 text-sm">
+                      {alumniStudents.length}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        </div>
+
+        {/* DAFTAR NAMA SISWA ALUMNI UNTUK TAHUN YANG DIPILIH (COLLAPSIBLE / ACCORDION) */}
+        <div className="border-t border-slate-200 pt-6 space-y-4">
+          <div 
+            onClick={() => setIsAlumniDetailOpen(!isAlumniDetailOpen)}
+            className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 hover:bg-slate-100/90 p-4 rounded-2xl border border-slate-200 cursor-pointer transition-all select-none group shadow-2xs"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <Users className="w-5 h-5 text-emerald-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                  <span>Rincian Daftar Siswa Alumni {selectedAlumniYear === 'ALL' ? '(Semua Tahun)' : `Tahun ${selectedAlumniYear}`}</span>
+                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                    {filteredAlumniList.length} Siswa
+                  </span>
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  {isAlumniDetailOpen ? 'Klik untuk menutup / menyembunyikan tabel rincian ini' : 'Klik untuk membuka / menampilkan tabel rincian ini'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 self-end sm:self-center" onClick={(e) => e.stopPropagation()}>
+              {isAlumniDetailOpen && (
+                <div className="relative w-full sm:w-56">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={alumniSearchQuery}
+                    onChange={(e) => setAlumniSearchQuery(e.target.value)}
+                    placeholder="Cari nama, NISN, rombel..."
+                    className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500 transition-colors shadow-2xs"
+                  />
+                </div>
+              )}
+
+              {selectedAlumniYear !== 'ALL' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedAlumniYear('ALL');
+                    setIsAlumniDetailOpen(true);
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 text-xs font-bold shrink-0 transition-colors shadow-2xs"
+                >
+                  Reset Tahun
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setIsAlumniDetailOpen(!isAlumniDetailOpen)}
+                className="p-2 rounded-xl bg-white hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 border border-slate-200 transition-colors shrink-0 flex items-center gap-1.5 text-xs font-bold shadow-2xs"
+                title={isAlumniDetailOpen ? "Tutup Tabel" : "Buka Tabel"}
+              >
+                <span>{isAlumniDetailOpen ? "Tutup" : "Buka"}</span>
+                {isAlumniDetailOpen ? <ChevronUp className="w-4 h-4 text-emerald-600" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
+              </button>
+            </div>
+          </div>
+
+          {/* ISINYA DITAMPILKAN JIKA OPEN */}
+          {isAlumniDetailOpen && (
+            <div className="overflow-x-auto border border-slate-200 rounded-2xl shadow-2xs transition-all">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                    <th className="py-3 px-3.5 text-center">No</th>
+                    <th className="py-3 px-4">NISN / NIS</th>
+                    <th className="py-3 px-4">Nama Lengkap Siswa</th>
+                    <th className="py-3 px-3 text-center">L/P</th>
+                    <th className="py-3 px-4">Rombel Terakhir</th>
+                    <th className="py-3 px-3 text-center">Tahun Lulus</th>
+                    <th className="py-3 px-4">No. Seri Ijazah</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredAlumniList.length > 0 ? (
+                    filteredAlumniList.map((st, idx) => (
+                      <tr key={st.id || idx} className="hover:bg-slate-50 transition-colors">
+                        <td className="py-2.5 px-3.5 text-center font-mono text-slate-400">{idx + 1}</td>
+                        <td className="py-2.5 px-4 font-mono font-semibold text-slate-700">
+                          {st.nisn || st.nis || '-'}
+                        </td>
+                        <td className="py-2.5 px-4 font-bold text-slate-900">
+                          {st.nama}
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                            st.jenisKelamin === 'L' ? 'bg-sky-100 text-sky-800' : 'bg-rose-100 text-rose-800'
+                          }`}>
+                            {st.jenisKelamin || '-'}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-4 text-slate-600">
+                          {st.rombel || st.rombelSaatIni || '-'}
+                        </td>
+                        <td className="py-2.5 px-3 text-center font-bold text-emerald-700 font-mono">
+                          {normalizeTahunLulus(st.tahunLulus)}
+                        </td>
+                        <td className="py-2.5 px-4 font-mono text-slate-600">
+                          {st.noSeriIjazah || '-'}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-slate-400">
+                        Tidak ada data siswa alumni yang sesuai dengan filter tahun/pencarian.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* REKAPITULASI DATA POKOK DETAIL (KEREN & KEKINIAN) */}

@@ -87,7 +87,7 @@ export interface TeacherStaff {
   nip?: string;
   nama: string;
   jenisKelamin: 'L' | 'P';
-  statusKepegawaian: 'PNS' | 'PPPK' | 'GTT' | 'GTY' | 'Honor Sekolah' | string;
+  statusKepegawaian: 'PNS' | 'PPPK' | 'PPPK Paruh Waktu' | 'GTT' | 'GTY' | 'Guru Honor Sekolah' | 'Tenaga Honor Sekolah' | 'Honor Sekolah' | string;
   jenisPtk: 'Guru Mapel' | 'Guru Kelas' | 'Kepala Sekolah' | 'Tenaga Administrasi' | 'Laboran' | 'Pustakawan' | string;
   mapel: string;
   pendidikanTerakhir: string;

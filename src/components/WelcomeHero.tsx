@@ -32,7 +32,9 @@ import {
   LayoutTemplate,
   LogOut,
   User,
-  Menu
+  Menu,
+  X,
+  ZoomIn
 } from 'lucide-react';
 import { ActiveTab, SyncConfig, Student, TeacherStaff, SarprasItem, StudentReport, AppDisplayConfig, SchoolProfile, AdminUser } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
@@ -80,15 +82,22 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
   onLogout
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [isOperatorModalOpen, setIsOperatorModalOpen] = useState(false);
 
   const activeStudents = students.filter(s => !s.status || s.status === 'Aktif');
+
+  const totalGuru = teachers.filter(t => {
+    const j = String(t.jenisPtk || '').toLowerCase();
+    return (['Guru Mapel', 'Guru Kelas'].includes(t.jenisPtk) || j.includes('guru')) && !j.includes('kepala');
+  }).length;
+  const totalTendik = teachers.length - totalGuru;
 
   const menuItems = [
     {
       id: 'sekolah' as ActiveTab,
       label: 'Sekolah',
       icon: School,
-      count: `NPSN ${schoolProfile.npsn || '20109988'}`,
+      count: schoolProfile.npsn || '40203578',
       desc: 'Profil Satuan Pendidikan',
       color: 'from-cyan-500/20 to-sky-500/20 border-cyan-400/30 text-cyan-300'
     },
@@ -491,8 +500,12 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
 
             {/* School Operator Card */}
             <div className="p-3.5 rounded-2xl bg-white/10 hover:bg-white/15 backdrop-blur-md border border-white/20 text-xs flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3 overflow-hidden">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-400 to-orange-500 flex items-center justify-center font-bold text-slate-950 shadow-md overflow-hidden shrink-0">
+              <div 
+                className="flex items-center gap-3 overflow-hidden cursor-pointer group"
+                onClick={() => setIsOperatorModalOpen(true)}
+                title="Klik untuk melihat foto operator"
+              >
+                <div className="relative w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-400 to-orange-500 flex items-center justify-center font-bold text-slate-950 shadow-md overflow-hidden shrink-0 ring-2 ring-amber-300/40 group-hover:ring-amber-300 group-hover:scale-105 transition-all">
                   {displayConfig.operatorAvatarUrl ? (
                     <SafeImage 
                       src={displayConfig.operatorAvatarUrl} 
@@ -509,16 +522,29 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
                       {(displayConfig.operatorTitle ?? 'OP').replace(/[^a-zA-Z0-9]/g, '').substring(0, 2).toUpperCase() || 'OP'}
                     </span>
                   )}
+                  <div className="absolute inset-0 bg-slate-950/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                    <ZoomIn className="w-3.5 h-3.5 drop-shadow" />
+                  </div>
                 </div>
                 <div className="overflow-hidden">
-                  <div className="font-bold text-white truncate">
-                    {displayConfig.operatorTitle ?? 'Operator Sekolah'}
+                  <div className="font-bold text-white truncate group-hover:text-amber-200 transition-colors flex items-center gap-1.5">
+                    <span>{displayConfig.operatorTitle ?? 'Operator Sekolah'}</span>
                   </div>
                   <div className="text-[11px] text-sky-200 truncate">
                     {displayConfig.operatorName ?? schoolProfile.namaSekolah ?? 'SMP NEGERI 11 PALU'}
                   </div>
                 </div>
               </div>
+
+              <button
+                type="button"
+                onClick={() => setIsOperatorModalOpen(true)}
+                className="px-2.5 py-1.5 rounded-xl bg-white/15 hover:bg-amber-400 hover:text-slate-950 text-white text-[11px] font-semibold border border-white/20 transition-all shrink-0 cursor-pointer flex items-center gap-1 shadow-xs active:scale-95"
+                title="Lihat Foto Operator"
+              >
+                <ZoomIn className="w-3.5 h-3.5" />
+                <span>Foto</span>
+              </button>
             </div>
 
           </div>
@@ -533,11 +559,97 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            <span>NPSN: <strong>{schoolProfile.npsn ?? '20109988'}</strong></span>
+            <span>NPSN: <strong>{schoolProfile.npsn ?? '40203578'}</strong></span>
           </div>
         </div>
 
       </div>
+
+      {/* Operator Photo Popup Modal */}
+      {isOperatorModalOpen && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn"
+          onClick={() => setIsOperatorModalOpen(false)}
+        >
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.9, opacity: 0 }}
+            className="relative w-full max-w-sm bg-slate-900 border border-slate-700/80 rounded-3xl shadow-2xl overflow-hidden p-6 text-white flex flex-col items-center text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close button */}
+            <button
+              onClick={() => setIsOperatorModalOpen(false)}
+              className="absolute top-3.5 right-3.5 p-2 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
+              title="Tutup"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Header Badge */}
+            <div className="px-3.5 py-1 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30 text-xs font-bold mb-4 flex items-center gap-1.5 shadow-xs">
+              <UserCheck className="w-3.5 h-3.5 text-amber-300" />
+              <span>{displayConfig.operatorTitle ?? 'Operator Sekolah'}</span>
+            </div>
+
+            {/* Large Avatar Photo Frame */}
+            <div className="relative w-48 h-48 sm:w-56 sm:h-56 rounded-2xl bg-gradient-to-tr from-amber-400 via-orange-500 to-amber-300 p-1.5 shadow-2xl shadow-amber-500/20 mb-4 overflow-hidden border-2 border-white/30 group">
+              <div className="w-full h-full rounded-xl bg-slate-800 overflow-hidden flex items-center justify-center relative">
+                {displayConfig.operatorAvatarUrl ? (
+                  <SafeImage 
+                    src={displayConfig.operatorAvatarUrl} 
+                    fallbackNode={
+                      <div className="flex flex-col items-center gap-2 text-slate-400">
+                        <User className="w-16 h-16" />
+                        <span className="text-xs font-semibold">Foto Operator</span>
+                      </div>
+                    }
+                    alt="Foto Operator Sekolah" 
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center p-4 text-center text-amber-300">
+                    <User className="w-20 h-20 mb-1" />
+                    <span className="text-sm font-bold text-white">
+                      {displayConfig.operatorName ?? 'Operator Dapodik'}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Name and School Info */}
+            <h3 className="text-lg font-extrabold text-white">
+              {displayConfig.operatorName ?? 'Ahmad'}
+            </h3>
+            <p className="text-xs text-sky-200/80 font-medium mt-0.5">
+              {schoolProfile.namaSekolah ?? 'SMP NEGERI 11 PALU'}
+            </p>
+
+            {/* Secondary Details */}
+            <div className="mt-4 w-full pt-3 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-around">
+              <div>
+                <span className="block text-slate-500">NPSN</span>
+                <span className="font-bold text-slate-200">{schoolProfile.npsn ?? '40203578'}</span>
+              </div>
+              <div className="h-6 w-px bg-slate-800" />
+              <div>
+                <span className="block text-slate-500">Status</span>
+                <span className="font-bold text-emerald-400">Aktif Dapodik</span>
+              </div>
+            </div>
+
+            {/* Close Action Button */}
+            <button
+              onClick={() => setIsOperatorModalOpen(false)}
+              className="mt-5 w-full py-2.5 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-bold text-xs shadow-lg shadow-sky-500/20 transition-all cursor-pointer"
+            >
+              Tutup Tampilan Foto
+            </button>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 };
