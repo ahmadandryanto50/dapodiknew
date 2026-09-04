@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { formatDateIndonesian } from '../utils/dateUtils';
 import { compressImage } from '../utils/imageCompressor';
+import { getNormalizedMisi } from '../utils/misiUtils';
 import { SafeImage } from './SafeImage';
 import { 
   Settings, 
@@ -2066,13 +2067,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                     
                     {/* List of current missions */}
                     <div className="space-y-2">
-                      {((schoolData.misi && schoolData.misi.length > 0) ? schoolData.misi : [
-                        'Menyelenggarakan pembelajaran berkualitas berbasis Kurikulum Merdeka yang berpihak pada murid.',
-                        'Menumbuhkembangkan budi pekerti, keimanan, ketaqwaan, dan toleransi dalam kehidupan sekolah.',
-                        'Mengoptimalkan pemanfaatan teknologi digital dan literasi komputasi dalam kegiatan belajar mengajar.',
-                        'Membina bakat, minat, dan potensi peserta didik melalui kegiatan kokurikuler dan ekstrakurikuler berprestasi.',
-                        'Menciptakan lingkungan satuan pendidikan yang aman, nyaman, inklusif, ramah anak, dan bebas perundungan.'
-                      ]).map((m, idx) => (
+                      {getNormalizedMisi(schoolData.misi).map((m, idx) => (
                         <div key={idx} className="flex items-center gap-2 bg-white border border-slate-200 p-2.5 rounded-xl shadow-xs">
                           <span className="w-6 h-6 rounded-lg bg-sky-100 text-sky-700 font-bold flex items-center justify-center shrink-0">
                             {idx + 1}
@@ -2081,7 +2076,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                             type="text"
                             value={m}
                             onChange={(e) => {
-                              const updated = [...(schoolData.misi || [])];
+                              const updated = [...getNormalizedMisi(schoolData.misi)];
                               updated[idx] = e.target.value;
                               setSchoolData({ ...schoolData, misi: updated });
                             }}
@@ -2090,7 +2085,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                           <button
                             type="button"
                             onClick={() => {
-                              const updated = (schoolData.misi || []).filter((_, i) => i !== idx);
+                              const updated = getNormalizedMisi(schoolData.misi).filter((_, i) => i !== idx);
                               setSchoolData({ ...schoolData, misi: updated });
                             }}
                             className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
@@ -2111,7 +2106,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' && newMisiInput.trim()) {
                             e.preventDefault();
-                            const current = schoolData.misi || [];
+                            const current = getNormalizedMisi(schoolData.misi);
                             setSchoolData({ ...schoolData, misi: [...current, newMisiInput.trim()] });
                             setNewMisiInput('');
                           }
@@ -2123,7 +2118,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                         type="button"
                         onClick={() => {
                           if (newMisiInput.trim()) {
-                            const current = schoolData.misi || [];
+                            const current = getNormalizedMisi(schoolData.misi);
                             setSchoolData({ ...schoolData, misi: [...current, newMisiInput.trim()] });
                             setNewMisiInput('');
                           }

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { SafeImage } from './SafeImage';
 import { formatDateIndonesian } from '../utils/dateUtils';
 import { compressImage } from '../utils/imageCompressor';
+import { getNormalizedMisi } from '../utils/misiUtils';
 import { 
   School, 
   Edit3, 
@@ -567,13 +568,7 @@ export const SchoolModule: React.FC<SchoolModuleProps> = ({
             </h3>
 
             <div className="space-y-3 pt-2">
-              {(schoolProfile.misi && schoolProfile.misi.length > 0 ? schoolProfile.misi : [
-                'Menyelenggarakan pembelajaran berkualitas berbasis Kurikulum Merdeka yang berpihak pada murid.',
-                'Menumbuhkembangkan budi pekerti, keimanan, ketaqwaan, dan toleransi dalam kehidupan sekolah.',
-                'Mengoptimalkan pemanfaatan teknologi digital dan literasi komputasi dalam kegiatan belajar mengajar.',
-                'Membina bakat, minat, dan potensi peserta didik melalui kegiatan kokurikuler dan ekstrakurikuler berprestasi.',
-                'Menciptakan lingkungan satuan pendidikan yang aman, nyaman, inklusif, ramah anak, dan bebas perundungan.'
-              ]).map((m, idx) => (
+              {getNormalizedMisi(schoolProfile?.misi).map((m, idx) => (
                 <div key={idx} className="flex items-start gap-3 text-xs sm:text-sm text-slate-800">
                   <div className="w-6 h-6 rounded-full bg-amber-100 text-amber-800 border border-amber-300 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
                     {idx + 1}

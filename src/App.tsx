@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   ActiveTab, 
   Student, 
@@ -133,6 +133,9 @@ export default function App() {
     return localStorage.getItem('dapodik_authenticated') === 'true';
   });
 
+  // Ref to prevent background polling from overwriting local state right after user operations
+  const lastLocalMutationRef = useRef<number>(0);
+
   // State Initialization from LocalStorage
   const [activeTab, setActiveTab] = useState<ActiveTab>('home');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
@@ -151,10 +154,10 @@ export default function App() {
 
   const [sarpras, setSarpras] = useState<SarprasItem[]>(() => {
     const saved = localStorage.getItem('dapodik_sarpras');
-    if (saved) {
+    if (saved !== null) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           return parsed;
         }
       } catch (e) {
@@ -166,8 +169,17 @@ export default function App() {
 
   const [reports, setReports] = useState<StudentReport[]>(() => {
     const saved = localStorage.getItem('dapodik_reports');
-    const parsed = saved ? JSON.parse(saved) : initialReports;
-    return sanitizeReports(parsed);
+    if (saved !== null) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return sanitizeReports(parsed);
+        }
+      } catch (e) {
+        console.error('Failed to parse dapodik_reports', e);
+      }
+    }
+    return sanitizeReports(initialReports);
   });
 
   const [displayConfig, setDisplayConfig] = useState<AppDisplayConfig>(() => {
@@ -745,6 +757,10 @@ export default function App() {
         }
 
         if (serverData && Object.keys(serverData).length > 0) {
+          // If a local mutation occurred in the last 4 seconds, skip overwriting local state with server data
+          if (Date.now() - lastLocalMutationRef.current < 4000) {
+            return;
+          }
           // Compare and update only if different to prevent redundant writes or feedback loops
           if (serverData.students) {
             setStudents(prev => {
@@ -1145,8 +1161,11 @@ export default function App() {
   };
 
   const handleDeleteStudent = (id: string) => {
+    lastLocalMutationRef.current = Date.now();
     const updated = sanitizeStudentDates(students.filter(s => s.id !== id));
     setStudents(updated);
+    localStorage.setItem('dapodik_students', JSON.stringify(updated));
+    saveCacheToServer(updated, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notifications);
     showToast('Data siswa dihapus...');
     triggerAutoSync(updated, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, true);
   };
@@ -1237,8 +1256,11 @@ export default function App() {
   };
 
   const handleDeleteTeacher = (id: string) => {
+    lastLocalMutationRef.current = Date.now();
     const updated = sanitizeTeacherDates(teachers.filter(t => t.id !== id));
     setTeachers(updated);
+    localStorage.setItem('dapodik_teachers', JSON.stringify(updated));
+    saveCacheToServer(students, updated, sarpras, reports, displayConfig, schoolProfile, administrators, notifications);
     showToast('Data PTK dihapus...');
     triggerAutoSync(students, updated, sarpras, reports, displayConfig, schoolProfile, administrators, true);
   };
@@ -1259,44 +1281,62 @@ export default function App() {
 
   // Sarpras Handlers
   const handleAddSarpras = (s: SarprasItem) => {
+    lastLocalMutationRef.current = Date.now();
     const updated = [s, ...sarpras];
     setSarpras(updated);
+    localStorage.setItem('dapodik_sarpras', JSON.stringify(updated));
+    saveCacheToServer(students, teachers, updated, reports, displayConfig, schoolProfile, administrators, notifications);
     showToast(`Sarpras "${s.namaBarang}" ditambahkan...`);
     triggerAutoSync(students, teachers, updated, reports, displayConfig, schoolProfile, administrators, true);
   };
 
   const handleUpdateSarpras = (s: SarprasItem) => {
+    lastLocalMutationRef.current = Date.now();
     const updated = sarpras.map(sp => sp.id === s.id ? s : sp);
     setSarpras(updated);
+    localStorage.setItem('dapodik_sarpras', JSON.stringify(updated));
+    saveCacheToServer(students, teachers, updated, reports, displayConfig, schoolProfile, administrators, notifications);
     showToast(`Data sarpras "${s.namaBarang}" diperbarui...`);
     triggerAutoSync(students, teachers, updated, reports, displayConfig, schoolProfile, administrators, true);
   };
 
   const handleDeleteSarpras = (id: string) => {
+    lastLocalMutationRef.current = Date.now();
     const updated = sarpras.filter(s => s.id !== id);
     setSarpras(updated);
+    localStorage.setItem('dapodik_sarpras', JSON.stringify(updated));
+    saveCacheToServer(students, teachers, updated, reports, displayConfig, schoolProfile, administrators, notifications);
     showToast('Data sarpras dihapus...');
     triggerAutoSync(students, teachers, updated, reports, displayConfig, schoolProfile, administrators, true);
   };
 
   // Reports Handlers
   const handleAddReport = (r: StudentReport) => {
+    lastLocalMutationRef.current = Date.now();
     const updated = [r, ...reports];
     setReports(updated);
+    localStorage.setItem('dapodik_reports', JSON.stringify(updated));
+    saveCacheToServer(students, teachers, sarpras, updated, displayConfig, schoolProfile, administrators, notifications);
     showToast(`Lembar Rapor untuk "${r.studentName}" disimpan...`);
     triggerAutoSync(students, teachers, sarpras, updated, displayConfig, schoolProfile, administrators, true);
   };
 
   const handleUpdateReport = (r: StudentReport) => {
+    lastLocalMutationRef.current = Date.now();
     const updated = reports.map(rp => rp.id === r.id ? r : rp);
     setReports(updated);
+    localStorage.setItem('dapodik_reports', JSON.stringify(updated));
+    saveCacheToServer(students, teachers, sarpras, updated, displayConfig, schoolProfile, administrators, notifications);
     showToast(`Rapor "${r.studentName}" diperbarui...`);
     triggerAutoSync(students, teachers, sarpras, updated, displayConfig, schoolProfile, administrators, true);
   };
 
   const handleDeleteReport = (id: string) => {
+    lastLocalMutationRef.current = Date.now();
     const updated = reports.filter(r => r.id !== id);
     setReports(updated);
+    localStorage.setItem('dapodik_reports', JSON.stringify(updated));
+    saveCacheToServer(students, teachers, sarpras, updated, displayConfig, schoolProfile, administrators, notifications);
     showToast('Data rapor dihapus...');
     triggerAutoSync(students, teachers, sarpras, updated, displayConfig, schoolProfile, administrators, true);
   };
