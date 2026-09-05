@@ -13,6 +13,15 @@ async function startServer() {
   // Support JSON bodies up to 10MB (in case of large profile photo base64 strings)
   app.use(express.json({ limit: '10mb' }));
 
+  // Prevent caching on all API responses so multi-device/browser sync is always instantaneous and fresh
+  app.use("/api", (req, res, next) => {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    res.setHeader("Surrogate-Control", "no-store");
+    next();
+  });
+
   // API Route: Get Shared Sync Config
   app.get("/api/sync-config", (req, res) => {
     try {

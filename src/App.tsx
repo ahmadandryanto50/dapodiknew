@@ -136,49 +136,14 @@ const sanitizeReports = (raporList: any[]): StudentReport[] => {
 
 function getCleanAdministrators(admins: AdminUser[]): AdminUser[] {
   if (!Array.isArray(admins)) return [];
-  let deletedUsernames: string[] = [];
-  try {
-    const delStr = localStorage.getItem('dapodik_deleted_admins');
-    if (delStr) deletedUsernames = JSON.parse(delStr);
-  } catch (e) {
-    console.error(e);
-  }
-  return admins.filter(
-    (a) => a && a.username && !deletedUsernames.includes(String(a.username).trim().toLowerCase())
-  );
+  return admins.filter(a => a && a.username && String(a.username).trim().length > 0);
 }
 
 function mergeAdministratorsWithLocal(incomingAdmins: AdminUser[], currentAdmins: AdminUser[]): AdminUser[] {
-  const map = new Map<string, AdminUser>();
-
-  // 1. Put current/local admins first so locally added accounts remain
-  currentAdmins.forEach(a => {
-    if (a && a.username) {
-      map.set(String(a.username).trim().toLowerCase(), a);
-    }
-  });
-
-  // 2. Put incoming admins if not present or merge
-  if (Array.isArray(incomingAdmins)) {
-    incomingAdmins.forEach(sa => {
-      if (sa && sa.username) {
-        const key = String(sa.username).trim().toLowerCase();
-        if (!map.has(key)) {
-          map.set(key, sa);
-        } else {
-          const existing = map.get(key)!;
-          map.set(key, {
-            ...sa,
-            ...existing,
-            password: existing.password || sa.password,
-            status: existing.status || sa.status
-          });
-        }
-      }
-    });
+  if (Array.isArray(incomingAdmins) && incomingAdmins.length > 0) {
+    return getCleanAdministrators(incomingAdmins);
   }
-
-  return getCleanAdministrators(Array.from(map.values()));
+  return getCleanAdministrators(currentAdmins);
 }
 
 function getFilteredNotifications(notifs: NotificationItem[]): NotificationItem[] {
@@ -547,6 +512,21 @@ export default function App() {
     const cleanAdmins = getCleanAdministrators(newAdmins);
     setAdministrators(cleanAdmins);
     localStorage.setItem('dapodik_administrators', JSON.stringify(cleanAdmins));
+
+    // Update currentUser session immediately if current user's data/password was edited
+    const savedUserStr = localStorage.getItem('dapodik_current_user');
+    if (savedUserStr) {
+      try {
+        const currentSaved = JSON.parse(savedUserStr);
+        const matched = cleanAdmins.find(a => a.username.toLowerCase() === currentSaved.username.toLowerCase());
+        if (matched) {
+          setCurrentUser(matched);
+          localStorage.setItem('dapodik_current_user', JSON.stringify(matched));
+        }
+      } catch (e) {}
+    }
+
+    lastLocalMutationRef.current = Date.now();
     saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, cleanAdmins, notifications, aplikasiLinks);
     showToast('Data akun pengguna berhasil diperbarui & disinkronkan.');
     triggerAutoSync(students, teachers, sarpras, reports, displayConfig, schoolProfile, cleanAdmins, true);
@@ -562,19 +542,59 @@ export default function App() {
     setIsSyncing(false);
     
     if (res.success && res.data) {
-      const { siswa, ptk, sarpras: pulledSarpras, rapor, pengaturan, administrator, profilSekolah } = res.data;
+      const { siswa, ptk, sarpras: pulledSarpras, rapor, pengaturan, administrator, profilSekolah, aplikasi } = res.data;
       
-      if (Array.isArray(siswa)) setStudents(sanitizeStudentDates(siswa));
-      if (Array.isArray(ptk)) setTeachers(sanitizeTeacherDates(ptk));
-      if (Array.isArray(pulledSarpras)) setSarpras(pulledSarpras);
-      if (Array.isArray(rapor)) setReports(sanitizeReports(rapor));
+      let newStudents = students;
+      let newTeachers = teachers;
+      let newSarpras = sarpras;
+      let newReports = reports;
+      let newAdmins = administrators;
+      let newProfile = schoolProfile;
+      let newDisplay = displayConfig;
+      let newLinks = aplikasiLinks;
+
+      if (Array.isArray(siswa)) {
+        newStudents = sanitizeStudentDates(siswa);
+        setStudents(newStudents);
+        localStorage.setItem('dapodik_students', JSON.stringify(newStudents));
+      }
+      if (Array.isArray(ptk)) {
+        newTeachers = sanitizeTeacherDates(ptk);
+        setTeachers(newTeachers);
+        localStorage.setItem('dapodik_teachers', JSON.stringify(newTeachers));
+      }
+      if (Array.isArray(pulledSarpras)) {
+        newSarpras = pulledSarpras;
+        setSarpras(newSarpras);
+        localStorage.setItem('dapodik_sarpras', JSON.stringify(newSarpras));
+      }
+      if (Array.isArray(rapor)) {
+        newReports = sanitizeReports(rapor);
+        setReports(newReports);
+        localStorage.setItem('dapodik_reports', JSON.stringify(newReports));
+      }
+      if (Array.isArray(aplikasi) && aplikasi.length > 0) {
+        newLinks = aplikasi;
+        setAplikasiLinks(newLinks);
+        localStorage.setItem('dapodik_aplikasi_links', JSON.stringify(newLinks));
+      }
       if (Array.isArray(administrator) && administrator.length > 0) {
-        setAdministrators(prev => {
-          const merged = mergeAdministratorsWithLocal(administrator, prev);
-          localStorage.setItem('dapodik_administrators', JSON.stringify(merged));
-          saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, merged, notifications, aplikasiLinks);
-          return merged;
-        });
+        newAdmins = getCleanAdministrators(administrator);
+        setAdministrators(newAdmins);
+        localStorage.setItem('dapodik_administrators', JSON.stringify(newAdmins));
+
+        // Update current user if they are logged in and their data in the sheet changed
+        const savedUserStr = localStorage.getItem('dapodik_current_user');
+        if (savedUserStr) {
+          try {
+            const currentSaved = JSON.parse(savedUserStr);
+            const matched = newAdmins.find((a: AdminUser) => a.username.toLowerCase() === currentSaved.username.toLowerCase());
+            if (matched) {
+              setCurrentUser(matched);
+              localStorage.setItem('dapodik_current_user', JSON.stringify(matched));
+            }
+          } catch (e) {}
+        }
       }
       
       if (profilSekolah && profilSekolah.length > 0) {
@@ -599,7 +619,9 @@ export default function App() {
           }
         });
         if (Object.keys(profileMap).length > 0) {
-          setSchoolProfile(prev => sanitizeSchoolProfileDates({ ...prev, ...profileMap }));
+          newProfile = sanitizeSchoolProfileDates({ ...schoolProfile, ...profileMap });
+          setSchoolProfile(newProfile);
+          localStorage.setItem('dapodik_school_profile', JSON.stringify(newProfile));
         }
       }
       
@@ -613,34 +635,34 @@ export default function App() {
           }
         });
         if (Object.keys(configMap).length > 0) {
-          setDisplayConfig(prev => {
-            const merged = { ...prev };
-            Object.keys(configMap).forEach(key => {
-              if ((key === 'logoCustomUrl' || key === 'welcomeCustomIconUrl' || key === 'operatorAvatarUrl') && !configMap[key]) {
-                return;
-              }
-              if (key in merged || ['appName', 'appVersion', 'appSubtitle', 'logoCustomUrl', 'welcomeGreeting', 'welcomeTitle', 'welcomeSubtitle', 'welcomeIconType', 'welcomeCustomIconUrl', 'curriculumBadge', 'curriculumBadgeIcon', 'footerVersionText', 'operatorTitle', 'operatorName', 'operatorAvatarUrl'].includes(key)) {
-                (merged as any)[key] = configMap[key];
-              }
-            });
-            return merged;
+          const mergedDisplay = { ...displayConfig };
+          Object.keys(configMap).forEach(key => {
+            if ((key === 'logoCustomUrl' || key === 'welcomeCustomIconUrl' || key === 'operatorAvatarUrl') && !configMap[key]) {
+              return;
+            }
+            if (key in mergedDisplay || ['appName', 'appVersion', 'appSubtitle', 'logoCustomUrl', 'welcomeGreeting', 'welcomeTitle', 'welcomeSubtitle', 'welcomeIconType', 'welcomeCustomIconUrl', 'curriculumBadge', 'curriculumBadgeIcon', 'footerVersionText', 'operatorTitle', 'operatorName', 'operatorAvatarUrl'].includes(key)) {
+              (mergedDisplay as any)[key] = configMap[key];
+            }
           });
+          newDisplay = mergedDisplay;
+          setDisplayConfig(mergedDisplay);
+          localStorage.setItem('dapodik_display_config', JSON.stringify(mergedDisplay));
 
-          setSchoolProfile(prev => {
-            const merged = { ...prev };
-            if (configMap.logoCustomUrl || configMap.logoSekolah) {
-              merged.logoSekolah = configMap.logoCustomUrl || configMap.logoSekolah;
+          const mergedProfile = { ...newProfile };
+          if (configMap.logoCustomUrl || configMap.logoSekolah) {
+            mergedProfile.logoSekolah = configMap.logoCustomUrl || configMap.logoSekolah;
+          }
+          if (configMap.operatorName || configMap.operatorSekolah) {
+            mergedProfile.operatorSekolah = configMap.operatorName || configMap.operatorSekolah;
+          }
+          Object.keys(profileMap).forEach(key => {
+            if (key in mergedProfile) {
+              (mergedProfile as any)[key] = profileMap[key];
             }
-            if (configMap.operatorName || configMap.operatorSekolah) {
-              merged.operatorSekolah = configMap.operatorName || configMap.operatorSekolah;
-            }
-            Object.keys(profileMap).forEach(key => {
-              if (key in merged) {
-                (merged as any)[key] = profileMap[key];
-              }
-            });
-            return sanitizeSchoolProfileDates(merged);
           });
+          newProfile = sanitizeSchoolProfileDates(mergedProfile);
+          setSchoolProfile(newProfile);
+          localStorage.setItem('dapodik_school_profile', JSON.stringify(newProfile));
         }
       }
 
@@ -650,16 +672,8 @@ export default function App() {
         status: 'connected'
       }));
 
-      // Update current user if they are logged in and their data in the sheet changed
-      const savedUserStr = localStorage.getItem('dapodik_current_user');
-      if (savedUserStr && administrator && administrator.length > 0) {
-        const currentSaved = JSON.parse(savedUserStr);
-        const matched = administrator.find((a: AdminUser) => a.username.toLowerCase() === currentSaved.username.toLowerCase());
-        if (matched) {
-          setCurrentUser(matched);
-          localStorage.setItem('dapodik_current_user', JSON.stringify(matched));
-        }
-      }
+      // Broadcast fresh pulled data to server cache so other devices immediately sync
+      saveCacheToServer(newStudents, newTeachers, newSarpras, newReports, newDisplay, newProfile, newAdmins, notifications, newLinks);
 
       if (!silent) {
         showToast('Data berhasil disinkronkan dari Database!');
@@ -681,9 +695,9 @@ export default function App() {
         let serverConfig = null;
         let serverData = null;
 
-        // 1. Fetch sync configuration from server (if server backend exists, e.g., in developer preview container)
+        // 1. Fetch sync configuration from server with cache-busting
         try {
-          const configRes = await fetch('/api/sync-config');
+          const configRes = await fetch(`/api/sync-config?t=${Date.now()}`);
           if (configRes.ok && configRes.headers.get('content-type')?.includes('application/json')) {
             serverConfig = await configRes.json();
           }
@@ -691,9 +705,9 @@ export default function App() {
           console.log('Using pre-baked sync config defaults (Vercel/GitHub static hosting environment detected)');
         }
         
-        // 2. Fetch data cache from server (if server backend exists)
+        // 2. Fetch data cache from server with cache-busting
         try {
-          const dataRes = await fetch('/api/app-data');
+          const dataRes = await fetch(`/api/app-data?t=${Date.now()}`);
           if (dataRes.ok && dataRes.headers.get('content-type')?.includes('application/json')) {
             serverData = await dataRes.json();
           }
@@ -710,20 +724,57 @@ export default function App() {
         
         // Apply cached data from server if valid
         if (serverData && Object.keys(serverData).length > 0) {
-          if (serverData.students) setStudents(sanitizeStudentDates(serverData.students));
-          if (serverData.teachers) setTeachers(sanitizeTeacherDates(serverData.teachers));
-          if (serverData.sarpras) setSarpras(serverData.sarpras);
-          if (serverData.reports) setReports(sanitizeReports(serverData.reports));
-          if (serverData.displayConfig) setDisplayConfig(serverData.displayConfig);
-          if (serverData.schoolProfile) setSchoolProfile(sanitizeSchoolProfileDates(serverData.schoolProfile));
-          if (serverData.administrators) {
-            setAdministrators(prev => {
-              const merged = mergeAdministratorsWithLocal(serverData.administrators, prev);
-              localStorage.setItem('dapodik_administrators', JSON.stringify(merged));
-              return merged;
-            });
+          if (serverData.students && Array.isArray(serverData.students)) {
+            const clean = sanitizeStudentDates(serverData.students);
+            setStudents(clean);
+            localStorage.setItem('dapodik_students', JSON.stringify(clean));
           }
-          if (serverData.notifications) setNotifications(getFilteredNotifications(serverData.notifications));
+          if (serverData.teachers && Array.isArray(serverData.teachers)) {
+            const clean = sanitizeTeacherDates(serverData.teachers);
+            setTeachers(clean);
+            localStorage.setItem('dapodik_teachers', JSON.stringify(clean));
+          }
+          if (serverData.sarpras && Array.isArray(serverData.sarpras)) {
+            setSarpras(serverData.sarpras);
+            localStorage.setItem('dapodik_sarpras', JSON.stringify(serverData.sarpras));
+          }
+          if (serverData.reports && Array.isArray(serverData.reports)) {
+            const clean = sanitizeReports(serverData.reports);
+            setReports(clean);
+            localStorage.setItem('dapodik_reports', JSON.stringify(clean));
+          }
+          if (serverData.displayConfig) {
+            setDisplayConfig(serverData.displayConfig);
+            localStorage.setItem('dapodik_display_config', JSON.stringify(serverData.displayConfig));
+          }
+          if (serverData.schoolProfile) {
+            const clean = sanitizeSchoolProfileDates(serverData.schoolProfile);
+            setSchoolProfile(clean);
+            localStorage.setItem('dapodik_school_profile', JSON.stringify(clean));
+          }
+          if (serverData.administrators && Array.isArray(serverData.administrators) && serverData.administrators.length > 0) {
+            const cleanAdmins = getCleanAdministrators(serverData.administrators);
+            setAdministrators(cleanAdmins);
+            localStorage.setItem('dapodik_administrators', JSON.stringify(cleanAdmins));
+
+            // Update logged-in user if password or profile changed on another device
+            const savedUserStr = localStorage.getItem('dapodik_current_user');
+            if (savedUserStr) {
+              try {
+                const currentSaved = JSON.parse(savedUserStr);
+                const matched = cleanAdmins.find((a: AdminUser) => a.username.toLowerCase() === currentSaved.username.toLowerCase());
+                if (matched) {
+                  setCurrentUser(matched);
+                  localStorage.setItem('dapodik_current_user', JSON.stringify(matched));
+                }
+              } catch (e) {}
+            }
+          }
+          if (serverData.notifications && Array.isArray(serverData.notifications)) {
+            const filtered = getFilteredNotifications(serverData.notifications);
+            setNotifications(filtered);
+            localStorage.setItem('dapodik_notifications', JSON.stringify(filtered));
+          }
           if (serverData.aplikasiLinks && Array.isArray(serverData.aplikasiLinks) && serverData.aplikasiLinks.length > 0) {
             setAplikasiLinks(serverData.aplikasiLinks);
             localStorage.setItem('dapodik_aplikasi_links', JSON.stringify(serverData.aplikasiLinks));
@@ -739,21 +790,58 @@ export default function App() {
           if (res.success && res.data) {
             const { siswa, ptk, sarpras: pulledSarpras, rapor, pengaturan, administrator, profilSekolah, aplikasi } = res.data;
             
+            let finalStudents = serverData?.students || students;
+            let finalTeachers = serverData?.teachers || teachers;
+            let finalSarpras = serverData?.sarpras || sarpras;
+            let finalReports = serverData?.reports || reports;
+            let finalAdmins = serverData?.administrators || administrators;
+            let finalProfile = serverData?.schoolProfile || schoolProfile;
+            let finalDisplay = serverData?.displayConfig || displayConfig;
+            let finalLinks = serverData?.aplikasiLinks || aplikasiLinks;
+
             if (Array.isArray(aplikasi) && aplikasi.length > 0) {
-              setAplikasiLinks(aplikasi);
-              localStorage.setItem('dapodik_aplikasi_links', JSON.stringify(aplikasi));
+              finalLinks = aplikasi;
+              setAplikasiLinks(finalLinks);
+              localStorage.setItem('dapodik_aplikasi_links', JSON.stringify(finalLinks));
             }
             
-            if (Array.isArray(siswa)) setStudents(sanitizeStudentDates(siswa));
-            if (Array.isArray(ptk)) setTeachers(sanitizeTeacherDates(ptk));
-            if (Array.isArray(pulledSarpras)) setSarpras(pulledSarpras);
-            if (Array.isArray(rapor)) setReports(sanitizeReports(rapor));
+            if (Array.isArray(siswa)) {
+              finalStudents = sanitizeStudentDates(siswa);
+              setStudents(finalStudents);
+              localStorage.setItem('dapodik_students', JSON.stringify(finalStudents));
+            }
+            if (Array.isArray(ptk)) {
+              finalTeachers = sanitizeTeacherDates(ptk);
+              setTeachers(finalTeachers);
+              localStorage.setItem('dapodik_teachers', JSON.stringify(finalTeachers));
+            }
+            if (Array.isArray(pulledSarpras)) {
+              finalSarpras = pulledSarpras;
+              setSarpras(finalSarpras);
+              localStorage.setItem('dapodik_sarpras', JSON.stringify(finalSarpras));
+            }
+            if (Array.isArray(rapor)) {
+              finalReports = sanitizeReports(rapor);
+              setReports(finalReports);
+              localStorage.setItem('dapodik_reports', JSON.stringify(finalReports));
+            }
             if (Array.isArray(administrator) && administrator.length > 0) {
-              setAdministrators(prev => {
-                const merged = mergeAdministratorsWithLocal(administrator, prev);
-                localStorage.setItem('dapodik_administrators', JSON.stringify(merged));
-                return merged;
-              });
+              finalAdmins = getCleanAdministrators(administrator);
+              setAdministrators(finalAdmins);
+              localStorage.setItem('dapodik_administrators', JSON.stringify(finalAdmins));
+
+              // Update current user if they are logged in and their password was modified
+              const savedUserStr = localStorage.getItem('dapodik_current_user');
+              if (savedUserStr) {
+                try {
+                  const currentSaved = JSON.parse(savedUserStr);
+                  const matched = finalAdmins.find((a: AdminUser) => a.username.toLowerCase() === currentSaved.username.toLowerCase());
+                  if (matched) {
+                    setCurrentUser(matched);
+                    localStorage.setItem('dapodik_current_user', JSON.stringify(matched));
+                  }
+                } catch (e) {}
+              }
             }
             
             if (profilSekolah && profilSekolah.length > 0) {
@@ -778,16 +866,16 @@ export default function App() {
                 }
               });
               if (Object.keys(profileMap).length > 0) {
-                setSchoolProfile(prev => {
-                  const merged = { ...prev };
-                  Object.keys(profileMap).forEach(key => {
-                    if ((key === 'logoSekolah' || key === 'fotoKepalaSekolah') && !profileMap[key]) {
-                      return;
-                    }
-                    merged[key] = profileMap[key];
-                  });
-                  return sanitizeSchoolProfileDates(merged);
+                const mergedProf = { ...finalProfile };
+                Object.keys(profileMap).forEach(key => {
+                  if ((key === 'logoSekolah' || key === 'fotoKepalaSekolah') && !profileMap[key]) {
+                    return;
+                  }
+                  mergedProf[key] = profileMap[key];
                 });
+                finalProfile = sanitizeSchoolProfileDates(mergedProf);
+                setSchoolProfile(finalProfile);
+                localStorage.setItem('dapodik_school_profile', JSON.stringify(finalProfile));
               }
             }
             
@@ -801,32 +889,32 @@ export default function App() {
                 }
               });
               if (Object.keys(configMap).length > 0) {
-                setDisplayConfig(prev => {
-                  const merged = { ...prev };
-                  Object.keys(configMap).forEach(key => {
-                    if ((key === 'logoCustomUrl' || key === 'welcomeCustomIconUrl' || key === 'operatorAvatarUrl') && !configMap[key]) {
-                      return;
-                    }
-                    (merged as any)[key] = configMap[key];
-                  });
-                  return merged;
+                const mergedDisp = { ...finalDisplay };
+                Object.keys(configMap).forEach(key => {
+                  if ((key === 'logoCustomUrl' || key === 'welcomeCustomIconUrl' || key === 'operatorAvatarUrl') && !configMap[key]) {
+                    return;
+                  }
+                  (mergedDisp as any)[key] = configMap[key];
                 });
+                finalDisplay = mergedDisp;
+                setDisplayConfig(finalDisplay);
+                localStorage.setItem('dapodik_display_config', JSON.stringify(finalDisplay));
 
-                setSchoolProfile(prev => {
-                  const merged = { ...prev };
-                  if (configMap.logoCustomUrl || configMap.logoSekolah) {
-                    merged.logoSekolah = configMap.logoCustomUrl || configMap.logoSekolah;
+                const mergedProf = { ...finalProfile };
+                if (configMap.logoCustomUrl || configMap.logoSekolah) {
+                  mergedProf.logoSekolah = configMap.logoCustomUrl || configMap.logoSekolah;
+                }
+                if (configMap.operatorName || configMap.operatorSekolah) {
+                  mergedProf.operatorSekolah = configMap.operatorName || configMap.operatorSekolah;
+                }
+                Object.keys(profileMap).forEach(key => {
+                  if (key in mergedProf) {
+                    (mergedProf as any)[key] = profileMap[key];
                   }
-                  if (configMap.operatorName || configMap.operatorSekolah) {
-                    merged.operatorSekolah = configMap.operatorName || configMap.operatorSekolah;
-                  }
-                  Object.keys(profileMap).forEach(key => {
-                    if (key in merged) {
-                      (merged as any)[key] = profileMap[key];
-                    }
-                  });
-                  return sanitizeSchoolProfileDates(merged);
                 });
+                finalProfile = sanitizeSchoolProfileDates(mergedProf);
+                setSchoolProfile(finalProfile);
+                localStorage.setItem('dapodik_school_profile', JSON.stringify(finalProfile));
               }
             }
             
@@ -836,6 +924,9 @@ export default function App() {
               lastSynced: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
               status: 'connected'
             }));
+
+            // Sync server cache with the pulled data
+            saveCacheToServer(finalStudents, finalTeachers, finalSarpras, finalReports, finalDisplay, finalProfile, finalAdmins, notifications, finalLinks);
             
             showToast('Sinkronisasi otomatis dari Database berhasil!');
           }
@@ -862,7 +953,7 @@ export default function App() {
       try {
         let serverConfig = null;
         try {
-          const configRes = await fetch('/api/sync-config');
+          const configRes = await fetch(`/api/sync-config?t=${Date.now()}`);
           if (configRes.ok && configRes.headers.get('content-type')?.includes('application/json')) {
             serverConfig = await configRes.json();
           }
@@ -873,6 +964,7 @@ export default function App() {
         if (serverConfig && serverConfig.webAppUrl) {
           setSyncConfig(prev => {
             if (JSON.stringify(prev) !== JSON.stringify(serverConfig)) {
+              localStorage.setItem('dapodik_sync_config', JSON.stringify(serverConfig));
               return serverConfig;
             }
             return prev;
@@ -881,7 +973,7 @@ export default function App() {
 
         let serverData = null;
         try {
-          const dataRes = await fetch('/api/app-data');
+          const dataRes = await fetch(`/api/app-data?t=${Date.now()}`);
           if (dataRes.ok && dataRes.headers.get('content-type')?.includes('application/json')) {
             serverData = await dataRes.json();
           }
@@ -890,41 +982,45 @@ export default function App() {
         }
 
         if (serverData && Object.keys(serverData).length > 0) {
-          // If a local mutation occurred in the last 4 seconds, skip overwriting local state with server data
-          if (Date.now() - lastLocalMutationRef.current < 4000) {
+          // If a local mutation occurred in the last 3 seconds, skip overwriting local state with server data
+          if (Date.now() - lastLocalMutationRef.current < 3000) {
             return;
           }
           // Compare and update only if different to prevent redundant writes or feedback loops
-          if (serverData.students) {
+          if (serverData.students && Array.isArray(serverData.students)) {
             setStudents(prev => {
               const incoming = sanitizeStudentDates(serverData.students);
               if (JSON.stringify(prev) !== JSON.stringify(incoming)) {
+                localStorage.setItem('dapodik_students', JSON.stringify(incoming));
                 return incoming;
               }
               return prev;
             });
           }
-          if (serverData.teachers) {
+          if (serverData.teachers && Array.isArray(serverData.teachers)) {
             setTeachers(prev => {
               const incoming = sanitizeTeacherDates(serverData.teachers);
               if (JSON.stringify(prev) !== JSON.stringify(incoming)) {
+                localStorage.setItem('dapodik_teachers', JSON.stringify(incoming));
                 return incoming;
               }
               return prev;
             });
           }
-          if (serverData.sarpras) {
+          if (serverData.sarpras && Array.isArray(serverData.sarpras)) {
             setSarpras(prev => {
               if (JSON.stringify(prev) !== JSON.stringify(serverData.sarpras)) {
+                localStorage.setItem('dapodik_sarpras', JSON.stringify(serverData.sarpras));
                 return serverData.sarpras;
               }
               return prev;
             });
           }
-          if (serverData.reports) {
+          if (serverData.reports && Array.isArray(serverData.reports)) {
             setReports(prev => {
               const incoming = sanitizeReports(serverData.reports);
               if (JSON.stringify(prev) !== JSON.stringify(incoming)) {
+                localStorage.setItem('dapodik_reports', JSON.stringify(incoming));
                 return incoming;
               }
               return prev;
@@ -933,6 +1029,7 @@ export default function App() {
           if (serverData.displayConfig) {
             setDisplayConfig(prev => {
               if (JSON.stringify(prev) !== JSON.stringify(serverData.displayConfig)) {
+                localStorage.setItem('dapodik_display_config', JSON.stringify(serverData.displayConfig));
                 return serverData.displayConfig;
               }
               return prev;
@@ -942,23 +1039,41 @@ export default function App() {
             setSchoolProfile(prev => {
               const incoming = sanitizeSchoolProfileDates(serverData.schoolProfile);
               if (JSON.stringify(prev) !== JSON.stringify(incoming)) {
+                localStorage.setItem('dapodik_school_profile', JSON.stringify(incoming));
                 return incoming;
               }
               return prev;
             });
           }
-          if (serverData.administrators) {
+          if (serverData.administrators && Array.isArray(serverData.administrators)) {
             setAdministrators(prev => {
-              if (JSON.stringify(prev) !== JSON.stringify(serverData.administrators)) {
-                return serverData.administrators;
+              const cleanAdmins = getCleanAdministrators(serverData.administrators);
+              if (JSON.stringify(prev) !== JSON.stringify(cleanAdmins)) {
+                localStorage.setItem('dapodik_administrators', JSON.stringify(cleanAdmins));
+
+                // Update current user session if password or profile changed on another device
+                const savedUserStr = localStorage.getItem('dapodik_current_user');
+                if (savedUserStr) {
+                  try {
+                    const currentSaved = JSON.parse(savedUserStr);
+                    const matched = cleanAdmins.find((a: AdminUser) => a.username.toLowerCase() === currentSaved.username.toLowerCase());
+                    if (matched && (matched.password !== currentSaved.password || matched.nama !== currentSaved.nama || matched.role !== currentSaved.role)) {
+                      setCurrentUser(matched);
+                      localStorage.setItem('dapodik_current_user', JSON.stringify(matched));
+                    }
+                  } catch (e) {}
+                }
+
+                return cleanAdmins;
               }
               return prev;
             });
           }
-          if (serverData.notifications) {
+          if (serverData.notifications && Array.isArray(serverData.notifications)) {
             setNotifications(prev => {
               const filtered = getFilteredNotifications(serverData.notifications);
               if (JSON.stringify(prev) !== JSON.stringify(filtered)) {
+                localStorage.setItem('dapodik_notifications', JSON.stringify(filtered));
                 return filtered;
               }
               return prev;
@@ -981,18 +1096,22 @@ export default function App() {
       }
     };
 
-    // Poll every 5 seconds for fast cross-tab and device synchronization
-    const pollInterval = setInterval(revalidateData, 5000);
+    // Poll every 3 seconds for fast cross-tab and device synchronization
+    const pollInterval = setInterval(revalidateData, 3000);
 
-    // Refresh immediately on window focus
-    const handleFocus = () => {
-      revalidateData();
+    // Refresh immediately on window focus or visibility change (switching back to browser or unlocking device)
+    const handleSyncTrigger = () => {
+      if (document.visibilityState === 'visible') {
+        revalidateData();
+      }
     };
-    window.addEventListener('focus', handleFocus);
+    window.addEventListener('focus', handleSyncTrigger);
+    document.addEventListener('visibilitychange', handleSyncTrigger);
 
     return () => {
       clearInterval(pollInterval);
-      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('focus', handleSyncTrigger);
+      document.removeEventListener('visibilitychange', handleSyncTrigger);
     };
   }, [isInitialized]);
 
