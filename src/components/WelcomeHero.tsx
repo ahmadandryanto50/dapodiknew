@@ -273,7 +273,10 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
           </div>
 
           {/* Quick Realtime Sync Pill & Actions */}
-          <div className="flex items-center gap-2.5 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Install APK HP Button */}
+            <PWAInstallButton variant="header" />
+
             {/* Mobile Menu Button */}
             {onOpenMobileMenu && (
               <button 
@@ -486,6 +489,8 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
 
             {/* Quick Action Buttons */}
             <div className="flex flex-wrap items-center justify-center gap-3 pt-5">
+              <PWAInstallButton variant="hero" />
+
               <button
                 id="hero-enter-siswa-btn"
                 onClick={() => onNavigate('siswa')}

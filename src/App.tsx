@@ -38,6 +38,7 @@ import { AplikasiModule } from './components/AplikasiModule';
 import { GoogleSheetModal } from './components/GoogleSheetModal';
 import { QuickSearchModal } from './components/QuickSearchModal';
 import { NotificationDrawer } from './components/NotificationDrawer';
+import { PWAInstallButton } from './components/PWAInstallButton';
 import { SafeImage } from './components/SafeImage';
 import { formatDateIndonesian, cleanLeadingZerosCode } from './utils/dateUtils';
 import { 
@@ -1620,6 +1621,8 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2.5">
+            <PWAInstallButton variant="header" />
+
             <button
               onClick={() => {
                 if (currentUser?.role === 'Administrator' || currentUser?.role === 'Operator') {
@@ -1946,9 +1949,14 @@ export default function App() {
               })}
             </div>
 
+            {/* Mobile PWA Download / Install Card Banner */}
+            <div className="pt-3 pb-2 border-t border-slate-100">
+              <PWAInstallButton variant="hero" className="w-full justify-center shadow-md py-2.5 text-xs" />
+            </div>
+
             {/* Bottom Operator Status */}
             {currentUser && (
-              <div className="border-t border-slate-100 pt-4 mt-auto shrink-0">
+              <div className="border-t border-slate-100 pt-3 mt-auto shrink-0">
                 <div className="flex items-center gap-3 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
                   <div className="w-8 h-8 rounded-lg bg-amber-400 text-slate-950 font-bold text-xs flex items-center justify-center shrink-0">
                     {currentUser.nama.substring(0, 1).toUpperCase()}
@@ -1963,6 +1971,9 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Floating PWA / APK Install Banner for Mobile HP */}
+      <PWAInstallButton variant="floating" />
 
     </div>
   );
