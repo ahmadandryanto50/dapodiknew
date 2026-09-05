@@ -38,7 +38,6 @@ import { AplikasiModule } from './components/AplikasiModule';
 import { GoogleSheetModal } from './components/GoogleSheetModal';
 import { QuickSearchModal } from './components/QuickSearchModal';
 import { NotificationDrawer } from './components/NotificationDrawer';
-import { PWAInstallButton } from './components/PWAInstallButton';
 import { SafeImage } from './components/SafeImage';
 import { formatDateIndonesian, cleanLeadingZerosCode } from './utils/dateUtils';
 import { 
@@ -1621,8 +1620,6 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2.5">
-            <PWAInstallButton variant="header" />
-
             <button
               onClick={() => {
                 if (currentUser?.role === 'Administrator' || currentUser?.role === 'Operator') {
@@ -1949,11 +1946,6 @@ export default function App() {
               })}
             </div>
 
-            {/* Mobile PWA Download / Install Card Banner */}
-            <div className="pt-3 pb-2 border-t border-slate-100">
-              <PWAInstallButton variant="hero" className="w-full justify-center shadow-md py-2.5 text-xs" />
-            </div>
-
             {/* Bottom Operator Status */}
             {currentUser && (
               <div className="border-t border-slate-100 pt-3 mt-auto shrink-0">
@@ -1971,9 +1963,6 @@ export default function App() {
           </div>
         </div>
       )}
-
-      {/* Floating PWA / APK Install Banner for Mobile HP */}
-      <PWAInstallButton variant="floating" />
 
     </div>
   );

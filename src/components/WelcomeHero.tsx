@@ -38,7 +38,6 @@ import {
   ZoomIn
 } from 'lucide-react';
 import { ActiveTab, SyncConfig, Student, TeacherStaff, SarprasItem, StudentReport, AppDisplayConfig, SchoolProfile, AdminUser } from '../types';
-import { PWAInstallButton } from './PWAInstallButton';
 import { SafeImage } from './SafeImage';
 
 interface WelcomeHeroProps {
@@ -274,9 +273,6 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
 
           {/* Quick Realtime Sync Pill & Actions */}
           <div className="flex items-center gap-2 sm:gap-3">
-            {/* Install APK HP Button */}
-            <PWAInstallButton variant="header" />
-
             {/* Mobile Menu Button */}
             {onOpenMobileMenu && (
               <button 
@@ -489,8 +485,6 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
 
             {/* Quick Action Buttons */}
             <div className="flex flex-wrap items-center justify-center gap-3 pt-5">
-              <PWAInstallButton variant="hero" />
-
               <button
                 id="hero-enter-siswa-btn"
                 onClick={() => onNavigate('siswa')}
