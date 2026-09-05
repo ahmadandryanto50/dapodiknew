@@ -181,6 +181,23 @@ function mergeAdministratorsWithLocal(incomingAdmins: AdminUser[], currentAdmins
   return getCleanAdministrators(Array.from(map.values()));
 }
 
+function getFilteredNotifications(notifs: NotificationItem[]): NotificationItem[] {
+  if (!Array.isArray(notifs)) return [];
+  let deletedIds: string[] = [];
+  let isCleared = false;
+  try {
+    const delStr = localStorage.getItem('dapodik_deleted_notif_ids');
+    if (delStr) deletedIds = JSON.parse(delStr);
+    isCleared = localStorage.getItem('dapodik_notif_cleared_flag') === 'true';
+  } catch (e) {
+    console.error(e);
+  }
+  if (isCleared && deletedIds.length === 0) {
+    return [];
+  }
+  return notifs.filter(n => n && n.id && !deletedIds.includes(n.id));
+}
+
 export default function App() {
   // Authentication State
   const [administrators, setAdministrators] = useState<AdminUser[]>(() => {
@@ -341,8 +358,19 @@ export default function App() {
   });
 
   const [notifications, setNotifications] = useState<NotificationItem[]>(() => {
+    const isCleared = localStorage.getItem('dapodik_notif_cleared_flag') === 'true';
     const saved = localStorage.getItem('dapodik_notifications');
-    return saved ? JSON.parse(saved) : initialNotifications;
+    let base: NotificationItem[] = [];
+    if (saved !== null) {
+      try {
+        base = JSON.parse(saved);
+      } catch (e) {
+        console.error(e);
+      }
+    } else if (!isCleared) {
+      base = initialNotifications;
+    }
+    return getFilteredNotifications(base);
   });
 
   const [aplikasiLinks, setAplikasiLinks] = useState<any[]>(() => {
@@ -417,6 +445,24 @@ export default function App() {
     } catch (err) {
       console.error('Failed to save sync config to server:', err);
     }
+  };
+
+  const addNotification = (title: string, message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
+    const newNotif: NotificationItem = {
+      id: `notif-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      title,
+      message,
+      time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+      type,
+      read: false
+    };
+    setNotifications(prev => {
+      const updated = [newNotif, ...getFilteredNotifications(prev)];
+      localStorage.setItem('dapodik_notifications', JSON.stringify(updated));
+      localStorage.removeItem('dapodik_notif_cleared_flag');
+      saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, updated);
+      return updated;
+    });
   };
 
   // Save to LocalStorage & Server Cache
@@ -677,7 +723,7 @@ export default function App() {
               return merged;
             });
           }
-          if (serverData.notifications) setNotifications(serverData.notifications);
+          if (serverData.notifications) setNotifications(getFilteredNotifications(serverData.notifications));
           if (serverData.aplikasiLinks && Array.isArray(serverData.aplikasiLinks) && serverData.aplikasiLinks.length > 0) {
             setAplikasiLinks(serverData.aplikasiLinks);
             localStorage.setItem('dapodik_aplikasi_links', JSON.stringify(serverData.aplikasiLinks));
@@ -911,8 +957,9 @@ export default function App() {
           }
           if (serverData.notifications) {
             setNotifications(prev => {
-              if (JSON.stringify(prev) !== JSON.stringify(serverData.notifications)) {
-                return serverData.notifications;
+              const filtered = getFilteredNotifications(serverData.notifications);
+              if (JSON.stringify(prev) !== JSON.stringify(filtered)) {
+                return filtered;
               }
               return prev;
             });
@@ -1194,6 +1241,7 @@ export default function App() {
     setDisplayConfig(updatedDisplay);
     setSchoolProfile(updatedProfile);
     showToast('Teks & tampilan disimpan...');
+    addNotification('Update Tampilan Beranda', 'Pengaturan teks dan tampilan beranda berhasil diperbarui.', 'info');
     triggerAutoSync(students, teachers, sarpras, reports, updatedDisplay, updatedProfile, administrators, true);
   };
 
@@ -1208,6 +1256,7 @@ export default function App() {
     setSchoolProfile(updatedProfile);
     setDisplayConfig(updatedDisplay);
     showToast('Profil sekolah disimpan...');
+    addNotification('Update Profil Sekolah', 'Data Profil Satuan Pendidikan berhasil diperbarui.', 'info');
     triggerAutoSync(students, teachers, sarpras, reports, updatedDisplay, updatedProfile, administrators, true);
   };
 
@@ -1229,6 +1278,7 @@ export default function App() {
     setSchoolProfile(updatedProfile);
     
     showToast('Semua pengaturan dan profil sekolah berhasil disimpan...');
+    addNotification('Update Pengaturan Sistem', 'Seluruh konfigurasi aplikasi dan profil sekolah telah disinkronkan.', 'success');
     triggerAutoSync(students, teachers, sarpras, reports, updatedDisplay, updatedProfile, administrators, true);
   };
 
@@ -1237,6 +1287,7 @@ export default function App() {
     const updated = sanitizeStudentDates([std, ...students]);
     setStudents(updated);
     showToast(`Siswa "${std.nama}" ditambahkan...`);
+    addNotification('Penambahan Data Siswa', `Siswa baru "${std.nama}" (NISN: ${std.nisn || '-'}) berhasil ditambahkan.`, 'success');
     triggerAutoSync(updated, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, true);
   };
 
@@ -1244,6 +1295,7 @@ export default function App() {
     const updated = sanitizeStudentDates(students.map(s => s.id === std.id ? std : s));
     setStudents(updated);
     showToast(`Data siswa "${std.nama}" diperbarui...`);
+    addNotification('Pembaruan Data Siswa', `Data siswa "${std.nama}" berhasil diperbarui.`, 'info');
     triggerAutoSync(updated, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, true);
   };
 
@@ -1254,6 +1306,7 @@ export default function App() {
     localStorage.setItem('dapodik_students', JSON.stringify(updated));
     saveCacheToServer(updated, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notifications);
     showToast('Data siswa dihapus...');
+    addNotification('Penghapusan Data Siswa', 'Data siswa berhasil dihapus dari sistem.', 'warning');
     triggerAutoSync(updated, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, true);
   };
 
@@ -1270,6 +1323,7 @@ export default function App() {
     }));
     setStudents(updated);
     showToast(`Berhasil memindahkan siswa ke Data Siswa Keluar (${reason})`);
+    addNotification('Siswa Keluar / Mutasi', `Siswa berhasil dipindahkan ke Data Siswa Keluar (${reason}).`, 'warning');
     triggerAutoSync(updated, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, true);
   };
 
@@ -1291,6 +1345,7 @@ export default function App() {
     }));
     setStudents(updated);
     showToast('Berhasil menarik siswa kembali ke Data Siswa Aktif');
+    addNotification('Siswa Dikembalikan', 'Siswa berhasil ditarik kembali ke Data Siswa Aktif.', 'info');
     triggerAutoSync(updated, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, true);
   };
 
@@ -1310,6 +1365,7 @@ export default function App() {
     }));
     setStudents(updated);
     showToast(`🎓 Siswa "${targetStudent?.nama || 'Siswa'}" berhasil dipindahkan ke Menu Alumni (Tahun Lulus: ${tahunLulus})`);
+    addNotification('Siswa Lulus / Alumni', `Siswa "${targetStudent?.nama || 'Siswa'}" berhasil diluluskan (Alumni ${tahunLulus}).`, 'success');
     triggerAutoSync(updated, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, true);
   };
 
@@ -1324,6 +1380,7 @@ export default function App() {
     }
     setStudents(updated);
     showToast(`🎉 Sukses mengimpor ${imported.length} data siswa!`);
+    addNotification('Impor Data Siswa', `Berhasil mengimpor ${imported.length} data siswa baru.`, 'success');
     triggerAutoSync(updated, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, true);
   };
 
@@ -1332,6 +1389,7 @@ export default function App() {
     const updated = sanitizeTeacherDates([t, ...teachers]);
     setTeachers(updated);
     showToast(`PTK "${t.nama}" ditambahkan...`);
+    addNotification('Penambahan PTK/Guru', `PTK/Guru baru "${t.nama}" ditambahkan.`, 'success');
     triggerAutoSync(students, updated, sarpras, reports, displayConfig, schoolProfile, administrators, true);
   };
 
@@ -1339,6 +1397,7 @@ export default function App() {
     const updated = sanitizeTeacherDates(teachers.map(tc => tc.id === t.id ? t : tc));
     setTeachers(updated);
     showToast(`Data PTK "${t.nama}" diperbarui...`);
+    addNotification('Pembaruan PTK/Guru', `Data PTK "${t.nama}" berhasil diperbarui.`, 'info');
     triggerAutoSync(students, updated, sarpras, reports, displayConfig, schoolProfile, administrators, true);
   };
 
@@ -1349,6 +1408,7 @@ export default function App() {
     localStorage.setItem('dapodik_teachers', JSON.stringify(updated));
     saveCacheToServer(students, updated, sarpras, reports, displayConfig, schoolProfile, administrators, notifications);
     showToast('Data PTK dihapus...');
+    addNotification('Penghapusan PTK/Guru', 'Data PTK/Guru telah dihapus.', 'warning');
     triggerAutoSync(students, updated, sarpras, reports, displayConfig, schoolProfile, administrators, true);
   };
 
@@ -1363,6 +1423,7 @@ export default function App() {
     }
     setTeachers(updated);
     showToast(`🎉 Sukses mengimpor ${imported.length} data PTK!`);
+    addNotification('Impor Data PTK', `Berhasil mengimpor ${imported.length} data PTK.`, 'success');
     triggerAutoSync(students, updated, sarpras, reports, displayConfig, schoolProfile, administrators, true);
   };
 
@@ -1374,6 +1435,7 @@ export default function App() {
     localStorage.setItem('dapodik_sarpras', JSON.stringify(updated));
     saveCacheToServer(students, teachers, updated, reports, displayConfig, schoolProfile, administrators, notifications);
     showToast(`Sarpras "${s.namaBarang}" ditambahkan...`);
+    addNotification('Penambahan Sarpras', `Sarpras "${s.namaBarang}" ditambahkan.`, 'success');
     triggerAutoSync(students, teachers, updated, reports, displayConfig, schoolProfile, administrators, true);
   };
 
@@ -1384,6 +1446,7 @@ export default function App() {
     localStorage.setItem('dapodik_sarpras', JSON.stringify(updated));
     saveCacheToServer(students, teachers, updated, reports, displayConfig, schoolProfile, administrators, notifications);
     showToast(`Data sarpras "${s.namaBarang}" diperbarui...`);
+    addNotification('Pembaruan Sarpras', `Data sarpras "${s.namaBarang}" diperbarui.`, 'info');
     triggerAutoSync(students, teachers, updated, reports, displayConfig, schoolProfile, administrators, true);
   };
 
@@ -1394,6 +1457,7 @@ export default function App() {
     localStorage.setItem('dapodik_sarpras', JSON.stringify(updated));
     saveCacheToServer(students, teachers, updated, reports, displayConfig, schoolProfile, administrators, notifications);
     showToast('Data sarpras dihapus...');
+    addNotification('Penghapusan Sarpras', 'Data sarana & prasarana dihapus.', 'warning');
     triggerAutoSync(students, teachers, updated, reports, displayConfig, schoolProfile, administrators, true);
   };
 
@@ -1405,6 +1469,7 @@ export default function App() {
     localStorage.setItem('dapodik_reports', JSON.stringify(updated));
     saveCacheToServer(students, teachers, sarpras, updated, displayConfig, schoolProfile, administrators, notifications);
     showToast(`Lembar Rapor untuk "${r.studentName}" disimpan...`);
+    addNotification('Rapor Disimpan', `Lembar Rapor untuk "${r.studentName}" berhasil disimpan.`, 'success');
     triggerAutoSync(students, teachers, sarpras, updated, displayConfig, schoolProfile, administrators, true);
   };
 
@@ -1415,6 +1480,7 @@ export default function App() {
     localStorage.setItem('dapodik_reports', JSON.stringify(updated));
     saveCacheToServer(students, teachers, sarpras, updated, displayConfig, schoolProfile, administrators, notifications);
     showToast(`Rapor "${r.studentName}" diperbarui...`);
+    addNotification('Rapor Diperbarui', `Rapor "${r.studentName}" berhasil diperbarui.`, 'info');
     triggerAutoSync(students, teachers, sarpras, updated, displayConfig, schoolProfile, administrators, true);
   };
 
@@ -1425,13 +1491,65 @@ export default function App() {
     localStorage.setItem('dapodik_reports', JSON.stringify(updated));
     saveCacheToServer(students, teachers, sarpras, updated, displayConfig, schoolProfile, administrators, notifications);
     showToast('Data rapor dihapus...');
+    addNotification('Penghapusan Rapor', 'Data lembar rapor dihapus.', 'warning');
     triggerAutoSync(students, teachers, sarpras, updated, displayConfig, schoolProfile, administrators, true);
   };
 
   const unreadNotifCount = notifications.filter(n => !n.read).length;
 
   const handleMarkAllNotifRead = () => {
-    setNotifications(notifications.map(n => ({ ...n, read: true })));
+    const updated = notifications.map(n => ({ ...n, read: true }));
+    setNotifications(updated);
+    localStorage.setItem('dapodik_notifications', JSON.stringify(updated));
+    saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, updated);
+  };
+
+  const handleMarkNotifRead = (id: string) => {
+    const updated = notifications.map(n => n.id === id ? { ...n, read: true } : n);
+    setNotifications(updated);
+    localStorage.setItem('dapodik_notifications', JSON.stringify(updated));
+    saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, updated);
+  };
+
+  const handleDeleteNotif = (id: string) => {
+    const updated = notifications.filter(n => n.id !== id);
+    setNotifications(updated);
+    localStorage.setItem('dapodik_notifications', JSON.stringify(updated));
+
+    try {
+      const delStr = localStorage.getItem('dapodik_deleted_notif_ids') || '[]';
+      const delList: string[] = JSON.parse(delStr);
+      if (!delList.includes(id)) {
+        delList.push(id);
+        localStorage.setItem('dapodik_deleted_notif_ids', JSON.stringify(delList));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, updated);
+    showToast('Notifikasi dihapus...');
+  };
+
+  const handleClearAllNotif = () => {
+    setNotifications([]);
+    localStorage.setItem('dapodik_notifications', '[]');
+    localStorage.setItem('dapodik_notif_cleared_flag', 'true');
+
+    try {
+      const allIds = notifications.map(n => n.id);
+      const delStr = localStorage.getItem('dapodik_deleted_notif_ids') || '[]';
+      const delList: string[] = JSON.parse(delStr);
+      allIds.forEach(id => {
+        if (!delList.includes(id)) delList.push(id);
+      });
+      localStorage.setItem('dapodik_deleted_notif_ids', JSON.stringify(delList));
+    } catch (e) {
+      console.error(e);
+    }
+
+    saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, []);
+    showToast('Semua notifikasi berhasil dihapus...');
   };
 
   // School Profile Handler
@@ -1900,6 +2018,9 @@ export default function App() {
         onClose={() => setIsNotifDrawerOpen(false)}
         notifications={notifications}
         onMarkAllRead={handleMarkAllNotifRead}
+        onMarkRead={handleMarkNotifRead}
+        onClearAllNotif={handleClearAllNotif}
+        onDeleteNotif={handleDeleteNotif}
       />
 
       {/* Mobile Navigation Drawer */}
