@@ -134,11 +134,26 @@ const sanitizeReports = (raporList: any[]): StudentReport[] => {
   });
 };
 
+function getCleanAdministrators(admins: AdminUser[]): AdminUser[] {
+  if (!Array.isArray(admins)) return [];
+  let deletedUsernames: string[] = [];
+  try {
+    const delStr = localStorage.getItem('dapodik_deleted_admins');
+    if (delStr) deletedUsernames = JSON.parse(delStr);
+  } catch (e) {
+    console.error(e);
+  }
+  return admins.filter(
+    (a) => a && a.username && !deletedUsernames.includes(a.username.trim().toLowerCase())
+  );
+}
+
 export default function App() {
   // Authentication State
   const [administrators, setAdministrators] = useState<AdminUser[]>(() => {
     const saved = localStorage.getItem('dapodik_administrators');
-    return saved ? JSON.parse(saved) : initialAdministrators;
+    const list = saved ? JSON.parse(saved) : initialAdministrators;
+    return getCleanAdministrators(list);
   });
 
   const [currentUser, setCurrentUser] = useState<AdminUser | null>(() => {
@@ -450,9 +465,12 @@ export default function App() {
   };
 
   const handleSaveAdministrators = (newAdmins: AdminUser[]) => {
-    setAdministrators(newAdmins);
-    showToast('Data akun administrator berhasil diperbarui.');
-    triggerAutoSync(students, teachers, sarpras, reports, displayConfig, schoolProfile, newAdmins);
+    const cleanAdmins = getCleanAdministrators(newAdmins);
+    setAdministrators(cleanAdmins);
+    localStorage.setItem('dapodik_administrators', JSON.stringify(cleanAdmins));
+    saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, cleanAdmins, notifications, aplikasiLinks);
+    showToast('Data akun pengguna berhasil diperbarui & disinkronkan.');
+    triggerAutoSync(students, teachers, sarpras, reports, displayConfig, schoolProfile, cleanAdmins, true);
   };
 
   const handlePullFromSheets = async (silent = false) => {
@@ -471,7 +489,12 @@ export default function App() {
       if (Array.isArray(ptk)) setTeachers(sanitizeTeacherDates(ptk));
       if (Array.isArray(pulledSarpras)) setSarpras(pulledSarpras);
       if (Array.isArray(rapor)) setReports(sanitizeReports(rapor));
-      if (Array.isArray(administrator) && administrator.length > 0) setAdministrators(administrator);
+      if (Array.isArray(administrator) && administrator.length > 0) {
+        const cleanPulled = getCleanAdministrators(administrator);
+        setAdministrators(cleanPulled);
+        localStorage.setItem('dapodik_administrators', JSON.stringify(cleanPulled));
+        saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, cleanPulled, notifications, aplikasiLinks);
+      }
       
       if (profilSekolah && profilSekolah.length > 0) {
         const profileMap: any = {};
@@ -612,7 +635,11 @@ export default function App() {
           if (serverData.reports) setReports(sanitizeReports(serverData.reports));
           if (serverData.displayConfig) setDisplayConfig(serverData.displayConfig);
           if (serverData.schoolProfile) setSchoolProfile(sanitizeSchoolProfileDates(serverData.schoolProfile));
-          if (serverData.administrators) setAdministrators(serverData.administrators);
+          if (serverData.administrators) {
+            const cleanServerAdmins = getCleanAdministrators(serverData.administrators);
+            setAdministrators(cleanServerAdmins);
+            localStorage.setItem('dapodik_administrators', JSON.stringify(cleanServerAdmins));
+          }
           if (serverData.notifications) setNotifications(serverData.notifications);
           if (serverData.aplikasiLinks && Array.isArray(serverData.aplikasiLinks) && serverData.aplikasiLinks.length > 0) {
             setAplikasiLinks(serverData.aplikasiLinks);
@@ -638,7 +665,11 @@ export default function App() {
             if (Array.isArray(ptk)) setTeachers(sanitizeTeacherDates(ptk));
             if (Array.isArray(pulledSarpras)) setSarpras(pulledSarpras);
             if (Array.isArray(rapor)) setReports(sanitizeReports(rapor));
-            if (Array.isArray(administrator) && administrator.length > 0) setAdministrators(administrator);
+            if (Array.isArray(administrator) && administrator.length > 0) {
+              const cleanPulled = getCleanAdministrators(administrator);
+              setAdministrators(cleanPulled);
+              localStorage.setItem('dapodik_administrators', JSON.stringify(cleanPulled));
+            }
             
             if (profilSekolah && profilSekolah.length > 0) {
               const profileMap: any = {};
@@ -1383,10 +1414,10 @@ export default function App() {
         onLogin={handleLogin}
         displayConfig={displayConfig}
         administrators={administrators}
-        onSaveAdministrators={handleSaveAdministrators}
         syncConfig={syncConfig}
         onPullData={() => handlePullFromSheets(false)}
         schoolProfile={schoolProfile}
+        teachers={teachers}
       />
     );
   }
@@ -1844,17 +1875,25 @@ export default function App() {
           <div className="relative flex flex-col w-72 max-w-[85vw] bg-white h-full shadow-2xl p-5 border-r border-slate-100 z-10">
             {/* Header */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
-              <div className="flex items-center gap-2.5 text-left">
-                <div className="w-8 h-8 rounded-xl bg-sky-900 p-1 flex items-center justify-center shrink-0">
-                  <div className="w-5 h-5 rounded-full border-2 border-white border-t-amber-400 border-r-amber-400 flex items-center justify-center transform -rotate-45">
-                    <div className="w-1 h-1 bg-amber-400 rounded-xs" />
+              <div className="flex items-center gap-3 text-left">
+                {displayConfig.logoCustomUrl || schoolProfile.logoSekolah ? (
+                  <img
+                    src={displayConfig.logoCustomUrl || schoolProfile.logoSekolah}
+                    alt="Logo"
+                    className="w-10 h-10 rounded-2xl object-contain bg-slate-50 border border-slate-200 p-1 shrink-0 shadow-xs"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-2xl bg-[#034d74] p-1.5 flex items-center justify-center shrink-0 shadow-md">
+                    <div className="w-full h-full rounded-xl border-2 border-white/90 border-t-amber-400 border-r-amber-400 flex items-center justify-center transform -rotate-45 relative">
+                      <div className="w-2 h-2 bg-amber-400 rounded-full shadow-xs" />
+                    </div>
                   </div>
-                </div>
+                )}
                 <div className="overflow-hidden">
-                  <h3 className="font-extrabold text-xs text-slate-900 tracking-wider truncate leading-tight">
+                  <h3 className="font-extrabold text-sm text-[#0c2340] tracking-wider truncate leading-tight">
                     {displayConfig.appName ?? 'DAPODIK'}
                   </h3>
-                  <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider leading-none mt-0.5">
+                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest leading-none mt-1">
                     MENU NAVIGASI
                   </p>
                 </div>

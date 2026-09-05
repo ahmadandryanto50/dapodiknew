@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   Users, 
   GraduationCap, 
@@ -17,6 +17,7 @@ import {
   CheckCircle2, 
   Database, 
   ChevronRight,
+  ChevronDown,
   TrendingUp,
   School,
   Landmark,
@@ -83,6 +84,26 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isOperatorModalOpen, setIsOperatorModalOpen] = useState(false);
+  const [isNavOpen, setIsNavOpen] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('dapodik_nav_open');
+      return saved !== null ? JSON.parse(saved) : false;
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleNav = () => {
+    setIsNavOpen((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('dapodik_nav_open', JSON.stringify(next));
+      } catch (e) {
+        console.error(e);
+      }
+      return next;
+    });
+  };
 
   const activeStudents = students.filter(s => !s.status || s.status === 'Aktif');
 
@@ -316,46 +337,71 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
         {/* Center Grid: Left Nav Cards + Center Welcome Display + Right Interactive Dashboard */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center py-6">
           
-          {/* Left Vertical Pill Navigation */}
+          {/* Left Vertical Pill Navigation (Collapsible Accordion) */}
           <div className="lg:col-span-3 flex flex-col gap-3">
-            <div className="text-xs font-semibold uppercase tracking-widest text-sky-200/80 px-2 flex items-center justify-between">
-              <span>Menu Navigasi Utama</span>
-            </div>
+            <button
+              type="button"
+              id="toggle-main-nav-btn"
+              onClick={toggleNav}
+              className="w-full text-xs font-bold uppercase tracking-wider text-sky-100 bg-white/15 hover:bg-white/25 border border-white/25 backdrop-blur-xl px-3.5 py-2.5 rounded-2xl flex items-center justify-between cursor-pointer transition-all shadow-md active:scale-98 group"
+              title="Klik untuk Membuka / Menutup Navigasi Utama"
+            >
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 rounded-xl bg-cyan-400/20 border border-cyan-300/40 text-cyan-200 group-hover:scale-110 transition-transform">
+                  <Menu className="w-4 h-4" />
+                </div>
+                <span className="text-xs sm:text-sm tracking-wide">Menu Navigasi Utama</span>
+              </div>
+              <div className="flex items-center gap-1.5 bg-white/20 text-white font-extrabold px-2.5 py-1 rounded-xl text-[10px] sm:text-[11px] shadow-xs group-hover:bg-cyan-400 group-hover:text-slate-900 transition-colors">
+                <span>{isNavOpen ? 'Tutup' : `Buka (${menuItems.length})`}</span>
+                <ChevronDown className={`w-3.5 h-3.5 text-cyan-200 group-hover:text-slate-900 transition-transform duration-300 ${isNavOpen ? 'rotate-180' : ''}`} />
+              </div>
+            </button>
 
-            <div className="space-y-2.5">
-              {menuItems.map((item) => {
-                const IconComponent = item.icon;
-                return (
-                  <button
-                    key={item.label}
-                    id={`menu-btn-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
-                    onClick={() => (item as any).customAction ? (item as any).customAction() : onNavigate(item.id)}
-                    className="w-full group flex items-center justify-between px-4 py-3 rounded-2xl bg-white/15 hover:bg-white/25 backdrop-blur-xl border border-white/25 shadow-lg shadow-sky-950/10 hover:shadow-cyan-500/20 hover:scale-[1.02] active:scale-[0.99] transition-all text-left cursor-pointer"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className={`p-2.5 rounded-xl bg-gradient-to-br ${item.color} border shadow-inner transition-transform group-hover:rotate-6`}>
-                        <IconComponent className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <div className="font-bold text-sm text-white group-hover:text-cyan-200 transition-colors">
-                          {item.label}
+            <AnimatePresence initial={false}>
+              {isNavOpen && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                  animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
+                  exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                  transition={{ duration: 0.3, ease: 'easeInOut' }}
+                  className="space-y-2.5"
+                >
+                  {menuItems.map((item) => {
+                    const IconComponent = item.icon;
+                    return (
+                      <button
+                        key={item.label}
+                        id={`menu-btn-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
+                        onClick={() => (item as any).customAction ? (item as any).customAction() : onNavigate(item.id)}
+                        className="w-full group flex items-center justify-between px-4 py-3 rounded-2xl bg-white/15 hover:bg-white/25 backdrop-blur-xl border border-white/25 shadow-lg shadow-sky-950/10 hover:shadow-cyan-500/20 hover:scale-[1.02] active:scale-[0.99] transition-all text-left cursor-pointer"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`p-2.5 rounded-xl bg-gradient-to-br ${item.color} border shadow-inner transition-transform group-hover:rotate-6`}>
+                            <IconComponent className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <div className="font-bold text-sm text-white group-hover:text-cyan-200 transition-colors">
+                              {item.label}
+                            </div>
+                            <div className="text-[11px] text-sky-100/70 font-medium">
+                              {item.desc}
+                            </div>
+                          </div>
                         </div>
-                        <div className="text-[11px] text-sky-100/70 font-medium">
-                          {item.desc}
+                        
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-white/20 text-sky-100 group-hover:bg-cyan-400 group-hover:text-slate-900 transition-colors">
+                            {item.count}
+                          </span>
+                          <ChevronRight className="w-4 h-4 text-white/50 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
                         </div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-white/20 text-sky-100 group-hover:bg-cyan-400 group-hover:text-slate-900 transition-colors">
-                        {item.count}
-                      </span>
-                      <ChevronRight className="w-4 h-4 text-white/50 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+                      </button>
+                    );
+                  })}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           {/* Center Graphic & Typography Banner */}

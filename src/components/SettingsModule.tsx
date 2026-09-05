@@ -88,6 +88,12 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
 
   // Admin management states
   const [adminList, setAdminList] = useState<AdminUser[]>(administrators);
+
+  useEffect(() => {
+    if (Array.isArray(administrators)) {
+      setAdminList(administrators);
+    }
+  }, [administrators]);
   const [editingAdmin, setEditingAdmin] = useState<AdminUser | null>(null);
   const [isAddAdminOpen, setIsAddAdminOpen] = useState(false);
   const [adminFormData, setAdminFormData] = useState<Partial<AdminUser>>({
@@ -214,7 +220,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   return (
     <div className="space-y-6">
       {/* Top Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/80 backdrop-blur-xl border border-slate-200/80 p-5 rounded-2xl shadow-sm">
+      <div className="sticky top-[57px] z-30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/95 backdrop-blur-xl border border-slate-200/80 p-5 rounded-2xl shadow-md transition-all">
         <div className="flex items-center gap-3">
           <button
             onClick={onBackToHome}
@@ -1219,9 +1225,23 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                               <button
                                 type="button"
                                 onClick={() => {
-                                  const updated = adminList.filter((a) => a.id !== admin.id);
-                                  setAdminList(updated);
-                                  if (onSaveAdministrators) onSaveAdministrators(updated);
+                                  if (confirm(`Apakah Anda yakin ingin menghapus akun "${admin.nama}" (${admin.username})? Data di aplikasi dan Database Cloud akan dihapus.`)) {
+                                    const updated = adminList.filter((a) => a.id !== admin.id && a.username.toLowerCase() !== admin.username.toLowerCase());
+                                    setAdminList(updated);
+
+                                    try {
+                                      const delStr = localStorage.getItem('dapodik_deleted_admins') || '[]';
+                                      const delList: string[] = JSON.parse(delStr);
+                                      if (!delList.includes(admin.username.toLowerCase())) {
+                                        delList.push(admin.username.toLowerCase());
+                                        localStorage.setItem('dapodik_deleted_admins', JSON.stringify(delList));
+                                      }
+                                    } catch (e) {
+                                      console.error(e);
+                                    }
+
+                                    if (onSaveAdministrators) onSaveAdministrators(updated);
+                                  }
                                 }}
                                 className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-600 hover:text-white text-slate-700 transition-all border border-slate-200"
                                 title="Hapus Akun"

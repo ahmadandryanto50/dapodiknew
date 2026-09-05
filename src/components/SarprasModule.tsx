@@ -128,7 +128,7 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
   return (
     <div className="space-y-6">
       {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/80 backdrop-blur-xl border border-slate-200/80 p-5 rounded-2xl shadow-sm">
+      <div className="sticky top-[57px] z-30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/95 backdrop-blur-xl border border-slate-200/80 p-5 rounded-2xl shadow-md transition-all">
         <div className="flex items-center gap-3">
           <button
             onClick={onBackToHome}

@@ -171,7 +171,7 @@ export const AplikasiModule: React.FC<AplikasiModuleProps> = ({
     <div className="space-y-6">
       
       {/* HEADER BAR */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white/80 backdrop-blur-md p-4 sm:p-5 rounded-3xl border border-slate-200/80 shadow-sm">
+      <div className="sticky top-[57px] z-30 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white/95 backdrop-blur-md p-4 sm:p-5 rounded-3xl border border-slate-200/80 shadow-md transition-all">
         <div className="flex items-center gap-3">
           <button 
             onClick={onBackToHome}
