@@ -1178,7 +1178,11 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                               ? 'bg-sky-50 text-sky-700 border-sky-200'
                               : admin.role === 'Kepala Sekolah'
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : 'bg-amber-50 text-amber-700 border-amber-200'
+                              : admin.role === 'Guru'
+                              ? 'bg-amber-50 text-amber-700 border-amber-200'
+                              : admin.role === 'Siswa'
+                              ? 'bg-cyan-50 text-cyan-700 border-cyan-200'
+                              : 'bg-indigo-50 text-indigo-700 border-indigo-200'
                           }`}>
                             {admin.role}
                           </span>
@@ -1341,6 +1345,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                           <option value="Operator">Operator</option>
                           <option value="Kepala Sekolah">Kepala Sekolah</option>
                           <option value="Guru">Guru</option>
+                          <option value="Siswa">Siswa</option>
                         </select>
                       </div>
                       <div>

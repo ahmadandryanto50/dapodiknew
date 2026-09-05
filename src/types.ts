@@ -265,7 +265,7 @@ export interface AdminUser {
   username: string;
   password: string;
   nama: string;
-  role: 'Administrator' | 'Operator' | 'Kepala Sekolah' | 'Guru';
+  role: 'Administrator' | 'Operator' | 'Kepala Sekolah' | 'Guru' | 'Siswa' | string;
   email: string;
   noHp?: string;
   status: 'Aktif' | 'Nonaktif';

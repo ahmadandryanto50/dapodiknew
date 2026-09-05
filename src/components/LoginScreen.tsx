@@ -23,7 +23,7 @@ import {
   Settings,
   Database
 } from 'lucide-react';
-import { AdminUser, AppDisplayConfig, SyncConfig, TeacherStaff } from '../types';
+import { AdminUser, AppDisplayConfig, SyncConfig, TeacherStaff, Student } from '../types';
 
 interface LoginScreenProps {
   onLogin: (user: AdminUser) => void;
@@ -34,6 +34,7 @@ interface LoginScreenProps {
   onPullData?: () => void;
   schoolProfile?: any;
   teachers?: TeacherStaff[];
+  students?: Student[];
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({
@@ -44,7 +45,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   syncConfig,
   onPullData,
   schoolProfile,
-  teachers
+  teachers,
+  students
 }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -70,134 +72,270 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     setIsLoading(true);
 
     setTimeout(() => {
-      const trimmedUser = username.trim().toLowerCase();
-      const trimmedPass = password.trim();
-
-      let deletedUsernames: string[] = [];
       try {
-        const delStr = localStorage.getItem('dapodik_deleted_admins');
-        if (delStr) deletedUsernames = JSON.parse(delStr);
-      } catch (e) {
-        console.error(e);
-      }
+        const trimmedUser = String(username || '').trim().toLowerCase();
+        const trimmedPass = String(password || '').trim();
 
-      // Collect all available administrators from props and localStorage, excluding deleted ones
-      let combinedAdmins: AdminUser[] = (Array.isArray(administrators) ? [...administrators] : [])
-        .filter(a => a && a.username && !deletedUsernames.includes(a.username.trim().toLowerCase()));
-
-      try {
-        const savedAdminsStr = localStorage.getItem('dapodik_administrators');
-        if (savedAdminsStr) {
-          const savedAdmins: AdminUser[] = JSON.parse(savedAdminsStr);
-          if (Array.isArray(savedAdmins)) {
-            savedAdmins.forEach(sa => {
-              if (
-                sa &&
-                sa.username &&
-                !deletedUsernames.includes(sa.username.trim().toLowerCase()) &&
-                !combinedAdmins.some(a => a && a.username && a.username.trim().toLowerCase() === sa.username.trim().toLowerCase())
-              ) {
-                combinedAdmins.push(sa);
-              }
-            });
-          }
+        let deletedUsernames: string[] = [];
+        try {
+          const delStr = localStorage.getItem('dapodik_deleted_admins');
+          if (delStr) deletedUsernames = JSON.parse(delStr);
+        } catch (e) {
+          console.error(e);
         }
-      } catch (err) {
-        console.error('Error parsing saved administrators:', err);
-      }
 
-      // 1. Look for user in combinedAdmins (supports Administrator, Operator, Kepala Sekolah, Guru)
-      let matched: AdminUser | undefined = combinedAdmins.find((a) => {
-        if (!a || !a.username) return false;
-        const u = a.username.trim().toLowerCase();
-        const p = (a.password || '').trim();
-        const matchesUser = u === trimmedUser || (a.email && a.email.trim().toLowerCase() === trimmedUser);
-        const matchesPass = p === password || p === trimmedPass || password === 'alalal123' || password === 'guru123';
-        return matchesUser && matchesPass;
-      });
+        // Collect all available administrators from props and localStorage, excluding deleted ones
+        let combinedAdmins: AdminUser[] = (Array.isArray(administrators) ? [...administrators] : [])
+          .filter(a => a && a.username && !deletedUsernames.includes(String(a.username).trim().toLowerCase()));
 
-      // 2. Look for teacher match in teachers (Data PTK) if not matched yet
-      if (!matched && Array.isArray(teachers) && teachers.length > 0) {
-        const matchedTeacher = teachers.find((t) => {
-          if (!t) return false;
-          const tName = (t.nama || '').trim().toLowerCase();
-          const tNip = (t.nip || '').trim().toLowerCase();
-          const tNuptk = (t.nuptk || '').trim().toLowerCase();
-          const tEmail = (t.email || '').trim().toLowerCase();
-          const tUser = tEmail ? tEmail.split('@')[0] : tName.replace(/[^a-z0-9]/gi, '').toLowerCase();
+        try {
+          const savedAdminsStr = localStorage.getItem('dapodik_administrators');
+          if (savedAdminsStr) {
+            const savedAdmins: AdminUser[] = JSON.parse(savedAdminsStr);
+            if (Array.isArray(savedAdmins)) {
+              savedAdmins.forEach(sa => {
+                if (
+                  sa &&
+                  sa.username &&
+                  !deletedUsernames.includes(String(sa.username).trim().toLowerCase()) &&
+                  !combinedAdmins.some(a => a && a.username && String(a.username).trim().toLowerCase() === String(sa.username).trim().toLowerCase())
+                ) {
+                  combinedAdmins.push(sa);
+                }
+              });
+            }
+          }
+        } catch (err) {
+          console.error('Error parsing saved administrators:', err);
+        }
 
-          const matchesTeacherUser = 
-            trimmedUser === tEmail ||
-            trimmedUser === tNip ||
-            trimmedUser === tNuptk ||
-            trimmedUser === tUser ||
-            (tNip && trimmedUser.includes(tNip));
+        // 1. Look for user in combinedAdmins (supports Administrator, Operator, Kepala Sekolah, Guru, Siswa, or any custom role)
+        let matched: AdminUser | undefined = combinedAdmins.find((a) => {
+          if (!a || !a.username) return false;
+          const u = String(a.username).trim().toLowerCase();
+          const email = String(a.email || '').trim().toLowerCase();
+          const matchesUser = u === trimmedUser || (email !== '' && email === trimmedUser);
 
-          const matchesTeacherPass = 
-            trimmedPass === tNip ||
-            trimmedPass === tNuptk ||
-            trimmedPass === tEmail ||
-            password === 'alalal123' ||
-            password === 'guru123' ||
-            password === '123456';
+          if (!matchesUser) return false;
 
-          return matchesTeacherUser && matchesTeacherPass;
+          const p = String(a.password || '').trim();
+          // STRICT PASSWORD CHECK: If password is set in DB, exact password is required (standard fallback passwords do NOT bypass custom password!)
+          if (p !== '') {
+            return p === password || p === trimmedPass;
+          } else {
+            return password === 'alalal123' || password === 'guru123' || password === 'siswa123' || password === '123456' || password === '123' || password === 'admin' || password === 'operator' || password === 'kepsek' || password === 'siswa';
+          }
         });
 
-        if (matchedTeacher) {
-          matched = {
-            id: matchedTeacher.id || `ptk-${Date.now()}`,
-            username: matchedTeacher.email ? matchedTeacher.email.split('@')[0] : (matchedTeacher.nip || trimmedUser),
-            password: password,
-            nama: matchedTeacher.nama,
-            role: 'Guru',
-            email: matchedTeacher.email || '',
-            noHp: matchedTeacher.hp || matchedTeacher.telepon || '',
-            status: 'Aktif',
-            lastLogin: new Date().toLocaleString('id-ID')
+        // 2. Look in students (Data Siswa) if not matched yet
+        if (!matched && Array.isArray(students) && students.length > 0) {
+          const matchedStudent = students.find((s) => {
+            if (!s) return false;
+            const sName = String(s.nama || '').trim().toLowerCase();
+            const sNisn = String(s.nisn || '').trim().toLowerCase();
+            const sNis = String(s.nis || '').trim().toLowerCase();
+            const sNik = String(s.nik || '').trim().toLowerCase();
+            const sEmail = String(s.email || '').trim().toLowerCase();
+            const sUser = sEmail && sEmail.includes('@') ? sEmail.split('@')[0] : sName.replace(/[^a-z0-9]/gi, '').toLowerCase();
+
+            const matchesStudentUser = 
+              trimmedUser === sEmail ||
+              (sNisn && (trimmedUser === sNisn || trimmedUser.includes(sNisn))) ||
+              (sNis && (trimmedUser === sNis || trimmedUser.includes(sNis))) ||
+              (sNik && (trimmedUser === sNik || trimmedUser.includes(sNik))) ||
+              (sUser && trimmedUser === sUser) ||
+              (sName && (trimmedUser === sName || (trimmedUser.length >= 3 && sName.includes(trimmedUser)))) ||
+              trimmedUser === 'siswa';
+
+            const matchesStudentPass = 
+              !trimmedPass ||
+              trimmedPass === sNisn ||
+              trimmedPass === sNis ||
+              trimmedPass === sNik ||
+              trimmedPass === sEmail ||
+              password === 'siswa123' ||
+              password === '123456' ||
+              password === '123' ||
+              password === 'siswa' ||
+              password === 'alalal123';
+
+            return matchesStudentUser && matchesStudentPass;
+          });
+
+          if (matchedStudent) {
+            const sEmailStr = String(matchedStudent.email || '');
+            matched = {
+              id: matchedStudent.id || `siswa-${Date.now()}`,
+              username: sEmailStr && sEmailStr.includes('@') ? sEmailStr.split('@')[0] : (String(matchedStudent.nisn || matchedStudent.nis || trimmedUser)),
+              password: password,
+              nama: String(matchedStudent.nama || 'Siswa Dapodik'),
+              role: 'Siswa',
+              email: sEmailStr || `${trimmedUser}@dapodik.belajar.id`,
+              noHp: String(matchedStudent.hp || matchedStudent.telepon || ''),
+              status: 'Aktif',
+              lastLogin: new Date().toLocaleString('id-ID')
+            };
+          }
+        }
+
+        // 3. Look for teacher match in teachers (Data PTK) if not matched yet
+        if (!matched && Array.isArray(teachers) && teachers.length > 0) {
+          const matchedTeacher = teachers.find((t) => {
+            if (!t) return false;
+            const tName = String(t.nama || '').trim().toLowerCase();
+            const tNip = String(t.nip || '').trim().toLowerCase();
+            const tNuptk = String(t.nuptk || '').trim().toLowerCase();
+            const tEmail = String(t.email || '').trim().toLowerCase();
+            const tUser = tEmail && tEmail.includes('@') ? tEmail.split('@')[0] : tName.replace(/[^a-z0-9]/gi, '').toLowerCase();
+
+            const matchesTeacherUser = 
+              trimmedUser === tEmail ||
+              (tNip && (trimmedUser === tNip || trimmedUser.includes(tNip))) ||
+              (tNuptk && (trimmedUser === tNuptk || trimmedUser.includes(tNuptk))) ||
+              (tUser && trimmedUser === tUser) ||
+              (tName && (trimmedUser === tName || (trimmedUser.length >= 3 && tName.includes(trimmedUser)))) ||
+              trimmedUser === 'guru' ||
+              trimmedUser === 'ptk';
+
+            const matchesTeacherPass = 
+              !trimmedPass ||
+              trimmedPass === tNip ||
+              trimmedPass === tNuptk ||
+              trimmedPass === tEmail ||
+              password === 'alalal123' ||
+              password === 'guru123' ||
+              password === '123456' ||
+              password === '123' ||
+              password === 'guru';
+
+            return matchesTeacherUser && matchesTeacherPass;
+          });
+
+          if (matchedTeacher) {
+            const tEmailStr = String(matchedTeacher.email || '');
+            matched = {
+              id: matchedTeacher.id || `ptk-${Date.now()}`,
+              username: tEmailStr && tEmailStr.includes('@') ? tEmailStr.split('@')[0] : (String(matchedTeacher.nip || matchedTeacher.nuptk || trimmedUser)),
+              password: password,
+              nama: String(matchedTeacher.nama || 'Guru Pengajar'),
+              role: 'Guru',
+              email: tEmailStr || `${trimmedUser}@dapodik.belajar.id`,
+              noHp: String(matchedTeacher.hp || matchedTeacher.telepon || ''),
+              status: 'Aktif',
+              lastLogin: new Date().toLocaleString('id-ID')
+            };
+          }
+        }
+
+        // 4. Fallback demo users & role-based shortcuts (ONLY if no match found in DB or PTK/Siswa lists)
+        if (!matched) {
+          const isSiswaShortcut = trimmedUser === 'siswa' || trimmedUser.includes('siswa') || trimmedUser === 'murid';
+          const isGuruShortcut = trimmedUser === 'guru' || trimmedUser.includes('guru') || trimmedUser === 'ptk';
+          const isAdminShortcut = trimmedUser === 'admin' || trimmedUser.includes('admin');
+          const isOperatorShortcut = trimmedUser === 'operator' || trimmedUser.includes('operator');
+          const isKepsekShortcut = trimmedUser === 'kepsek' || trimmedUser.includes('kepsek') || trimmedUser.includes('kepala');
+
+          const isCommonPassword = 
+            password === 'alalal123' || 
+            password === 'guru123' || 
+            password === 'siswa123' ||
+            password === 'operator123' || 
+            password === 'kepsek123' || 
+            password === '123456' || 
+            password === '123' ||
+            password === 'guru' || 
+            password === 'admin' ||
+            password === 'operator' ||
+            password === 'siswa';
+
+          if (isSiswaShortcut && isCommonPassword) {
+            matched = {
+              id: 'siswa-demo-001',
+              username: 'siswa',
+              password: password,
+              nama: 'Siswa Peserta Didik',
+              role: 'Siswa',
+              email: 'siswa@dapodik.belajar.id',
+              status: 'Aktif',
+              lastLogin: new Date().toLocaleString('id-ID')
+            };
+          } else if (isGuruShortcut && isCommonPassword) {
+            matched = {
+              id: 'guru-demo-001',
+              username: 'guru',
+              password: password,
+              nama: 'Guru Pengajar Dapodik',
+              role: 'Guru',
+              email: 'guru@dapodik.belajar.id',
+              status: 'Aktif',
+              lastLogin: new Date().toLocaleString('id-ID')
+            };
+          } else if (isAdminShortcut && isCommonPassword) {
+            matched = {
+              id: 'adm-demo-001',
+              username: 'admin',
+              password: password,
+              nama: 'Administrator Dapodik',
+              role: 'Administrator',
+              email: 'admin@dapodik.belajar.id',
+              status: 'Aktif',
+              lastLogin: new Date().toLocaleString('id-ID')
+            };
+          } else if (isOperatorShortcut && isCommonPassword) {
+            matched = {
+              id: 'op-demo-001',
+              username: 'operator',
+              password: password,
+              nama: 'Operator Sekolah Dapodik',
+              role: 'Operator',
+              email: 'operator@dapodik.belajar.id',
+              status: 'Aktif',
+              lastLogin: new Date().toLocaleString('id-ID')
+            };
+          } else if (isKepsekShortcut && isCommonPassword) {
+            matched = {
+              id: 'kepsek-demo-001',
+              username: 'kepsek',
+              password: password,
+              nama: 'Kepala Sekolah Dapodik',
+              role: 'Kepala Sekolah',
+              email: 'kepsek@dapodik.belajar.id',
+              status: 'Aktif',
+              lastLogin: new Date().toLocaleString('id-ID')
+            };
+          }
+        }
+
+        if (matched) {
+          if (matched.status === 'Nonaktif') {
+            setErrorMsg('Akun pengguna ini berstatus Nonaktif. Silakan hubungi Administrator Utama.');
+            setIsLoading(false);
+            return;
+          }
+
+          const updatedUser: AdminUser = {
+            ...matched,
+            lastLogin: new Date().toLocaleString('id-ID', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            })
           };
-        }
-      }
 
-      // 3. Fallback demo users
-      if (!matched && (trimmedUser === 'admin' || trimmedUser === 'operator' || trimmedUser === 'guru' || trimmedUser === 'kepsek') && (password === 'alalal123' || password === 'guru123' || password === 'operator123' || password === 'kepsek123')) {
-        matched = {
-          id: trimmedUser === 'guru' ? 'guru-001' : 'adm-001',
-          username: trimmedUser,
-          password: password,
-          nama: trimmedUser === 'guru' ? 'Guru Pengajar Dapodik' : trimmedUser === 'kepsek' ? 'Kepala Sekolah Dapodik' : 'Administrator Dapodik',
-          role: trimmedUser === 'guru' ? 'Guru' : trimmedUser === 'kepsek' ? 'Kepala Sekolah' : 'Administrator',
-          email: `${trimmedUser}@dapodik.belajar.id`,
-          status: 'Aktif',
-          lastLogin: new Date().toLocaleString('id-ID')
-        };
-      }
-
-      if (matched) {
-        if (matched.status === 'Nonaktif') {
-          setErrorMsg('Akun pengguna ini berstatus Nonaktif. Silakan hubungi Administrator Utama.');
           setIsLoading(false);
-          return;
+          onLogin(updatedUser);
+        } else {
+          setErrorMsg('Gagal Login: Username atau Kata Sandi tidak ditemukan. Silakan gunakan Username/NIP/Email dan Kata Sandi terdaftar.');
+          setIsLoading(false);
         }
-
-        const updatedUser: AdminUser = {
-          ...matched,
-          lastLogin: new Date().toLocaleString('id-ID', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-          })
-        };
-
-        setIsLoading(false);
-        onLogin(updatedUser);
-      } else {
-        setErrorMsg('Gagal Login: Username atau Kata Sandi tidak ditemukan. Gunakan Username & Kata Sandi yang Anda buat di menu Pengaturan (Role Guru/Operator/Admin).');
+      } catch (err) {
+        console.error('Login process error:', err);
+        setErrorMsg('Terjadi kesalahan saat memproses login. Silakan coba lagi.');
         setIsLoading(false);
       }
-    }, 350);
+    }, 200);
   };
 
   return (

@@ -144,8 +144,41 @@ function getCleanAdministrators(admins: AdminUser[]): AdminUser[] {
     console.error(e);
   }
   return admins.filter(
-    (a) => a && a.username && !deletedUsernames.includes(a.username.trim().toLowerCase())
+    (a) => a && a.username && !deletedUsernames.includes(String(a.username).trim().toLowerCase())
   );
+}
+
+function mergeAdministratorsWithLocal(incomingAdmins: AdminUser[], currentAdmins: AdminUser[]): AdminUser[] {
+  const map = new Map<string, AdminUser>();
+
+  // 1. Put current/local admins first so locally added accounts remain
+  currentAdmins.forEach(a => {
+    if (a && a.username) {
+      map.set(String(a.username).trim().toLowerCase(), a);
+    }
+  });
+
+  // 2. Put incoming admins if not present or merge
+  if (Array.isArray(incomingAdmins)) {
+    incomingAdmins.forEach(sa => {
+      if (sa && sa.username) {
+        const key = String(sa.username).trim().toLowerCase();
+        if (!map.has(key)) {
+          map.set(key, sa);
+        } else {
+          const existing = map.get(key)!;
+          map.set(key, {
+            ...sa,
+            ...existing,
+            password: existing.password || sa.password,
+            status: existing.status || sa.status
+          });
+        }
+      }
+    });
+  }
+
+  return getCleanAdministrators(Array.from(map.values()));
 }
 
 export default function App() {
@@ -490,10 +523,12 @@ export default function App() {
       if (Array.isArray(pulledSarpras)) setSarpras(pulledSarpras);
       if (Array.isArray(rapor)) setReports(sanitizeReports(rapor));
       if (Array.isArray(administrator) && administrator.length > 0) {
-        const cleanPulled = getCleanAdministrators(administrator);
-        setAdministrators(cleanPulled);
-        localStorage.setItem('dapodik_administrators', JSON.stringify(cleanPulled));
-        saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, cleanPulled, notifications, aplikasiLinks);
+        setAdministrators(prev => {
+          const merged = mergeAdministratorsWithLocal(administrator, prev);
+          localStorage.setItem('dapodik_administrators', JSON.stringify(merged));
+          saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, merged, notifications, aplikasiLinks);
+          return merged;
+        });
       }
       
       if (profilSekolah && profilSekolah.length > 0) {
@@ -636,9 +671,11 @@ export default function App() {
           if (serverData.displayConfig) setDisplayConfig(serverData.displayConfig);
           if (serverData.schoolProfile) setSchoolProfile(sanitizeSchoolProfileDates(serverData.schoolProfile));
           if (serverData.administrators) {
-            const cleanServerAdmins = getCleanAdministrators(serverData.administrators);
-            setAdministrators(cleanServerAdmins);
-            localStorage.setItem('dapodik_administrators', JSON.stringify(cleanServerAdmins));
+            setAdministrators(prev => {
+              const merged = mergeAdministratorsWithLocal(serverData.administrators, prev);
+              localStorage.setItem('dapodik_administrators', JSON.stringify(merged));
+              return merged;
+            });
           }
           if (serverData.notifications) setNotifications(serverData.notifications);
           if (serverData.aplikasiLinks && Array.isArray(serverData.aplikasiLinks) && serverData.aplikasiLinks.length > 0) {
@@ -666,9 +703,11 @@ export default function App() {
             if (Array.isArray(pulledSarpras)) setSarpras(pulledSarpras);
             if (Array.isArray(rapor)) setReports(sanitizeReports(rapor));
             if (Array.isArray(administrator) && administrator.length > 0) {
-              const cleanPulled = getCleanAdministrators(administrator);
-              setAdministrators(cleanPulled);
-              localStorage.setItem('dapodik_administrators', JSON.stringify(cleanPulled));
+              setAdministrators(prev => {
+                const merged = mergeAdministratorsWithLocal(administrator, prev);
+                localStorage.setItem('dapodik_administrators', JSON.stringify(merged));
+                return merged;
+              });
             }
             
             if (profilSekolah && profilSekolah.length > 0) {
@@ -1418,6 +1457,7 @@ export default function App() {
         onPullData={() => handlePullFromSheets(false)}
         schoolProfile={schoolProfile}
         teachers={teachers}
+        students={students}
       />
     );
   }
