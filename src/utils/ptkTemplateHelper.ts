@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 import { TeacherStaff } from '../types';
-import { formatDateIndonesian } from './dateUtils';
+import { formatDateIndonesian, cleanLeadingZerosCode } from './dateUtils';
 
 export const DAPODIK_PTK_HEADERS = [
   'Nama',
@@ -225,12 +225,12 @@ export async function parsePtkImportFile(file: File): Promise<{ teachers: Teache
     reader.onload = (e) => {
       try {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+        const workbook = XLSX.read(data, { type: 'array', cellDates: true, cellText: true, raw: false });
 
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
 
-        const rawRows: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+        const rawRows: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '', raw: false });
 
         if (rawRows.length < 2) {
           resolve({ teachers: [], totalParsed: 0 });
@@ -249,10 +249,12 @@ export async function parsePtkImportFile(file: File): Promise<{ teachers: Teache
 
         const headers: string[] = (rawRows[headerRowIdx] || []).map((h: any) => String(h).trim());
 
-        const getColVal = (row: any[], headerName: string): string => {
+        const getColVal = (row: any[], headerName: string): any => {
           const idx = headers.findIndex(h => h.toLowerCase() === headerName.toLowerCase());
           if (idx !== -1 && row[idx] !== undefined && row[idx] !== null) {
-            return String(row[idx]).trim();
+            const raw = row[idx];
+            if (raw instanceof Date) return raw;
+            return cleanLeadingZerosCode(raw, headerName);
           }
           return '';
         };

@@ -39,7 +39,7 @@ import { GoogleSheetModal } from './components/GoogleSheetModal';
 import { QuickSearchModal } from './components/QuickSearchModal';
 import { NotificationDrawer } from './components/NotificationDrawer';
 import { SafeImage } from './components/SafeImage';
-import { formatDateIndonesian } from './utils/dateUtils';
+import { formatDateIndonesian, cleanLeadingZerosCode } from './utils/dateUtils';
 import { 
   Home, 
   School,
@@ -65,6 +65,14 @@ const sanitizeTeacherDates = (teachersList: TeacherStaff[]): TeacherStaff[] => {
   if (!Array.isArray(teachersList)) return [];
   return teachersList.map(t => ({
     ...t,
+    nuptk: cleanLeadingZerosCode(t.nuptk, 'nuptk'),
+    nip: cleanLeadingZerosCode(t.nip, 'nip'),
+    nik: cleanLeadingZerosCode(t.nik, 'nik'),
+    noHp: cleanLeadingZerosCode(t.noHp, 'noHp'),
+    noKk: cleanLeadingZerosCode(t.noKk, 'noKk'),
+    rt: cleanLeadingZerosCode(t.rt, 'rt'),
+    rw: cleanLeadingZerosCode(t.rw, 'rw'),
+    kodePos: cleanLeadingZerosCode(t.kodePos, 'kodePos'),
     tanggalLahir: t.tanggalLahir ? formatDateIndonesian(t.tanggalLahir) : '',
     tanggalCpns: t.tanggalCpns ? formatDateIndonesian(t.tanggalCpns) : '',
     tmtPengangkatan: t.tmtPengangkatan ? formatDateIndonesian(t.tmtPengangkatan) : '',
@@ -76,6 +84,15 @@ const sanitizeStudentDates = (studentsList: Student[]): Student[] => {
   if (!Array.isArray(studentsList)) return [];
   return studentsList.map(s => ({
     ...s,
+    nisn: cleanLeadingZerosCode(s.nisn, 'nisn'),
+    nis: cleanLeadingZerosCode(s.nis, 'nis'),
+    nik: cleanLeadingZerosCode(s.nik, 'nik'),
+    hp: cleanLeadingZerosCode(s.hp, 'hp'),
+    telepon: cleanLeadingZerosCode(s.telepon, 'telepon'),
+    rt: cleanLeadingZerosCode(s.rt, 'rt'),
+    rw: cleanLeadingZerosCode(s.rw, 'rw'),
+    kodePos: cleanLeadingZerosCode(s.kodePos, 'kodePos'),
+    noKk: cleanLeadingZerosCode(s.noKk, 'noKk'),
     tanggalLahir: s.tanggalLahir ? formatDateIndonesian(s.tanggalLahir) : ''
   }));
 };

@@ -124,7 +124,9 @@ function doPost(e) {
 function getSheetData(ss, sheetName) {
   let sheet = ss.getSheetByName(sheetName);
   if (!sheet) return [];
-  const rows = sheet.getDataRange().getValues();
+  const range = sheet.getDataRange();
+  const rows = range.getValues();
+  const displayRows = range.getDisplayValues();
   if (rows.length < 2) return [];
   const headers = rows[0];
   const items = [];
@@ -133,6 +135,7 @@ function getSheetData(ss, sheetName) {
     let hasValue = false;
     for (let j = 0; j < headers.length; j++) {
       let val = rows[i][j];
+      let displayVal = displayRows[i] ? displayRows[i][j] : '';
       // Convert Date object to yyyy-MM-dd string using Spreadsheet Timezone to avoid UTC timezone shifts
       if (val instanceof Date) {
         val = Utilities.formatDate(val, ss.getSpreadsheetTimeZone(), "yyyy-MM-dd");
@@ -140,6 +143,17 @@ function getSheetData(ss, sheetName) {
         val = true;
       } else if (val === 'FALSE' || val === false) {
         val = false;
+      } else {
+        if (displayVal && typeof displayVal === 'string') {
+          displayVal = displayVal.trim();
+          if (displayVal.startsWith('0') || (typeof val === 'number' && displayVal !== String(val))) {
+            val = displayVal;
+          } else if (typeof val === 'number') {
+            val = String(val);
+          }
+        } else if (typeof val === 'number') {
+          val = String(val);
+        }
       }
       item[headers[j]] = val;
       if (val !== '' && val !== null && val !== undefined) {
@@ -189,13 +203,18 @@ function saveSheetData(ss, sheetName, items, fallbackHeaders) {
       let val = items[i][headers[j]];
       if (typeof val === 'object' && val !== null) {
         val = JSON.stringify(val);
+      } else if (typeof val === 'string' && val.trim().startsWith('0') && val.trim().length > 1 && !val.includes('-') && !val.includes('/')) {
+        // Prefix with single quote so Google Sheets treats it as text and preserves leading zeros
+        val = "'" + val.trim();
       }
       row.push(val !== undefined && val !== null ? val : '');
     }
     rows.push(row);
   }
   
-  sheet.getRange(1, 1, rows.length, headers.length).setValues(rows);
+  const fullRange = sheet.getRange(1, 1, rows.length, headers.length);
+  fullRange.setNumberFormat('@');
+  fullRange.setValues(rows);
   
   // Format Header
   const headerRange = sheet.getRange(1, 1, 1, headers.length);

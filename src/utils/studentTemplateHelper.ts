@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 import { Student } from '../types';
-import { formatDateIndonesian } from './dateUtils';
+import { formatDateIndonesian, cleanLeadingZerosCode } from './dateUtils';
 
 export const DAPODIK_STUDENT_HEADERS = [
   'Nama',
@@ -417,10 +417,10 @@ export async function parseStudentImportFile(file: File): Promise<{ students: St
           });
         } else {
           // XLSX or XLS
-          const workbook = XLSX.read(data, { type: 'array' });
+          const workbook = XLSX.read(data, { type: 'array', cellDates: true, cellText: true, raw: false });
           const firstSheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[firstSheetName];
-          rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as any[][];
+          rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '', raw: false }) as any[][];
         }
 
         if (rows.length < 2) {
@@ -445,20 +445,25 @@ export async function parseStudentImportFile(file: File): Promise<{ students: St
           }
 
           // Helper to get value by header name or index fallback
-          const getVal = (colIndex: number, ...headerAliases: string[]): string => {
+          const getVal = (colIndex: number, ...headerAliases: string[]): any => {
             // Try matching header aliases first
             for (const alias of headerAliases) {
               const foundIdx = headers.findIndex(h => 
                 h.toLowerCase().replace(/[^a-z0-9]/g, '') === alias.toLowerCase().replace(/[^a-z0-9]/g, '')
               );
               if (foundIdx !== -1 && row[foundIdx] !== undefined && row[foundIdx] !== null) {
-                const val = String(row[foundIdx]).trim();
+                const raw = row[foundIdx];
+                if (raw instanceof Date) return raw;
+                const val = cleanLeadingZerosCode(raw, alias);
                 if (val) return val;
               }
             }
             // Fallback by expected fixed index
             if (row[colIndex] !== undefined && row[colIndex] !== null) {
-              return String(row[colIndex]).trim();
+              const raw = row[colIndex];
+              if (raw instanceof Date) return raw;
+              const primaryAlias = headerAliases[0] || '';
+              return cleanLeadingZerosCode(raw, primaryAlias);
             }
             return '';
           };
