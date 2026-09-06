@@ -128,7 +128,7 @@ export const GoogleSheetModal: React.FC<GoogleSheetModalProps> = ({
                   </span>
                 </h2>
                 <p className="text-slate-500 text-[11px]">
-                  Simpan seluruh data Siswa, Alumni, PTK, Sarpras, Rapor, dan Profil Sekolah otomatis ke Database Cloud Anda
+                  Simpan seluruh data Siswa, Alumni, PTK, Sarpras, Rapor, Notifikasi, dan Profil Sekolah otomatis ke Database Cloud Anda
                 </p>
               </div>
             </div>
@@ -204,8 +204,14 @@ export const GoogleSheetModal: React.FC<GoogleSheetModalProps> = ({
                   className="w-full px-3.5 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-slate-900 font-mono focus:border-sky-500 focus:bg-white focus:outline-none placeholder-slate-400"
                 />
                 <p className="text-[10px] text-slate-500 mt-1">
-                  Didapatkan setelah menerapkan (deploy) skrip di Database Cloud (lihat tab Panduan).
+                  Didapatkan setelah menerapkan (deploy) skrip v2.7 di Database Cloud (lihat tab Panduan).
                 </p>
+                <div className="mt-2 p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-800 flex items-start gap-2">
+                  <HelpCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <strong>Catatan Notifikasi:</strong> Jika sheet <em>"Notifikasi"</em> belum muncul di Spreadsheet Google Anda, harap buka tab <strong>"Salin Skrip Apps Script"</strong>, salin kode v2.7 terbaru, lalu perbarui deployment Anda di Apps Script (<em>Deploy &gt; New Deployment</em> atau <em>Manage Deployments</em>).
+                  </div>
+                </div>
               </div>
 
               <div>

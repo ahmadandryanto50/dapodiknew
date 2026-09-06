@@ -2,7 +2,7 @@ import { Student, TeacherStaff, SarprasItem, StudentReport, SyncConfig, AppDispl
 
 export const APPS_SCRIPT_TEMPLATE = `/**
  * Google Apps Script untuk Dapodik Terintegrasi 2026
- * Versi Script: v2.6 (Mendukung Data_Alumni, Data_Siswa, Data_Siswa_Keluar, PTK, Sarpras & Profil Lengkap)
+ * Versi Script: v2.7 (Mendukung Data_Alumni, Data_Siswa, Data_Siswa_Keluar, PTK, Sarpras, Notifikasi, Administrator, Profil & Pengaturan)
  * 
  * Cara pasang / update:
  * 1. Buka Google Spreadsheet Anda di https://sheets.new (atau spreadsheet yang sudah ada)
@@ -200,7 +200,7 @@ function saveSheetData(ss, sheetName, items, fallbackHeaders) {
   }
   
   sheet.clear();
-  const headers = Object.keys(items[0]);
+  const headers = fallbackHeaders || (HEADERS_MAP[sheetName] || Object.keys(items[0]));
   const rows = [headers];
   
   for (let i = 0; i < items.length; i++) {
@@ -626,4 +626,28 @@ export function exportToCSV(data: any[], filename: string) {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+}
+
+export async function syncNotifikasiToGoogleSheets(
+  config: SyncConfig,
+  notifications: NotificationItem[]
+): Promise<{ success: boolean; message: string }> {
+  if (!config.webAppUrl) {
+    return { success: false, message: 'URL Google Apps Script belum dikonfigurasi.' };
+  }
+  try {
+    const payload = {
+      type: 'SYNC_NOTIFIKASI',
+      payload: notifications
+    };
+    await fetch(config.webAppUrl, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(payload)
+    });
+    return { success: true, message: 'Data notifikasi disinkronkan ke Database Cloud!' };
+  } catch (error: any) {
+    return { success: false, message: error?.message || 'Gagal menyinkronkan notifikasi.' };
+  }
 }

@@ -555,7 +555,7 @@ export default function App() {
       let newLinks = aplikasiLinks;
       let newNotifs = notifications;
 
-      if (Array.isArray(notifikasi) && notifikasi.length > 0) {
+      if (Array.isArray(notifikasi)) {
         newNotifs = getFilteredNotifications(notifikasi);
         setNotifications(newNotifs);
         notificationsRef.current = newNotifs;
