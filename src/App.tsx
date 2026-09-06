@@ -452,6 +452,7 @@ export default function App() {
   };
 
   const addNotification = (title: string, message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info'): NotificationItem[] => {
+    lastLocalMutationRef.current = Date.now();
     const newNotif: NotificationItem = {
       id: `notif-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       title,
@@ -465,6 +466,9 @@ export default function App() {
     setNotifications(updated);
     localStorage.setItem('dapodik_notifications', JSON.stringify(updated));
     saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, updated);
+    if (syncConfigRef.current && syncConfigRef.current.webAppUrl) {
+      syncNotifikasiToGoogleSheets(syncConfigRef.current, updated);
+    }
     return updated;
   };
 
