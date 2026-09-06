@@ -408,7 +408,7 @@ export default function App() {
     }
   };
 
-  const addNotification = (title: string, message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
+  const addNotification = (title: string, message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info'): NotificationItem[] => {
     const newNotif: NotificationItem = {
       id: `notif-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       title,
@@ -422,7 +422,7 @@ export default function App() {
     setNotifications(updated);
     localStorage.setItem('dapodik_notifications', JSON.stringify(updated));
     saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, updated);
-    triggerAutoSync(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, false, updated);
+    return updated;
   };
 
   // Save to LocalStorage & Server Cache
@@ -527,9 +527,10 @@ export default function App() {
     }
 
     lastLocalMutationRef.current = Date.now();
-    saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, cleanAdmins, notifications, aplikasiLinks);
+    const freshNotifs = addNotification('Update Akun Pengguna', 'Data pengguna & hak akses administrator berhasil diperbarui.', 'info');
+    saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, cleanAdmins, freshNotifs, aplikasiLinks);
     showToast('Data akun pengguna berhasil diperbarui & disinkronkan.');
-    triggerAutoSync(students, teachers, sarpras, reports, displayConfig, schoolProfile, cleanAdmins, true);
+    triggerAutoSync(students, teachers, sarpras, reports, displayConfig, schoolProfile, cleanAdmins, true, freshNotifs);
   };
 
   const handlePullFromSheets = async (silent = false) => {
@@ -1385,8 +1386,8 @@ export default function App() {
     setDisplayConfig(updatedDisplay);
     setSchoolProfile(updatedProfile);
     showToast('Teks & tampilan disimpan...');
-    addNotification('Update Tampilan Beranda', 'Pengaturan teks dan tampilan beranda berhasil diperbarui.', 'info');
-    triggerAutoSync(students, teachers, sarpras, reports, updatedDisplay, updatedProfile, administrators, true);
+    const freshNotifs = addNotification('Update Tampilan Beranda', 'Pengaturan teks dan tampilan beranda berhasil diperbarui.', 'info');
+    triggerAutoSync(students, teachers, sarpras, reports, updatedDisplay, updatedProfile, administrators, true, freshNotifs);
   };
 
   const handleSaveSchoolProfile = (newProfile: SchoolProfile) => {
@@ -1400,8 +1401,8 @@ export default function App() {
     setSchoolProfile(updatedProfile);
     setDisplayConfig(updatedDisplay);
     showToast('Profil sekolah disimpan...');
-    addNotification('Update Profil Sekolah', 'Data Profil Satuan Pendidikan berhasil diperbarui.', 'info');
-    triggerAutoSync(students, teachers, sarpras, reports, updatedDisplay, updatedProfile, administrators, true);
+    const freshNotifs = addNotification('Update Profil Sekolah', 'Data Profil Satuan Pendidikan berhasil diperbarui.', 'info');
+    triggerAutoSync(students, teachers, sarpras, reports, updatedDisplay, updatedProfile, administrators, true, freshNotifs);
   };
 
   const handleSaveAllSettings = (newConfig: AppDisplayConfig, newProfile: SchoolProfile) => {
@@ -1422,8 +1423,8 @@ export default function App() {
     setSchoolProfile(updatedProfile);
     
     showToast('Semua pengaturan dan profil sekolah berhasil disimpan...');
-    addNotification('Update Pengaturan Sistem', 'Seluruh konfigurasi aplikasi dan profil sekolah telah disinkronkan.', 'success');
-    triggerAutoSync(students, teachers, sarpras, reports, updatedDisplay, updatedProfile, administrators, true);
+    const freshNotifs = addNotification('Update Pengaturan Sistem', 'Seluruh konfigurasi aplikasi dan profil sekolah telah disinkronkan.', 'success');
+    triggerAutoSync(students, teachers, sarpras, reports, updatedDisplay, updatedProfile, administrators, true, freshNotifs);
   };
 
   // Student Handlers
@@ -1431,16 +1432,16 @@ export default function App() {
     const updated = sanitizeStudentDates([std, ...students]);
     setStudents(updated);
     showToast(`Siswa "${std.nama}" ditambahkan...`);
-    addNotification('Penambahan Data Siswa', `Siswa baru "${std.nama}" (NISN: ${std.nisn || '-'}) berhasil ditambahkan.`, 'success');
-    triggerAutoSync(updated, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, true);
+    const freshNotifs = addNotification('Penambahan Data Siswa', `Siswa baru "${std.nama}" (NISN: ${std.nisn || '-'}) berhasil ditambahkan.`, 'success');
+    triggerAutoSync(updated, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, true, freshNotifs);
   };
 
   const handleUpdateStudent = (std: Student) => {
     const updated = sanitizeStudentDates(students.map(s => s.id === std.id ? std : s));
     setStudents(updated);
     showToast(`Data siswa "${std.nama}" diperbarui...`);
-    addNotification('Pembaruan Data Siswa', `Data siswa "${std.nama}" berhasil diperbarui.`, 'info');
-    triggerAutoSync(updated, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, true);
+    const freshNotifs = addNotification('Pembaruan Data Siswa', `Data siswa "${std.nama}" berhasil diperbarui.`, 'info');
+    triggerAutoSync(updated, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, true, freshNotifs);
   };
 
   const handleDeleteStudent = (id: string) => {
@@ -1448,10 +1449,10 @@ export default function App() {
     const updated = sanitizeStudentDates(students.filter(s => s.id !== id));
     setStudents(updated);
     localStorage.setItem('dapodik_students', JSON.stringify(updated));
-    saveCacheToServer(updated, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notifications);
+    const freshNotifs = addNotification('Penghapusan Data Siswa', 'Data siswa berhasil dihapus dari sistem.', 'warning');
+    saveCacheToServer(updated, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, freshNotifs);
     showToast('Data siswa dihapus...');
-    addNotification('Penghapusan Data Siswa', 'Data siswa berhasil dihapus dari sistem.', 'warning');
-    triggerAutoSync(updated, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, true);
+    triggerAutoSync(updated, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, true, freshNotifs);
   };
 
   const handleMoveToStudentKeluar = (studentId: string, reason: 'Mutasi' | 'Putus sekolah' | 'Wafat/Meninggal' | 'Dikeluarkan' | 'Mengundurkan diri') => {
@@ -1467,8 +1468,8 @@ export default function App() {
     }));
     setStudents(updated);
     showToast(`Berhasil memindahkan siswa ke Data Siswa Keluar (${reason})`);
-    addNotification('Siswa Keluar / Mutasi', `Siswa berhasil dipindahkan ke Data Siswa Keluar (${reason}).`, 'warning');
-    triggerAutoSync(updated, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, true);
+    const freshNotifs = addNotification('Siswa Keluar / Mutasi', `Siswa berhasil dipindahkan ke Data Siswa Keluar (${reason}).`, 'warning');
+    triggerAutoSync(updated, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, true, freshNotifs);
   };
 
   const handleDeleteStudentKeluar = (id: string) => {
@@ -1489,8 +1490,8 @@ export default function App() {
     }));
     setStudents(updated);
     showToast('Berhasil menarik siswa kembali ke Data Siswa Aktif');
-    addNotification('Siswa Dikembalikan', 'Siswa berhasil ditarik kembali ke Data Siswa Aktif.', 'info');
-    triggerAutoSync(updated, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, true);
+    const freshNotifs = addNotification('Siswa Dikembalikan', 'Siswa berhasil ditarik kembali ke Data Siswa Aktif.', 'info');
+    triggerAutoSync(updated, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, true, freshNotifs);
   };
 
   const handleGraduateStudent = (studentId: string, tahunLulus: string, noSeriIjazah?: string) => {
@@ -1509,8 +1510,8 @@ export default function App() {
     }));
     setStudents(updated);
     showToast(`🎓 Siswa "${targetStudent?.nama || 'Siswa'}" berhasil dipindahkan ke Menu Alumni (Tahun Lulus: ${tahunLulus})`);
-    addNotification('Siswa Lulus / Alumni', `Siswa "${targetStudent?.nama || 'Siswa'}" berhasil diluluskan (Alumni ${tahunLulus}).`, 'success');
-    triggerAutoSync(updated, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, true);
+    const freshNotifs = addNotification('Siswa Lulus / Alumni', `Siswa "${targetStudent?.nama || 'Siswa'}" berhasil diluluskan (Alumni ${tahunLulus}).`, 'success');
+    triggerAutoSync(updated, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, true, freshNotifs);
   };
 
   const handleImportStudents = (imported: Student[], append: boolean) => {
@@ -1524,8 +1525,8 @@ export default function App() {
     }
     setStudents(updated);
     showToast(`🎉 Sukses mengimpor ${imported.length} data siswa!`);
-    addNotification('Impor Data Siswa', `Berhasil mengimpor ${imported.length} data siswa baru.`, 'success');
-    triggerAutoSync(updated, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, true);
+    const freshNotifs = addNotification('Impor Data Siswa', `Berhasil mengimpor ${imported.length} data siswa baru.`, 'success');
+    triggerAutoSync(updated, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, true, freshNotifs);
   };
 
   // Teacher Handlers
@@ -1533,16 +1534,16 @@ export default function App() {
     const updated = sanitizeTeacherDates([t, ...teachers]);
     setTeachers(updated);
     showToast(`PTK "${t.nama}" ditambahkan...`);
-    addNotification('Penambahan PTK/Guru', `PTK/Guru baru "${t.nama}" ditambahkan.`, 'success');
-    triggerAutoSync(students, updated, sarpras, reports, displayConfig, schoolProfile, administrators, true);
+    const freshNotifs = addNotification('Penambahan PTK/Guru', `PTK/Guru baru "${t.nama}" ditambahkan.`, 'success');
+    triggerAutoSync(students, updated, sarpras, reports, displayConfig, schoolProfile, administrators, true, freshNotifs);
   };
 
   const handleUpdateTeacher = (t: TeacherStaff) => {
     const updated = sanitizeTeacherDates(teachers.map(tc => tc.id === t.id ? t : tc));
     setTeachers(updated);
     showToast(`Data PTK "${t.nama}" diperbarui...`);
-    addNotification('Pembaruan PTK/Guru', `Data PTK "${t.nama}" berhasil diperbarui.`, 'info');
-    triggerAutoSync(students, updated, sarpras, reports, displayConfig, schoolProfile, administrators, true);
+    const freshNotifs = addNotification('Pembaruan PTK/Guru', `Data PTK "${t.nama}" berhasil diperbarui.`, 'info');
+    triggerAutoSync(students, updated, sarpras, reports, displayConfig, schoolProfile, administrators, true, freshNotifs);
   };
 
   const handleDeleteTeacher = (id: string) => {
@@ -1550,10 +1551,10 @@ export default function App() {
     const updated = sanitizeTeacherDates(teachers.filter(t => t.id !== id));
     setTeachers(updated);
     localStorage.setItem('dapodik_teachers', JSON.stringify(updated));
-    saveCacheToServer(students, updated, sarpras, reports, displayConfig, schoolProfile, administrators, notifications);
+    const freshNotifs = addNotification('Penghapusan PTK/Guru', 'Data PTK/Guru telah dihapus.', 'warning');
+    saveCacheToServer(students, updated, sarpras, reports, displayConfig, schoolProfile, administrators, freshNotifs);
     showToast('Data PTK dihapus...');
-    addNotification('Penghapusan PTK/Guru', 'Data PTK/Guru telah dihapus.', 'warning');
-    triggerAutoSync(students, updated, sarpras, reports, displayConfig, schoolProfile, administrators, true);
+    triggerAutoSync(students, updated, sarpras, reports, displayConfig, schoolProfile, administrators, true, freshNotifs);
   };
 
   const handleImportTeachers = (imported: TeacherStaff[], append: boolean) => {
@@ -1567,8 +1568,8 @@ export default function App() {
     }
     setTeachers(updated);
     showToast(`🎉 Sukses mengimpor ${imported.length} data PTK!`);
-    addNotification('Impor Data PTK', `Berhasil mengimpor ${imported.length} data PTK.`, 'success');
-    triggerAutoSync(students, updated, sarpras, reports, displayConfig, schoolProfile, administrators, true);
+    const freshNotifs = addNotification('Impor Data PTK', `Berhasil mengimpor ${imported.length} data PTK.`, 'success');
+    triggerAutoSync(students, updated, sarpras, reports, displayConfig, schoolProfile, administrators, true, freshNotifs);
   };
 
   // Sarpras Handlers
@@ -1577,10 +1578,10 @@ export default function App() {
     const updated = [s, ...sarpras];
     setSarpras(updated);
     localStorage.setItem('dapodik_sarpras', JSON.stringify(updated));
-    saveCacheToServer(students, teachers, updated, reports, displayConfig, schoolProfile, administrators, notifications);
+    const freshNotifs = addNotification('Penambahan Sarpras', `Sarpras "${s.namaBarang}" ditambahkan.`, 'success');
+    saveCacheToServer(students, teachers, updated, reports, displayConfig, schoolProfile, administrators, freshNotifs);
     showToast(`Sarpras "${s.namaBarang}" ditambahkan...`);
-    addNotification('Penambahan Sarpras', `Sarpras "${s.namaBarang}" ditambahkan.`, 'success');
-    triggerAutoSync(students, teachers, updated, reports, displayConfig, schoolProfile, administrators, true);
+    triggerAutoSync(students, teachers, updated, reports, displayConfig, schoolProfile, administrators, true, freshNotifs);
   };
 
   const handleUpdateSarpras = (s: SarprasItem) => {
@@ -1588,10 +1589,10 @@ export default function App() {
     const updated = sarpras.map(sp => sp.id === s.id ? s : sp);
     setSarpras(updated);
     localStorage.setItem('dapodik_sarpras', JSON.stringify(updated));
-    saveCacheToServer(students, teachers, updated, reports, displayConfig, schoolProfile, administrators, notifications);
+    const freshNotifs = addNotification('Pembaruan Sarpras', `Data sarpras "${s.namaBarang}" diperbarui.`, 'info');
+    saveCacheToServer(students, teachers, updated, reports, displayConfig, schoolProfile, administrators, freshNotifs);
     showToast(`Data sarpras "${s.namaBarang}" diperbarui...`);
-    addNotification('Pembaruan Sarpras', `Data sarpras "${s.namaBarang}" diperbarui.`, 'info');
-    triggerAutoSync(students, teachers, updated, reports, displayConfig, schoolProfile, administrators, true);
+    triggerAutoSync(students, teachers, updated, reports, displayConfig, schoolProfile, administrators, true, freshNotifs);
   };
 
   const handleDeleteSarpras = (id: string) => {
@@ -1599,10 +1600,10 @@ export default function App() {
     const updated = sarpras.filter(s => s.id !== id);
     setSarpras(updated);
     localStorage.setItem('dapodik_sarpras', JSON.stringify(updated));
-    saveCacheToServer(students, teachers, updated, reports, displayConfig, schoolProfile, administrators, notifications);
+    const freshNotifs = addNotification('Penghapusan Sarpras', 'Data sarana & prasarana dihapus.', 'warning');
+    saveCacheToServer(students, teachers, updated, reports, displayConfig, schoolProfile, administrators, freshNotifs);
     showToast('Data sarpras dihapus...');
-    addNotification('Penghapusan Sarpras', 'Data sarana & prasarana dihapus.', 'warning');
-    triggerAutoSync(students, teachers, updated, reports, displayConfig, schoolProfile, administrators, true);
+    triggerAutoSync(students, teachers, updated, reports, displayConfig, schoolProfile, administrators, true, freshNotifs);
   };
 
   // Reports Handlers
@@ -1611,10 +1612,10 @@ export default function App() {
     const updated = [r, ...reports];
     setReports(updated);
     localStorage.setItem('dapodik_reports', JSON.stringify(updated));
-    saveCacheToServer(students, teachers, sarpras, updated, displayConfig, schoolProfile, administrators, notifications);
+    const freshNotifs = addNotification('Rapor Disimpan', `Lembar Rapor untuk "${r.studentName}" berhasil disimpan.`, 'success');
+    saveCacheToServer(students, teachers, sarpras, updated, displayConfig, schoolProfile, administrators, freshNotifs);
     showToast(`Lembar Rapor untuk "${r.studentName}" disimpan...`);
-    addNotification('Rapor Disimpan', `Lembar Rapor untuk "${r.studentName}" berhasil disimpan.`, 'success');
-    triggerAutoSync(students, teachers, sarpras, updated, displayConfig, schoolProfile, administrators, true);
+    triggerAutoSync(students, teachers, sarpras, updated, displayConfig, schoolProfile, administrators, true, freshNotifs);
   };
 
   const handleUpdateReport = (r: StudentReport) => {
@@ -1622,10 +1623,10 @@ export default function App() {
     const updated = reports.map(rp => rp.id === r.id ? r : rp);
     setReports(updated);
     localStorage.setItem('dapodik_reports', JSON.stringify(updated));
-    saveCacheToServer(students, teachers, sarpras, updated, displayConfig, schoolProfile, administrators, notifications);
+    const freshNotifs = addNotification('Rapor Diperbarui', `Rapor "${r.studentName}" berhasil diperbarui.`, 'info');
+    saveCacheToServer(students, teachers, sarpras, updated, displayConfig, schoolProfile, administrators, freshNotifs);
     showToast(`Rapor "${r.studentName}" diperbarui...`);
-    addNotification('Rapor Diperbarui', `Rapor "${r.studentName}" berhasil diperbarui.`, 'info');
-    triggerAutoSync(students, teachers, sarpras, updated, displayConfig, schoolProfile, administrators, true);
+    triggerAutoSync(students, teachers, sarpras, updated, displayConfig, schoolProfile, administrators, true, freshNotifs);
   };
 
   const handleDeleteReport = (id: string) => {
@@ -1633,10 +1634,10 @@ export default function App() {
     const updated = reports.filter(r => r.id !== id);
     setReports(updated);
     localStorage.setItem('dapodik_reports', JSON.stringify(updated));
-    saveCacheToServer(students, teachers, sarpras, updated, displayConfig, schoolProfile, administrators, notifications);
+    const freshNotifs = addNotification('Penghapusan Rapor', 'Data lembar rapor dihapus.', 'warning');
+    saveCacheToServer(students, teachers, sarpras, updated, displayConfig, schoolProfile, administrators, freshNotifs);
     showToast('Data rapor dihapus...');
-    addNotification('Penghapusan Rapor', 'Data lembar rapor dihapus.', 'warning');
-    triggerAutoSync(students, teachers, sarpras, updated, displayConfig, schoolProfile, administrators, true);
+    triggerAutoSync(students, teachers, sarpras, updated, displayConfig, schoolProfile, administrators, true, freshNotifs);
   };
 
   const unreadNotifCount = notifications.filter(n => !n.read).length;
@@ -1647,7 +1648,7 @@ export default function App() {
     setNotifications(updated);
     localStorage.setItem('dapodik_notifications', JSON.stringify(updated));
     saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, updated);
-    triggerAutoSync(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, false, updated);
+    triggerAutoSync(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, true, updated);
   };
 
   const handleMarkNotifRead = (id: string) => {
@@ -1656,7 +1657,7 @@ export default function App() {
     setNotifications(updated);
     localStorage.setItem('dapodik_notifications', JSON.stringify(updated));
     saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, updated);
-    triggerAutoSync(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, false, updated);
+    triggerAutoSync(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, true, updated);
   };
 
   const handleDeleteNotif = (id: string) => {
@@ -1666,7 +1667,7 @@ export default function App() {
     localStorage.setItem('dapodik_notifications', JSON.stringify(updated));
     saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, updated);
     showToast('Notifikasi dihapus...');
-    triggerAutoSync(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, false, updated);
+    triggerAutoSync(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, true, updated);
   };
 
   const handleClearAllNotif = () => {
@@ -1676,7 +1677,7 @@ export default function App() {
     localStorage.setItem('dapodik_notifications', '[]');
     saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, updated);
     showToast('Semua notifikasi berhasil dihapus...');
-    triggerAutoSync(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, false, updated);
+    triggerAutoSync(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, true, updated);
   };
 
   // School Profile Handler
@@ -1688,7 +1689,8 @@ export default function App() {
       setDisplayConfig(updatedDisplay);
     }
     showToast('Profil Satuan Pendidikan disimpan...');
-    triggerAutoSync(students, teachers, sarpras, reports, updatedDisplay, updated, administrators, true);
+    const freshNotifs = addNotification('Update Profil Sekolah', 'Data Profil Satuan Pendidikan berhasil diperbarui.', 'info');
+    triggerAutoSync(students, teachers, sarpras, reports, updatedDisplay, updated, administrators, true, freshNotifs);
   };
 
   // If user is not authenticated, show the LoginScreen
