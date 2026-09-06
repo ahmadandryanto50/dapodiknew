@@ -367,11 +367,18 @@ export default function App() {
   });
 
   const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => {
+    const OLD_APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwHOEkfJ7iJVAlTKUVboM7ZHd13dX9Z6adJBH6N2UwA-LbDmTrJvxPHuBB8T4kePUmJAQ/exec';
+    const ACTIVE_APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwCjNbFmpToPA9JATA4FlFJPESoWbqS9JzIhbF2TS7FNsTlK2ZIUMtfsPBE5ln3Q7eO/exec';
+
     const saved = localStorage.getItem('dapodik_sync_config');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (parsed && parsed.webAppUrl) {
+          if (parsed.webAppUrl === OLD_APP_SCRIPT_URL) {
+            parsed.webAppUrl = ACTIVE_APP_SCRIPT_URL;
+            localStorage.setItem('dapodik_sync_config', JSON.stringify(parsed));
+          }
           return parsed;
         }
       } catch (e) {
@@ -380,7 +387,7 @@ export default function App() {
     }
     return {
       spreadsheetUrl: '1XmLmshCOhSktRfzW8uG_8RqxlxVCQt5eUVekEFLwj_M',
-      webAppUrl: 'https://script.google.com/macros/s/AKfycbwHOEkfJ7iJVAlTKUVboM7ZHd13dX9Z6adJBH6N2UwA-LbDmTrJvxPHuBB8T4kePUmJAQ/exec',
+      webAppUrl: ACTIVE_APP_SCRIPT_URL,
       sheetId: '',
       autoSync: true,
       lastSynced: null,
@@ -848,6 +855,7 @@ export default function App() {
         if (serverConfig && serverConfig.webAppUrl) {
           setSyncConfig(serverConfig);
           activeConfig = serverConfig;
+          localStorage.setItem('dapodik_sync_config', JSON.stringify(serverConfig));
         }
         
         // Apply cached data from server if valid
@@ -1449,11 +1457,23 @@ export default function App() {
   ) => {
     let res: { success: boolean; message: string } = { success: false, message: 'URL belum dikonfigurasi' };
 
-    // 1. DATA MASUK TERLEBIH DAHULU KE DATABASE SPREADSHEET
-    if (syncConfig.webAppUrl && (syncConfig.autoSync || force)) {
+    const activeConfig = syncConfigRef.current?.webAppUrl ? syncConfigRef.current : syncConfig;
+
+    // Persiapkan notifikasi terbaru jika ada pendingNotification
+    let activeNotifs = customNotifications || [];
+    if (pendingNotification) {
+      activeNotifs = addNotification(
+        pendingNotification.title,
+        pendingNotification.message,
+        pendingNotification.type || 'info'
+      );
+    }
+
+    // 1. DATA MASUK TERLEBIH DAHULU KE DATABASE SPREADSHEET (Siswa, PTK, Sarpras, Rapor, Pengaturan, Notifikasi, dsb.)
+    if (activeConfig.webAppUrl && (activeConfig.autoSync || force)) {
       setIsSyncing(true);
       try {
-        res = await syncToGoogleSheets(syncConfig, {
+        res = await syncToGoogleSheets(activeConfig, {
           siswa: customStudents,
           ptk: customTeachers,
           sarpras: customSarpras,
@@ -1462,7 +1482,7 @@ export default function App() {
           administrator: customAdministrators,
           profilSekolah: buildProfilSekolahPayload(customSchoolProfile),
           aplikasi: buildAplikasiPayload(),
-          notifikasi: customNotifications
+          notifikasi: activeNotifs
         });
       } catch (err: any) {
         console.warn('Gagal sinkron data ke spreadsheet:', err);
@@ -1471,31 +1491,16 @@ export default function App() {
       }
     }
 
-    // 2. LALU DISINKRONKAN KE NOTIFIKASINYA
-    let activeNotifs = customNotifications;
-    if (pendingNotification) {
-      // Buat notifikasi setelah data dikirim/masuk ke database spreadsheet
-      activeNotifs = addNotification(
-        pendingNotification.title,
-        pendingNotification.message,
-        pendingNotification.type || 'info'
-      );
-      // Sinkronkan notifikasi ke spreadsheet (sheet Notifikasi)
-      if (syncConfigRef.current?.webAppUrl) {
-        try {
-          await syncNotifikasiToGoogleSheets(syncConfigRef.current, activeNotifs);
-        } catch (notifSyncErr) {
-          console.warn('Gagal sinkron notifikasi ke spreadsheet:', notifSyncErr);
-        }
-      }
-    } else if (customNotifications && customNotifications.length > 0 && syncConfigRef.current?.webAppUrl) {
-      // Pastikan notifikasi juga tersimpan di sheet Notifikasi
+    // 2. PASTIKAN SHEET NOTIFIKASI JUGA SECARA SPESIFIK DISINKRONKAN KE DATABASE SPREADSHEET
+    if (activeConfig.webAppUrl && activeNotifs && activeNotifs.length > 0) {
       try {
-        await syncNotifikasiToGoogleSheets(syncConfigRef.current, customNotifications);
-      } catch (e) {}
+        await syncNotifikasiToGoogleSheets(activeConfig, activeNotifs);
+      } catch (notifSyncErr) {
+        console.warn('Gagal sinkron notifikasi ke spreadsheet:', notifSyncErr);
+      }
     }
 
-    // Simpan seluruh data & notifikasi terbaru ke server cache untuk sinkronisasi multi-perangkat
+    // 3. Simpan seluruh data & notifikasi terbaru ke server cache untuk sinkronisasi multi-perangkat
     saveCacheToServer(
       customStudents,
       customTeachers,
@@ -1517,7 +1522,7 @@ export default function App() {
       if (force) {
         showToast('Data berhasil disimpan ke Database & notifikasi disinkronkan!');
       }
-    } else if (force && syncConfig.webAppUrl) {
+    } else if (force && activeConfig.webAppUrl) {
       showToast('Tersimpan lokal. Status sync Database: ' + res.message);
     }
   };

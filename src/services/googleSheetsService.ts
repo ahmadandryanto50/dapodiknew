@@ -371,6 +371,108 @@ function checkAndInitializeSheets(ss) {
 }
 `;
 
+async function callProxyOrDirectPost(webAppUrl: string, payload: any): Promise<{ success: boolean; message: string }> {
+  // 1. Try server-side proxy endpoint first (bypasses browser CORS & mobile browser restrictions)
+  try {
+    const proxyRes = await fetch('/api/sync-sheets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ webAppUrl, payload })
+    });
+    if (proxyRes.ok) {
+      const json = await proxyRes.json();
+      if (json && json.success) {
+        return {
+          success: true,
+          message: 'Data berhasil dikirim & disinkronkan ke Database Spreadsheet!'
+        };
+      }
+    }
+  } catch (proxyErr) {
+    // If backend proxy is not reachable (e.g. static hosting on Vercel/GitHub Pages), continue to direct browser fetch
+  }
+
+  // 2. Direct browser fetch with mode: 'no-cors'
+  try {
+    const response = await fetch(webAppUrl, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: {
+        'Content-Type': 'text/plain'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (response.ok) {
+      try {
+        const resJson = await response.json();
+        if (resJson && resJson.status === 'success') {
+          return {
+            success: true,
+            message: resJson.message || 'Data berhasil dikirim & disinkronkan ke Database!'
+          };
+        } else if (resJson && resJson.status === 'error') {
+          return {
+            success: false,
+            message: 'Respons Database Error: ' + (resJson.message || 'Gagal memproses data.')
+          };
+        }
+      } catch (parseError) {
+        // Fallback if JSON parsing failed but request was OK
+      }
+    }
+
+    return {
+      success: true,
+      message: 'Data berhasil dikirim & disinkronkan ke Database!'
+    };
+  } catch (error: any) {
+    console.error('Sync error:', error);
+    if (error instanceof TypeError) {
+      return {
+        success: true,
+        message: 'Data berhasil dikirim & disinkronkan ke Database!'
+      };
+    }
+    return {
+      success: false,
+      message: error?.message || 'Gagal menyinkronkan data ke Database.'
+    };
+  }
+}
+
+function parseSheetsResult(result: any) {
+  return {
+    success: true,
+    message: 'Data berhasil ditarik dari Database!',
+    data: {
+      siswa: [
+        ...(result.siswa || []),
+        ...(result.siswaKeluar || []).filter((sk: any) => !(result.siswa || []).some((s: any) => s.id === sk.id)),
+        ...(result.alumni || []).map((al: any) => ({ ...al, status: al.status || 'Lulus' })).filter((al: any) => !(result.siswa || []).some((s: any) => s.id === al.id) && !(result.siswaKeluar || []).some((sk: any) => sk.id === al.id))
+      ],
+      ptk: result.ptk || [],
+      sarpras: result.sarpras || [],
+      rapor: result.rapor || [],
+      pengaturan: result.pengaturan || [],
+      administrator: result.administrator || [],
+      profilSekolah: result.profilSekolah || [],
+      aplikasi: result.aplikasi || [],
+      notifikasi: (result.notifikasi || []).map((n: any, idx: number) => {
+        const id = String(n.id || n.ID || `notif-${Date.now()}-${idx}`);
+        const title = String(n.title || n.Judul || n.judul || n.Title || '');
+        const message = String(n.message || n.Pesan || n.pesan || n.Message || '');
+        const time = String(n.time || n.Waktu || n.waktu || n.Time || '');
+        const rawType = String(n.type || n.tipe || n.Type || 'info').toLowerCase();
+        const type = (['info', 'success', 'warning', 'error'].includes(rawType) ? rawType : 'info') as 'info' | 'success' | 'warning' | 'error';
+        const rawRead = n.read !== undefined ? n.read : (n.readStatus !== undefined ? n.readStatus : n.dibaca);
+        const read = Boolean(rawRead === true || rawRead === 'true' || rawRead === 'TRUE' || rawRead === 1 || rawRead === '1');
+        return { id, title, message, time, type, read };
+      }).filter((n: NotificationItem) => n.title || n.message)
+    }
+  };
+}
+
 export async function syncToGoogleSheets(
   config: SyncConfig,
   data: {
@@ -437,48 +539,9 @@ export async function syncToGoogleSheets(
       timestamp: new Date().toLocaleString('id-ID')
     };
 
-    const response = await fetch(config.webAppUrl, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: {
-        'Content-Type': 'text/plain'
-      },
-      body: JSON.stringify(payload)
-    });
-
-    if (response.ok) {
-      try {
-        const resJson = await response.json();
-        if (resJson && resJson.status === 'success') {
-          return {
-            success: true,
-            message: resJson.message || 'Data berhasil dikirim & disinkronkan ke Database!'
-          };
-        } else if (resJson && resJson.status === 'error') {
-          return {
-            success: false,
-            message: 'Respons Database Error: ' + (resJson.message || 'Gagal memproses data.')
-          };
-        }
-      } catch (parseError) {
-        // Fallback if JSON parsing failed but request was OK
-      }
-    }
-
-    return {
-      success: true,
-      message: 'Data berhasil dikirim & disinkronkan ke Database!'
-    };
+    return await callProxyOrDirectPost(config.webAppUrl, payload);
   } catch (error: any) {
     console.error('Sync error:', error);
-    // Standard browsers may block reading the redirected response if CORS headers are missing,
-    // but the POST request itself has been sent and executed successfully on Google servers.
-    if (error instanceof TypeError) {
-      return {
-        success: true,
-        message: 'Data berhasil dikirim & disinkronkan ke Database! (Penjelasan: Respons terkirim dengan sukses ke server Database Cloud).'
-      };
-    }
     return {
       success: false,
       message: error?.message || 'Gagal menyinkronkan data ke Database.'
@@ -508,6 +571,24 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
     };
   }
 
+  // 1. Try server-side proxy endpoint first
+  try {
+    const proxyRes = await fetch('/api/load-sheets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ webAppUrl: config.webAppUrl })
+    });
+    if (proxyRes.ok) {
+      const result = await proxyRes.json();
+      if (result && result.status === 'success') {
+        return parseSheetsResult(result);
+      }
+    }
+  } catch (proxyErr) {
+    // Continue to direct browser fetch
+  }
+
+  // 2. Direct browser GET request
   try {
     const response = await fetch(config.webAppUrl);
     if (!response.ok) {
@@ -515,35 +596,7 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
     }
     const result = await response.json();
     if (result && result.status === 'success') {
-      return {
-        success: true,
-        message: 'Data berhasil ditarik dari Database!',
-        data: {
-          siswa: [
-            ...(result.siswa || []),
-            ...(result.siswaKeluar || []).filter((sk: any) => !(result.siswa || []).some((s: any) => s.id === sk.id)),
-            ...(result.alumni || []).map((al: any) => ({ ...al, status: al.status || 'Lulus' })).filter((al: any) => !(result.siswa || []).some((s: any) => s.id === al.id) && !(result.siswaKeluar || []).some((sk: any) => sk.id === al.id))
-          ],
-          ptk: result.ptk || [],
-          sarpras: result.sarpras || [],
-          rapor: result.rapor || [],
-          pengaturan: result.pengaturan || [],
-          administrator: result.administrator || [],
-          profilSekolah: result.profilSekolah || [],
-          aplikasi: result.aplikasi || [],
-          notifikasi: (result.notifikasi || []).map((n: any, idx: number) => {
-            const id = String(n.id || n.ID || `notif-${Date.now()}-${idx}`);
-            const title = String(n.title || n.Judul || n.judul || n.Title || '');
-            const message = String(n.message || n.Pesan || n.pesan || n.Message || '');
-            const time = String(n.time || n.Waktu || n.waktu || n.Time || '');
-            const rawType = String(n.type || n.tipe || n.Type || 'info').toLowerCase();
-            const type = (['info', 'success', 'warning', 'error'].includes(rawType) ? rawType : 'info') as 'info' | 'success' | 'warning' | 'error';
-            const rawRead = n.read !== undefined ? n.read : (n.readStatus !== undefined ? n.readStatus : n.dibaca);
-            const read = Boolean(rawRead === true || rawRead === 'true' || rawRead === 'TRUE' || rawRead === 1 || rawRead === '1');
-            return { id, title, message, time, type, read };
-          }).filter((n: NotificationItem) => n.title || n.message)
-        }
-      };
+      return parseSheetsResult(result);
     } else {
       return {
         success: false,
@@ -561,35 +614,7 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
       });
       const result = await response.json();
       if (result && result.status === 'success') {
-        return {
-          success: true,
-          message: 'Data berhasil ditarik dari Database (POST fallback)!',
-          data: {
-            siswa: [
-              ...(result.siswa || []),
-              ...(result.siswaKeluar || []).filter((sk: any) => !(result.siswa || []).some((s: any) => s.id === sk.id)),
-              ...(result.alumni || []).map((al: any) => ({ ...al, status: al.status || 'Lulus' })).filter((al: any) => !(result.siswa || []).some((s: any) => s.id === al.id) && !(result.siswaKeluar || []).some((sk: any) => sk.id === al.id))
-            ],
-            ptk: result.ptk || [],
-            sarpras: result.sarpras || [],
-            rapor: result.rapor || [],
-            pengaturan: result.pengaturan || [],
-            administrator: result.administrator || [],
-            profilSekolah: result.profilSekolah || [],
-            aplikasi: result.aplikasi || [],
-            notifikasi: (result.notifikasi || []).map((n: any, idx: number) => {
-              const id = String(n.id || n.ID || `notif-${Date.now()}-${idx}`);
-              const title = String(n.title || n.Judul || n.judul || n.Title || '');
-              const message = String(n.message || n.Pesan || n.pesan || n.Message || '');
-              const time = String(n.time || n.Waktu || n.waktu || n.Time || '');
-              const rawType = String(n.type || n.tipe || n.Type || 'info').toLowerCase();
-              const type = (['info', 'success', 'warning', 'error'].includes(rawType) ? rawType : 'info') as 'info' | 'success' | 'warning' | 'error';
-              const rawRead = n.read !== undefined ? n.read : (n.readStatus !== undefined ? n.readStatus : n.dibaca);
-              const read = Boolean(rawRead === true || rawRead === 'true' || rawRead === 'TRUE' || rawRead === 1 || rawRead === '1');
-              return { id, title, message, time, type, read };
-            }).filter((n: NotificationItem) => n.title || n.message)
-          }
-        };
+        return parseSheetsResult(result);
       }
     } catch (fallbackError: any) {
       console.error('POST fallback failed:', fallbackError);
@@ -641,19 +666,9 @@ export async function syncNotifikasiToGoogleSheets(
   if (!config.webAppUrl) {
     return { success: false, message: 'URL Google Apps Script belum dikonfigurasi.' };
   }
-  try {
-    const payload = {
-      type: 'SYNC_NOTIFIKASI',
-      payload: notifications
-    };
-    await fetch(config.webAppUrl, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify(payload)
-    });
-    return { success: true, message: 'Data notifikasi disinkronkan ke Database Cloud!' };
-  } catch (error: any) {
-    return { success: false, message: error?.message || 'Gagal menyinkronkan notifikasi.' };
-  }
+  const payload = {
+    type: 'SYNC_NOTIFIKASI',
+    payload: notifications
+  };
+  return await callProxyOrDirectPost(config.webAppUrl, payload);
 }

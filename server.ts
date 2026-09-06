@@ -35,13 +35,55 @@ async function startServer() {
     // Fallback to default
     return res.json({
       spreadsheetUrl: "1XmLmshCOhSktRfzW8uG_8RqxlxVCQt5eUVekEFLwj_M",
-      webAppUrl: "https://script.google.com/macros/s/AKfycbwHOEkfJ7iJVAlTKUVboM7ZHd13dX9Z6adJBH6N2UwA-LbDmTrJvxPHuBB8T4kePUmJAQ/exec",
+      webAppUrl: "https://script.google.com/macros/s/AKfycbwCjNbFmpToPA9JATA4FlFJPESoWbqS9JzIhbF2TS7FNsTlK2ZIUMtfsPBE5ln3Q7eO/exec",
       sheetId: "",
       autoSync: true,
       lastSynced: null,
       status: "connected",
       mode: "appscript"
     });
+  });
+
+  // API Route: Proxy Sync to Google Sheets (bypasses browser CORS & mobile restrictions)
+  app.post("/api/sync-sheets", async (req, res) => {
+    try {
+      const { webAppUrl, payload } = req.body;
+      if (!webAppUrl) {
+        return res.status(400).json({ success: false, message: "webAppUrl is required" });
+      }
+      const response = await fetch(webAppUrl, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify(payload)
+      });
+      const text = await response.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        data = { text };
+      }
+      return res.json({ success: true, data });
+    } catch (err) {
+      console.error("Error proxying to Google Sheets in /api/sync-sheets:", err);
+      return res.status(500).json({ success: false, message: (err as Error).message });
+    }
+  });
+
+  // API Route: Proxy Load from Google Sheets
+  app.post("/api/load-sheets", async (req, res) => {
+    try {
+      const { webAppUrl } = req.body;
+      if (!webAppUrl) {
+        return res.status(400).json({ success: false, message: "webAppUrl is required" });
+      }
+      const response = await fetch(webAppUrl);
+      const data = await response.json();
+      return res.json(data);
+    } catch (err) {
+      console.error("Error proxying from Google Sheets in /api/load-sheets:", err);
+      return res.status(500).json({ success: false, message: (err as Error).message });
+    }
   });
 
   // API Route: Save Shared Sync Config
