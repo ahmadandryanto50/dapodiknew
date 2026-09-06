@@ -1252,95 +1252,90 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                                     }} 
                                   />
                                   <div 
-                                    className={`absolute right-0 z-50 w-48 bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200/80 py-1.5 text-xs text-slate-700 divide-y divide-slate-100 ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-150 ${
-                                      isNearBottom ? 'bottom-full mb-1.5 origin-bottom-right' : 'top-full mt-1.5 origin-top-right'
-                                    }`}
+                                    className="absolute right-full top-1/2 -translate-y-1/2 mr-2 z-50 flex items-center gap-1.5 p-1.5 bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200/90 ring-1 ring-black/5 animate-in fade-in slide-in-from-right-2 duration-150 whitespace-nowrap text-xs font-medium text-slate-700"
                                     onClick={(e) => e.stopPropagation()}
                                   >
-                                    <div className="py-1">
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setOpenActionAdminId(null);
-                                          setEditingAdmin(admin);
-                                          setAdminFormData({ ...admin });
-                                          setIsAddAdminOpen(true);
-                                        }}
-                                        className="w-full text-left px-3.5 py-2 hover:bg-sky-50 text-slate-700 hover:text-sky-700 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
-                                      >
-                                        <div className="w-6 h-6 rounded-lg bg-sky-50 text-sky-700 flex items-center justify-center shrink-0 border border-sky-200">
-                                          <Edit2 className="w-3.5 h-3.5" />
-                                        </div>
-                                        <span>Edit Akun</span>
-                                      </button>
-                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setOpenActionAdminId(null);
+                                        setEditingAdmin(admin);
+                                        setAdminFormData({ ...admin });
+                                        setIsAddAdminOpen(true);
+                                      }}
+                                      className="px-2.5 py-1.5 hover:bg-sky-50 text-slate-700 hover:text-sky-700 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer border border-transparent hover:border-sky-200"
+                                      title="Edit Akun Pengguna"
+                                    >
+                                      <div className="w-5 h-5 rounded-lg bg-sky-50 text-sky-700 flex items-center justify-center shrink-0 border border-sky-200">
+                                        <Edit2 className="w-3 h-3" />
+                                      </div>
+                                      <span>Edit</span>
+                                    </button>
 
-                                    <div className="py-1">
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setOpenActionAdminId(null);
-                                          const isCurrentlyActive = admin.status === 'Aktif';
-                                          const newStatus = isCurrentlyActive ? 'Nonaktif' : 'Aktif';
-                                          const updated = adminList.map((a) =>
-                                            a.id === admin.id ? { ...a, status: newStatus as 'Aktif' | 'Nonaktif' } : a
-                                          );
-                                          setAdminList(updated);
-                                          if (onSaveAdministrators) onSaveAdministrators(updated);
-                                        }}
-                                        className={`w-full text-left px-3.5 py-2 flex items-center gap-2.5 font-medium transition-colors cursor-pointer ${
-                                          admin.status === 'Aktif'
-                                            ? 'hover:bg-amber-50 text-amber-700 hover:text-amber-800'
-                                            : 'hover:bg-emerald-50 text-emerald-700 hover:text-emerald-800'
-                                        }`}
-                                      >
-                                        <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 border ${
-                                          admin.status === 'Aktif'
-                                            ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                            : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                        }`}>
-                                          {admin.status === 'Aktif' ? (
-                                            <UserX className="w-3.5 h-3.5" />
-                                          ) : (
-                                            <UserCheck className="w-3.5 h-3.5" />
-                                          )}
-                                        </div>
-                                        <span>{admin.status === 'Aktif' ? 'Tidak Aktif' : 'Set Aktif'}</span>
-                                      </button>
-                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setOpenActionAdminId(null);
+                                        const isCurrentlyActive = admin.status === 'Aktif';
+                                        const newStatus = isCurrentlyActive ? 'Nonaktif' : 'Aktif';
+                                        const updated = adminList.map((a) =>
+                                          a.id === admin.id ? { ...a, status: newStatus as 'Aktif' | 'Nonaktif' } : a
+                                        );
+                                        setAdminList(updated);
+                                        if (onSaveAdministrators) onSaveAdministrators(updated);
+                                      }}
+                                      className={`px-2.5 py-1.5 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer border ${
+                                        admin.status === 'Aktif'
+                                          ? 'hover:bg-amber-50 text-amber-700 border-transparent hover:border-amber-200'
+                                          : 'hover:bg-emerald-50 text-emerald-700 border-transparent hover:border-emerald-200'
+                                      }`}
+                                      title={admin.status === 'Aktif' ? 'Nonaktifkan Akun' : 'Aktifkan Akun'}
+                                    >
+                                      <div className={`w-5 h-5 rounded-lg flex items-center justify-center shrink-0 border ${
+                                        admin.status === 'Aktif'
+                                          ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                          : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                      }`}>
+                                        {admin.status === 'Aktif' ? (
+                                          <UserX className="w-3 h-3" />
+                                        ) : (
+                                          <UserCheck className="w-3 h-3" />
+                                        )}
+                                      </div>
+                                      <span>{admin.status === 'Aktif' ? 'Tidak Aktif' : 'Set Aktif'}</span>
+                                    </button>
 
                                     {adminList.length > 1 && (
-                                      <div className="py-1">
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setOpenActionAdminId(null);
-                                            if (confirm(`Apakah Anda yakin ingin menghapus akun "${admin.nama}" (${admin.username})? Data di aplikasi dan Database Cloud akan dihapus.`)) {
-                                              const updated = adminList.filter((a) => a.id !== admin.id && a.username.toLowerCase() !== admin.username.toLowerCase());
-                                              setAdminList(updated);
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setOpenActionAdminId(null);
+                                          if (confirm(`Apakah Anda yakin ingin menghapus akun "${admin.nama}" (${admin.username})? Data di aplikasi dan Database Cloud akan dihapus.`)) {
+                                            const updated = adminList.filter((a) => a.id !== admin.id && a.username.toLowerCase() !== admin.username.toLowerCase());
+                                            setAdminList(updated);
 
-                                              try {
-                                                const delStr = localStorage.getItem('dapodik_deleted_admins') || '[]';
-                                                const delList: string[] = JSON.parse(delStr);
-                                                if (!delList.includes(admin.username.toLowerCase())) {
-                                                  delList.push(admin.username.toLowerCase());
-                                                  localStorage.setItem('dapodik_deleted_admins', JSON.stringify(delList));
-                                                }
-                                              } catch (e) {
-                                                console.error(e);
+                                            try {
+                                              const delStr = localStorage.getItem('dapodik_deleted_admins') || '[]';
+                                              const delList: string[] = JSON.parse(delStr);
+                                              if (!delList.includes(admin.username.toLowerCase())) {
+                                                delList.push(admin.username.toLowerCase());
+                                                localStorage.setItem('dapodik_deleted_admins', JSON.stringify(delList));
                                               }
-
-                                              if (onSaveAdministrators) onSaveAdministrators(updated);
+                                            } catch (e) {
+                                              console.error(e);
                                             }
-                                          }}
-                                          className="w-full text-left px-3.5 py-2 hover:bg-rose-50 text-rose-600 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
-                                        >
-                                          <div className="w-6 h-6 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 border border-rose-200">
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                          </div>
-                                          <span>Hapus Akun</span>
-                                        </button>
-                                      </div>
+
+                                            if (onSaveAdministrators) onSaveAdministrators(updated);
+                                          }
+                                        }}
+                                        className="px-2.5 py-1.5 hover:bg-rose-50 text-rose-600 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer border border-transparent hover:border-rose-200"
+                                        title="Hapus Akun Pengguna"
+                                      >
+                                        <div className="w-5 h-5 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 border border-rose-200">
+                                          <Trash2 className="w-3 h-3" />
+                                        </div>
+                                        <span>Hapus</span>
+                                      </button>
                                     )}
                                   </div>
                                 </>

@@ -1076,11 +1076,7 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
                               }} 
                             />
                             <div 
-                              className={`absolute right-0 z-50 w-52 bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200/80 py-1.5 text-xs text-slate-700 divide-y divide-slate-100 ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-150 ${
-                                idx >= Math.max(1, filteredStudents.length - 2)
-                                  ? 'bottom-full mb-1.5 origin-bottom-right'
-                                  : 'top-full mt-1.5 origin-top-right'
-                              }`}
+                              className="absolute right-full top-1/2 -translate-y-1/2 mr-2 z-50 w-56 bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200/90 py-1.5 text-xs text-slate-700 divide-y divide-slate-100 ring-1 ring-black/5 animate-in fade-in slide-in-from-right-2 duration-150 max-h-80 overflow-y-auto"
                               onClick={(e) => e.stopPropagation()}
                             >
                               <div className="py-1">
