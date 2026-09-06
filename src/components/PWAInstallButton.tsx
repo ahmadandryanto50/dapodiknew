@@ -65,7 +65,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({ variant = 'h
     if (isInstalled) return null;
     return (
       <>
-        <div className="fixed bottom-4 left-4 right-4 z-[90] md:hidden animate-slideUp">
+        <div className="fixed bottom-20 left-4 right-4 z-[90] md:hidden animate-slideUp">
           <div className="p-3 bg-slate-900/95 border border-sky-500/40 rounded-2xl shadow-2xl backdrop-blur-md flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
               <img

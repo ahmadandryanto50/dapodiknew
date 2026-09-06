@@ -270,17 +270,6 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
 
           {/* Quick Realtime Sync Pill & Actions */}
           <div className="flex items-center gap-2 sm:gap-3">
-            {/* Mobile Menu Button */}
-            {onOpenMobileMenu && (
-              <button 
-                onClick={onOpenMobileMenu}
-                className="md:hidden p-2.5 rounded-full bg-white/15 hover:bg-white/25 text-white backdrop-blur-md border border-white/20 transition-all cursor-pointer"
-                title="Menu Navigasi"
-              >
-                <Menu className="w-4 h-4" />
-              </button>
-            )}
-
             {/* Quick Notification Bell */}
             <button 
               id="header-notif-btn"

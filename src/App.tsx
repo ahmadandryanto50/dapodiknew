@@ -38,6 +38,7 @@ import { AplikasiModule } from './components/AplikasiModule';
 import { GoogleSheetModal } from './components/GoogleSheetModal';
 import { QuickSearchModal } from './components/QuickSearchModal';
 import { NotificationDrawer } from './components/NotificationDrawer';
+import { MobileBottomNav } from './components/MobileBottomNav';
 import { SafeImage } from './components/SafeImage';
 import { formatDateIndonesian, cleanLeadingZerosCode } from './utils/dateUtils';
 import { 
@@ -1788,15 +1789,6 @@ export default function App() {
               </div>
             </button>
 
-            {/* Hamburger menu for mobile/tablet */}
-            <button
-              onClick={() => setIsMobileMenuOpen(true)}
-              className="md:hidden flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white/95 transition-all text-xs font-semibold cursor-pointer active:scale-95"
-            >
-              <Menu className="w-4 h-4 text-sky-300" />
-              <span>Menu</span>
-            </button>
-
             {/* Quick module selector */}
             <div className="hidden md:flex items-center gap-1 ml-6 bg-white/15 backdrop-blur-md p-1 rounded-2xl border border-white/20 text-xs">
               <button
@@ -1960,7 +1952,7 @@ export default function App() {
       )}
 
       {/* Main View Router */}
-      <main className="flex-1 relative z-10">
+      <main className="flex-1 relative z-10 pb-20 md:pb-0">
         {activeTab === 'home' && (
           <WelcomeHero
             onNavigate={(tab) => {
@@ -2109,6 +2101,17 @@ export default function App() {
           </div>
         )}
       </main>
+      
+      {/* Mobile Bottom Navigation Bar (Khusus Tampilan HP & Android) */}
+      <MobileBottomNav
+        activeTab={activeTab}
+        onSelectTab={(tab) => {
+          setSettingsInitialFilter('all');
+          setActiveTab(tab);
+        }}
+        onOpenMenu={() => setIsMobileMenuOpen(true)}
+        currentUser={currentUser}
+      />
 
       {/* Global Modals */}
       <GoogleSheetModal
