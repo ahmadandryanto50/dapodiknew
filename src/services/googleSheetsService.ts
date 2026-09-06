@@ -531,14 +531,17 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
           administrator: result.administrator || [],
           profilSekolah: result.profilSekolah || [],
           aplikasi: result.aplikasi || [],
-          notifikasi: (result.notifikasi || []).map((n: any) => ({
-            id: String(n.id || ''),
-            title: String(n.title || ''),
-            message: String(n.message || ''),
-            time: String(n.time || ''),
-            type: (['info', 'success', 'warning', 'error'].includes(n.type) ? n.type : 'info') as 'info' | 'success' | 'warning' | 'error',
-            read: Boolean(n.read === true || n.read === 'true' || n.read === 'TRUE')
-          }))
+          notifikasi: (result.notifikasi || []).map((n: any, idx: number) => {
+            const id = String(n.id || n.ID || `notif-${Date.now()}-${idx}`);
+            const title = String(n.title || n.Judul || n.judul || n.Title || '');
+            const message = String(n.message || n.Pesan || n.pesan || n.Message || '');
+            const time = String(n.time || n.Waktu || n.waktu || n.Time || '');
+            const rawType = String(n.type || n.tipe || n.Type || 'info').toLowerCase();
+            const type = (['info', 'success', 'warning', 'error'].includes(rawType) ? rawType : 'info') as 'info' | 'success' | 'warning' | 'error';
+            const rawRead = n.read !== undefined ? n.read : (n.readStatus !== undefined ? n.readStatus : n.dibaca);
+            const read = Boolean(rawRead === true || rawRead === 'true' || rawRead === 'TRUE' || rawRead === 1 || rawRead === '1');
+            return { id, title, message, time, type, read };
+          }).filter((n: NotificationItem) => n.title || n.message)
         }
       };
     } else {
@@ -574,14 +577,17 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
             administrator: result.administrator || [],
             profilSekolah: result.profilSekolah || [],
             aplikasi: result.aplikasi || [],
-            notifikasi: (result.notifikasi || []).map((n: any) => ({
-              id: String(n.id || ''),
-              title: String(n.title || ''),
-              message: String(n.message || ''),
-              time: String(n.time || ''),
-              type: (['info', 'success', 'warning', 'error'].includes(n.type) ? n.type : 'info') as 'info' | 'success' | 'warning' | 'error',
-              read: Boolean(n.read === true || n.read === 'true' || n.read === 'TRUE')
-            }))
+            notifikasi: (result.notifikasi || []).map((n: any, idx: number) => {
+              const id = String(n.id || n.ID || `notif-${Date.now()}-${idx}`);
+              const title = String(n.title || n.Judul || n.judul || n.Title || '');
+              const message = String(n.message || n.Pesan || n.pesan || n.Message || '');
+              const time = String(n.time || n.Waktu || n.waktu || n.Time || '');
+              const rawType = String(n.type || n.tipe || n.Type || 'info').toLowerCase();
+              const type = (['info', 'success', 'warning', 'error'].includes(rawType) ? rawType : 'info') as 'info' | 'success' | 'warning' | 'error';
+              const rawRead = n.read !== undefined ? n.read : (n.readStatus !== undefined ? n.readStatus : n.dibaca);
+              const read = Boolean(rawRead === true || rawRead === 'true' || rawRead === 'TRUE' || rawRead === 1 || rawRead === '1');
+              return { id, title, message, time, type, read };
+            }).filter((n: NotificationItem) => n.title || n.message)
           }
         };
       }

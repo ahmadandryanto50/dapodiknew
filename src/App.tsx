@@ -24,7 +24,7 @@ import {
   initialNotifications,
   initialAdministrators
 } from './data/mockData';
-import { syncToGoogleSheets, loadFromGoogleSheets } from './services/googleSheetsService';
+import { syncToGoogleSheets, loadFromGoogleSheets, syncNotifikasiToGoogleSheets } from './services/googleSheetsService';
 import { LoginScreen } from './components/LoginScreen';
 import { WelcomeHero } from './components/WelcomeHero';
 import { StudentModule } from './components/StudentModule';
@@ -147,11 +147,47 @@ function mergeAdministratorsWithLocal(incomingAdmins: AdminUser[], currentAdmins
   return getCleanAdministrators(currentAdmins);
 }
 
-function getFilteredNotifications(notifs: NotificationItem[]): NotificationItem[] {
+function getDeletedNotifIds(): string[] {
+  try {
+    const saved = localStorage.getItem('dapodik_deleted_notif_ids');
+    return saved ? JSON.parse(saved) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveDeletedNotifId(id: string) {
+  if (!id) return;
+  try {
+    const list = getDeletedNotifIds();
+    if (!list.includes(id)) {
+      list.push(id);
+      localStorage.setItem('dapodik_deleted_notif_ids', JSON.stringify(list));
+    }
+  } catch (e) {}
+}
+
+function saveDeletedNotifIds(ids: string[]) {
+  if (!Array.isArray(ids) || ids.length === 0) return;
+  try {
+    const current = getDeletedNotifIds();
+    const set = new Set([...current, ...ids]);
+    localStorage.setItem('dapodik_deleted_notif_ids', JSON.stringify(Array.from(set)));
+  } catch (e) {}
+}
+
+function getFilteredNotifications(notifs: NotificationItem[], extraDeletedIds: string[] = []): NotificationItem[] {
   if (!Array.isArray(notifs)) return [];
-  // Permanent blacklist of dummy mock notifications so they never return in any browser
+  // Permanent blacklist of dummy mock notifications & deleted IDs so they never return in any browser
   const dummyIds = ['notif-1', 'notif-2', 'notif-3'];
-  return notifs.filter(n => n && n.id && !dummyIds.includes(n.id));
+  const deletedSet = new Set([...dummyIds, ...getDeletedNotifIds(), ...extraDeletedIds]);
+
+  return notifs
+    .filter(n => n && (n.id || n.title || n.message) && !deletedSet.has(String(n.id)))
+    .map((n, idx) => ({
+      ...n,
+      id: n.id ? String(n.id) : `notif-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`
+    }));
 }
 
 export default function App() {
@@ -355,6 +391,11 @@ export default function App() {
     notificationsRef.current = notifications;
   }, [notifications]);
 
+  const syncConfigRef = useRef<SyncConfig>(syncConfig);
+  useEffect(() => {
+    syncConfigRef.current = syncConfig;
+  }, [syncConfig]);
+
   const handleOpenEditDisplay = (filter: 'all' | '1' | '2' | '3' | '4' | '5' = 'all') => {
     setSettingsInitialFilter(filter);
     setActiveTab('pengaturan');
@@ -370,7 +411,8 @@ export default function App() {
     customSchoolProfile = schoolProfile,
     customAdministrators = administrators,
     customNotifications = notificationsRef.current,
-    customAplikasiLinks = aplikasiLinks
+    customAplikasiLinks = aplikasiLinks,
+    customDeletedNotifIds = getDeletedNotifIds()
   ) => {
     if (!isInitialized) return;
     try {
@@ -386,7 +428,8 @@ export default function App() {
           schoolProfile: customSchoolProfile,
           administrators: customAdministrators,
           notifications: customNotifications,
-          aplikasiLinks: customAplikasiLinks
+          aplikasiLinks: customAplikasiLinks,
+          deletedNotifIds: customDeletedNotifIds
         })
       });
     } catch (err) {
@@ -493,6 +536,7 @@ export default function App() {
     localStorage.setItem('dapodik_current_user', JSON.stringify(user));
     localStorage.setItem('dapodik_authenticated', 'true');
     showToast(`Selamat datang kembali, ${user.nama}!`);
+    handlePullFromSheets(true);
   };
 
   const handleLogout = () => {
@@ -779,9 +823,13 @@ export default function App() {
               } catch (e) {}
             }
           }
+          if (serverData.deletedNotifIds && Array.isArray(serverData.deletedNotifIds)) {
+            saveDeletedNotifIds(serverData.deletedNotifIds);
+          }
           if (serverData.notifications && Array.isArray(serverData.notifications)) {
             const filtered = getFilteredNotifications(serverData.notifications);
             setNotifications(filtered);
+            notificationsRef.current = filtered;
             localStorage.setItem('dapodik_notifications', JSON.stringify(filtered));
           }
           if (serverData.aplikasiLinks && Array.isArray(serverData.aplikasiLinks) && serverData.aplikasiLinks.length > 0) {
@@ -809,7 +857,7 @@ export default function App() {
             let finalLinks = serverData?.aplikasiLinks || aplikasiLinks;
             let finalNotifs = serverData?.notifications || notifications;
 
-            if (Array.isArray(notifikasi) && notifikasi.length > 0) {
+            if (Array.isArray(notifikasi)) {
               finalNotifs = getFilteredNotifications(notifikasi);
               setNotifications(finalNotifs);
               notificationsRef.current = finalNotifs;
@@ -1126,6 +1174,9 @@ export default function App() {
     const handleSyncTrigger = () => {
       if (document.visibilityState === 'visible') {
         revalidateData();
+        if (syncConfigRef.current && syncConfigRef.current.webAppUrl) {
+          handlePullFromSheets(true);
+        }
       }
     };
     window.addEventListener('focus', handleSyncTrigger);
@@ -1643,40 +1694,51 @@ export default function App() {
   const unreadNotifCount = notifications.filter(n => !n.read).length;
 
   const handleMarkAllNotifRead = () => {
+    lastLocalMutationRef.current = Date.now();
     const updated = notificationsRef.current.map(n => ({ ...n, read: true }));
     notificationsRef.current = updated;
     setNotifications(updated);
     localStorage.setItem('dapodik_notifications', JSON.stringify(updated));
     saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, updated);
+    syncNotifikasiToGoogleSheets(syncConfigRef.current, updated);
     triggerAutoSync(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, true, updated);
   };
 
   const handleMarkNotifRead = (id: string) => {
-    const updated = notificationsRef.current.map(n => n.id === id ? { ...n, read: true } : n);
+    lastLocalMutationRef.current = Date.now();
+    const updated = notificationsRef.current.map(n => String(n.id) === String(id) ? { ...n, read: true } : n);
     notificationsRef.current = updated;
     setNotifications(updated);
     localStorage.setItem('dapodik_notifications', JSON.stringify(updated));
     saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, updated);
+    syncNotifikasiToGoogleSheets(syncConfigRef.current, updated);
     triggerAutoSync(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, true, updated);
   };
 
   const handleDeleteNotif = (id: string) => {
-    const updated = notificationsRef.current.filter(n => n.id !== id);
+    lastLocalMutationRef.current = Date.now();
+    saveDeletedNotifId(String(id));
+    const updated = notificationsRef.current.filter(n => String(n.id) !== String(id));
     notificationsRef.current = updated;
     setNotifications(updated);
     localStorage.setItem('dapodik_notifications', JSON.stringify(updated));
     saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, updated);
-    showToast('Notifikasi dihapus...');
+    showToast('Notifikasi berhasil dihapus');
+    syncNotifikasiToGoogleSheets(syncConfigRef.current, updated);
     triggerAutoSync(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, true, updated);
   };
 
   const handleClearAllNotif = () => {
+    lastLocalMutationRef.current = Date.now();
+    const idsToDelete = notificationsRef.current.map(n => n.id).filter(Boolean);
+    saveDeletedNotifIds(idsToDelete);
     const updated: NotificationItem[] = [];
     notificationsRef.current = updated;
     setNotifications(updated);
     localStorage.setItem('dapodik_notifications', '[]');
     saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, updated);
     showToast('Semua notifikasi berhasil dihapus...');
+    syncNotifikasiToGoogleSheets(syncConfigRef.current, updated);
     triggerAutoSync(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, true, updated);
   };
 

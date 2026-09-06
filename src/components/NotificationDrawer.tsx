@@ -21,6 +21,8 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
   onClearAllNotif,
   onDeleteNotif
 }) => {
+  const [confirmClear, setConfirmClear] = React.useState(false);
+
   if (!isOpen) return null;
 
   const unreadCount = notifications.filter(n => !n.read).length;
@@ -64,27 +66,52 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
 
           {/* Action Row */}
           {notifications.length > 0 && (
-            <div className="pt-3 pb-1 flex items-center justify-between gap-2 border-b border-slate-100">
-              <button
-                onClick={onMarkAllRead}
-                className="text-sky-600 hover:text-sky-700 font-bold flex items-center gap-1.5 text-[11px] cursor-pointer transition-colors"
-              >
-                <Check className="w-3.5 h-3.5" />
-                <span>Tandai Semua Dibaca</span>
-              </button>
-
-              {onClearAllNotif && (
+            <div className="pt-3 pb-1 border-b border-slate-100 space-y-2">
+              <div className="flex items-center justify-between gap-2">
                 <button
-                  onClick={() => {
-                    if (confirm('Apakah Anda yakin ingin menghapus semua notifikasi? Pesan yang dihapus tidak akan muncul kembali.')) {
-                      onClearAllNotif();
-                    }
-                  }}
-                  className="text-rose-600 hover:text-rose-700 font-bold flex items-center gap-1.5 text-[11px] cursor-pointer transition-colors"
+                  type="button"
+                  onClick={onMarkAllRead}
+                  className="text-sky-600 hover:text-sky-700 font-bold flex items-center gap-1.5 text-[11px] cursor-pointer transition-colors"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Hapus Semua</span>
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Tandai Semua Dibaca</span>
                 </button>
+
+                {onClearAllNotif && (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmClear(!confirmClear)}
+                    className="text-rose-600 hover:text-rose-700 font-bold flex items-center gap-1.5 text-[11px] cursor-pointer transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Hapus Semua</span>
+                  </button>
+                )}
+              </div>
+
+              {confirmClear && onClearAllNotif && (
+                <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-between gap-2 text-[11px] animate-fade-in">
+                  <span className="font-bold text-rose-800">Hapus semua notifikasi?</span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setConfirmClear(false)}
+                      className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 cursor-pointer"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setConfirmClear(false);
+                        onClearAllNotif();
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-rose-600 text-white font-bold hover:bg-rose-700 cursor-pointer shadow-xs"
+                    >
+                      Ya, Hapus
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           )}
@@ -113,7 +140,7 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
                   }`}
                   title={notif.read ? "Notifikasi sudah dibaca" : "Klik untuk membaca & hilangkan tanda notifikasi"}
                 >
-                  <div className="flex items-start gap-2.5 pr-6">
+                  <div className="flex items-start gap-2.5 pr-8">
                     {notif.type === 'success' ? (
                       <div className={`p-1 rounded-lg shrink-0 mt-0.5 ${notif.read ? 'bg-slate-100 text-slate-400 border border-slate-200' : 'bg-emerald-50 text-emerald-600 border border-emerald-200'}`}>
                         <CheckCircle2 className="w-3.5 h-3.5" />
@@ -128,7 +155,7 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
                       </div>
                     )}
                     <div className="flex-1">
-                      <div className="font-bold text-slate-900 text-xs flex items-center justify-between gap-2">
+                      <div className="font-bold text-slate-900 text-xs flex items-center justify-between gap-2 pr-2">
                         <span className={notif.read ? 'text-slate-600 font-semibold' : 'text-slate-900 font-bold'}>{notif.title}</span>
                         {!notif.read ? (
                           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-rose-50 text-rose-600 border border-rose-200 shrink-0">
@@ -154,14 +181,16 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
                   {/* Individual delete button */}
                   {onDeleteNotif && (
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
+                        e.preventDefault();
                         onDeleteNotif(notif.id);
                       }}
-                      className="absolute top-3 right-3 p-1 rounded-lg text-slate-300 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer opacity-70 group-hover:opacity-100"
+                      className="absolute top-3 right-2.5 p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-200 border border-transparent transition-all cursor-pointer bg-white/80 shadow-xs"
                       title="Hapus notifikasi ini"
                     >
-                      <X className="w-3.5 h-3.5" />
+                      <Trash2 className="w-3.5 h-3.5 text-rose-500" />
                     </button>
                   )}
                 </div>
