@@ -12,7 +12,8 @@ import {
   AlertTriangle,
   XSquare,
   X,
-  Layers
+  Layers,
+  ChevronDown
 } from 'lucide-react';
 import { SarprasItem } from '../types';
 import { exportToCSV } from '../services/googleSheetsService';
@@ -37,6 +38,7 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
   const [filterKondisi, setFilterKondisi] = useState('ALL');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<SarprasItem | null>(null);
+  const [openActionId, setOpenActionId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<Omit<SarprasItem, 'id'>>({
     kodeBarang: '',
@@ -271,21 +273,76 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
                     {item.tahunPengadaan}
                   </td>
                   <td className="py-3 px-4 text-center">
-                    <div className="flex items-center justify-center gap-1.5">
+                    <div className="relative inline-block text-left">
                       <button
-                        onClick={() => handleOpenEdit(item)}
-                        className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 transition-colors"
-                        title="Edit Sarpras"
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenActionId(openActionId === item.id ? null : item.id);
+                        }}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-xs cursor-pointer ${
+                          openActionId === item.id
+                            ? 'bg-sky-600 text-white border-sky-600 shadow-md'
+                            : 'bg-white hover:bg-sky-50 text-slate-700 hover:text-sky-700 border-slate-300 hover:border-sky-300'
+                        }`}
+                        title="Pilih Aksi"
                       >
-                        <Edit3 className="w-3.5 h-3.5" />
+                        <span>Aksi</span>
+                        <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${openActionId === item.id ? 'rotate-180 text-white' : 'text-slate-400'}`} />
                       </button>
-                      <button
-                        onClick={() => handleDelete(item.id, item.namaBarang)}
-                        className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition-colors"
-                        title="Hapus Sarpras"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+
+                      {openActionId === item.id && (
+                        <>
+                          {/* Invisible backdrop to close menu when clicking outside */}
+                          <div 
+                            className="fixed inset-0 z-20 cursor-default" 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenActionId(null);
+                            }} 
+                          />
+                          <div 
+                            className={`absolute right-0 z-30 w-44 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 text-xs text-slate-700 divide-y divide-slate-100 ${
+                              idx >= filteredSarpras.length - 2 && filteredSarpras.length > 2
+                                ? 'bottom-full mb-1.5 origin-bottom-right'
+                                : 'top-full mt-1.5 origin-top-right'
+                            }`}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="py-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenActionId(null);
+                                  handleOpenEdit(item);
+                                }}
+                                className="w-full text-left px-3.5 py-2 hover:bg-amber-50 text-slate-700 hover:text-amber-700 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
+                              >
+                                <div className="w-6 h-6 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center shrink-0 border border-amber-200">
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </div>
+                                <span>Edit Sarpras</span>
+                              </button>
+                            </div>
+
+                            <div className="py-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenActionId(null);
+                                  handleDelete(item.id, item.namaBarang);
+                                }}
+                                className="w-full text-left px-3.5 py-2 hover:bg-rose-50 text-rose-600 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
+                              >
+                                <div className="w-6 h-6 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 border border-rose-200">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </div>
+                                <span>Hapus Sarpras</span>
+                              </button>
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>

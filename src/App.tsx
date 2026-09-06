@@ -148,19 +148,26 @@ function mergeAdministratorsWithLocal(incomingAdmins: AdminUser[], currentAdmins
 
 function getFilteredNotifications(notifs: NotificationItem[]): NotificationItem[] {
   if (!Array.isArray(notifs)) return [];
-  let deletedIds: string[] = [];
+  // Permanent blacklist of dummy mock notifications so they never return in any browser
+  const dummyIds = ['notif-1', 'notif-2', 'notif-3'];
+  let deletedIds: string[] = [...dummyIds];
   let isCleared = false;
   try {
     const delStr = localStorage.getItem('dapodik_deleted_notif_ids');
-    if (delStr) deletedIds = JSON.parse(delStr);
+    if (delStr) {
+      const parsed = JSON.parse(delStr);
+      if (Array.isArray(parsed)) {
+        deletedIds = Array.from(new Set([...deletedIds, ...parsed]));
+      }
+    }
     isCleared = localStorage.getItem('dapodik_notif_cleared_flag') === 'true';
   } catch (e) {
     console.error(e);
   }
-  if (isCleared && deletedIds.length === 0) {
+  if (isCleared && deletedIds.length === dummyIds.length) {
     return [];
   }
-  return notifs.filter(n => n && n.id && !deletedIds.includes(n.id));
+  return notifs.filter(n => n && n.id && !deletedIds.includes(n.id) && !dummyIds.includes(n.id));
 }
 
 export default function App() {
@@ -1702,10 +1709,10 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0c4a6e] via-[#0284c7] to-[#0369a1] text-white flex flex-col font-['Plus_Jakarta_Sans',sans-serif] relative selection:bg-sky-200 selection:text-sky-950">
       
-      {/* Background Animated Bokeh, Auroras & Constellation matching Beranda for All Pages */}
+      {/* Background Static Bokeh, Auroras & Constellation matching Beranda for All Pages */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
         {/* Soft Radial glows */}
-        <div className="absolute -top-24 -left-24 w-96 h-96 bg-cyan-400/20 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute -top-24 -left-24 w-96 h-96 bg-cyan-400/20 rounded-full blur-3xl" />
         <div className="absolute top-1/3 -right-20 w-[32rem] h-[32rem] bg-blue-400/25 rounded-full blur-3xl" />
         <div className="absolute -bottom-32 left-1/4 w-[40rem] h-[40rem] bg-sky-300/15 rounded-full blur-3xl" />
 
@@ -1722,7 +1729,7 @@ export default function App() {
           <line x1="30%" y1="70%" x2="50%" y2="40%" stroke="url(#appLineGrad)" strokeWidth="1.5" />
           <line x1="70%" y1="65%" x2="85%" y2="80%" stroke="url(#appLineGrad)" strokeWidth="1.5" />
           
-          <circle cx="20%" cy="20%" r="4" fill="#38bdf8" className="animate-ping" />
+          <circle cx="20%" cy="20%" r="4" fill="#38bdf8" />
           <circle cx="50%" cy="40%" r="5" fill="#ffffff" />
           <circle cx="80%" cy="25%" r="6" fill="#38bdf8" />
           <circle cx="70%" cy="65%" r="4" fill="#fbbf24" />

@@ -12,9 +12,6 @@ import {
   Sparkles,
   KeyRound,
   HelpCircle,
-  Clock,
-  Lightbulb,
-  Camera,
   Layers,
   BarChart3,
   TrendingUp,
@@ -358,33 +355,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             </linearGradient>
           </defs>
         </svg>
-
-        {/* Floating Constellation Nodes and Geometric Accents */}
-        <div className="absolute top-24 right-1/4 flex items-center gap-16 opacity-75">
-          <div className="relative">
-            <div className="w-8 h-8 rounded-full border border-white/40 flex items-center justify-center bg-white/10 backdrop-blur-sm shadow-lg">
-              <Clock className="w-4 h-4 text-white" />
-            </div>
-            <div className="absolute top-4 left-8 w-24 h-[1px] bg-gradient-to-r from-white/50 to-transparent rotate-12" />
-          </div>
-          <div className="relative -top-6">
-            <div className="w-9 h-9 rounded-full border border-amber-300/60 flex items-center justify-center bg-amber-400/20 backdrop-blur-sm shadow-lg">
-              <Lightbulb className="w-4 h-4 text-amber-200" />
-            </div>
-            <div className="absolute top-4 left-9 w-20 h-[1px] bg-gradient-to-r from-amber-300/50 to-transparent -rotate-12" />
-          </div>
-          <div className="hidden lg:flex w-7 h-7 rounded-full border border-cyan-200/50 items-center justify-center bg-cyan-400/20 backdrop-blur-sm">
-            <Camera className="w-3.5 h-3.5 text-cyan-100" />
-          </div>
-        </div>
-
-        {/* Floating Orange & Blue Gears on Left */}
-        <div className="absolute top-36 left-28 hidden sm:block">
-          <div className="w-12 h-12 rounded-full border-4 border-dashed border-orange-400/80 animate-spin-slow opacity-80" style={{ animationDuration: '24s' }} />
-        </div>
-        <div className="absolute top-48 left-16 hidden sm:block">
-          <div className="w-8 h-8 rounded-full border-2 border-dashed border-cyan-200/70 animate-spin-slow opacity-75" style={{ animationDuration: '18s', animationDirection: 'reverse' }} />
-        </div>
 
         {/* Dots Matrix Pattern on Bottom Left */}
         <div className="absolute bottom-16 left-8 grid grid-cols-5 gap-2 opacity-50">

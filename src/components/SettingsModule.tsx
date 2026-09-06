@@ -46,7 +46,8 @@ import {
   FileText,
   Building2,
   Eye,
-  EyeOff
+  EyeOff,
+  ChevronDown
 } from 'lucide-react';
 import { SyncConfig, AppDisplayConfig, SchoolProfile, AdminUser } from '../types';
 
@@ -107,6 +108,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   });
 
   const [revealedPasswords, setRevealedPasswords] = useState<Record<string, boolean>>({});
+  const [openActionAdminId, setOpenActionAdminId] = useState<string | null>(null);
 
   // Form states initialized from props
   const [formData, setFormData] = useState<AppDisplayConfig>({
@@ -1211,47 +1213,91 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                           </button>
                         </td>
                         <td className="px-4 py-3.5 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
+                          <div className="relative inline-block text-left">
                             <button
                               type="button"
-                              onClick={() => {
-                                setEditingAdmin(admin);
-                                setAdminFormData({ ...admin });
-                                setIsAddAdminOpen(true);
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenActionAdminId(openActionAdminId === admin.id ? null : admin.id);
                               }}
-                              className="p-1.5 rounded-lg bg-slate-100 hover:bg-sky-600 hover:text-white text-slate-700 transition-all border border-slate-200"
-                              title="Edit Akun"
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-xs cursor-pointer ${
+                                openActionAdminId === admin.id
+                                  ? 'bg-sky-600 text-white border-sky-600 shadow-md'
+                                  : 'bg-white hover:bg-sky-50 text-slate-700 hover:text-sky-700 border-slate-300 hover:border-sky-300'
+                              }`}
+                              title="Pilih Aksi"
                             >
-                              <Edit2 className="w-3.5 h-3.5" />
+                              <span>Aksi</span>
+                              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${openActionAdminId === admin.id ? 'rotate-180 text-white' : 'text-slate-400'}`} />
                             </button>
 
-                            {adminList.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (confirm(`Apakah Anda yakin ingin menghapus akun "${admin.nama}" (${admin.username})? Data di aplikasi dan Database Cloud akan dihapus.`)) {
-                                    const updated = adminList.filter((a) => a.id !== admin.id && a.username.toLowerCase() !== admin.username.toLowerCase());
-                                    setAdminList(updated);
+                            {openActionAdminId === admin.id && (
+                              <>
+                                {/* Invisible backdrop to close menu when clicking outside */}
+                                <div 
+                                  className="fixed inset-0 z-20 cursor-default" 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenActionAdminId(null);
+                                  }} 
+                                />
+                                <div 
+                                  className="absolute right-0 top-full mt-1.5 z-30 w-44 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 text-xs text-slate-700 divide-y divide-slate-100 origin-top-right"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <div className="py-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setOpenActionAdminId(null);
+                                        setEditingAdmin(admin);
+                                        setAdminFormData({ ...admin });
+                                        setIsAddAdminOpen(true);
+                                      }}
+                                      className="w-full text-left px-3.5 py-2 hover:bg-sky-50 text-slate-700 hover:text-sky-700 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
+                                    >
+                                      <div className="w-6 h-6 rounded-lg bg-sky-50 text-sky-700 flex items-center justify-center shrink-0 border border-sky-200">
+                                        <Edit2 className="w-3.5 h-3.5" />
+                                      </div>
+                                      <span>Edit Akun</span>
+                                    </button>
+                                  </div>
 
-                                    try {
-                                      const delStr = localStorage.getItem('dapodik_deleted_admins') || '[]';
-                                      const delList: string[] = JSON.parse(delStr);
-                                      if (!delList.includes(admin.username.toLowerCase())) {
-                                        delList.push(admin.username.toLowerCase());
-                                        localStorage.setItem('dapodik_deleted_admins', JSON.stringify(delList));
-                                      }
-                                    } catch (e) {
-                                      console.error(e);
-                                    }
+                                  {adminList.length > 1 && (
+                                    <div className="py-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setOpenActionAdminId(null);
+                                          if (confirm(`Apakah Anda yakin ingin menghapus akun "${admin.nama}" (${admin.username})? Data di aplikasi dan Database Cloud akan dihapus.`)) {
+                                            const updated = adminList.filter((a) => a.id !== admin.id && a.username.toLowerCase() !== admin.username.toLowerCase());
+                                            setAdminList(updated);
 
-                                    if (onSaveAdministrators) onSaveAdministrators(updated);
-                                  }
-                                }}
-                                className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-600 hover:text-white text-slate-700 transition-all border border-slate-200"
-                                title="Hapus Akun"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                                            try {
+                                              const delStr = localStorage.getItem('dapodik_deleted_admins') || '[]';
+                                              const delList: string[] = JSON.parse(delStr);
+                                              if (!delList.includes(admin.username.toLowerCase())) {
+                                                delList.push(admin.username.toLowerCase());
+                                                localStorage.setItem('dapodik_deleted_admins', JSON.stringify(delList));
+                                              }
+                                            } catch (e) {
+                                              console.error(e);
+                                            }
+
+                                            if (onSaveAdministrators) onSaveAdministrators(updated);
+                                          }
+                                        }}
+                                        className="w-full text-left px-3.5 py-2 hover:bg-rose-50 text-rose-600 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
+                                      >
+                                        <div className="w-6 h-6 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 border border-rose-200">
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </div>
+                                        <span>Hapus Akun</span>
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </>
                             )}
                           </div>
                         </td>

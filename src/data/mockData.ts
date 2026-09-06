@@ -308,32 +308,7 @@ export const initialReports: StudentReport[] = [
   }
 ];
 
-export const initialNotifications: NotificationItem[] = [
-  {
-    id: 'notif-1',
-    title: 'Validasi Dapodik Berhasil',
-    message: 'Data Pokok Pendidikan Semester Genap 2025/2026 telah tervalidasi 0 invalid.',
-    time: '5 menit yang lalu',
-    type: 'success',
-    read: false
-  },
-  {
-    id: 'notif-2',
-    title: 'Integrasi Database Cloud Aktif',
-    message: 'Sinkronisasi real-time siap digunakan. Data otomatis tercatat ke Database.',
-    time: '30 menit yang lalu',
-    type: 'info',
-    read: false
-  },
-  {
-    id: 'notif-3',
-    title: 'Update Sarpras Ruang Lab',
-    message: 'Penambahan 36 unit PC Lab Komputer telah diverifikasi.',
-    time: '2 jam yang lalu',
-    type: 'info',
-    read: true
-  }
-];
+export const initialNotifications: NotificationItem[] = [];
 
 export const initialAdministrators: AdminUser[] = [
   {

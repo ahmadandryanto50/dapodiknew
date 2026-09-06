@@ -64,6 +64,7 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
   const [importedPreviewTeachers, setImportedPreviewTeachers] = useState<TeacherStaff[]>([]);
   const [importFileName, setImportFileName] = useState('');
   const [selectedPtkDetail, setSelectedPtkDetail] = useState<TeacherStaff | null>(null);
+  const [openActionId, setOpenActionId] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -614,28 +615,90 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
                       </div>
                     </td>
                     <td className="py-3 px-4 text-center">
-                      <div className="flex items-center justify-center gap-1.5">
+                      <div className="relative inline-block text-left">
                         <button
-                          onClick={() => setSelectedPtkDetail(t)}
-                          className="p-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-600 border border-sky-200 transition-colors"
-                          title="Lihat Detail Profil PTK (51 Kolom)"
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenActionId(openActionId === t.id ? null : t.id);
+                          }}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-xs cursor-pointer ${
+                            openActionId === t.id
+                              ? 'bg-sky-600 text-white border-sky-600 shadow-md'
+                              : 'bg-white hover:bg-sky-50 text-slate-700 hover:text-sky-700 border-slate-300 hover:border-sky-300'
+                          }`}
+                          title="Pilih Aksi"
                         >
-                          <Eye className="w-3.5 h-3.5" />
+                          <span>Aksi</span>
+                          <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${openActionId === t.id ? 'rotate-180 text-white' : 'text-slate-400'}`} />
                         </button>
-                        <button
-                          onClick={() => handleOpenEdit(t)}
-                          className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-600 border border-amber-200 transition-colors"
-                          title="Edit PTK"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(t.id, t.nama)}
-                          className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-colors"
-                          title="Hapus PTK"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+
+                        {openActionId === t.id && (
+                          <>
+                            {/* Invisible backdrop to close menu when clicking outside */}
+                            <div 
+                              className="fixed inset-0 z-20 cursor-default" 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenActionId(null);
+                              }} 
+                            />
+                            <div 
+                              className={`absolute right-0 z-30 w-48 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 text-xs text-slate-700 divide-y divide-slate-100 ${
+                                idx >= filteredTeachers.length - 2 && filteredTeachers.length > 2
+                                  ? 'bottom-full mb-1.5 origin-bottom-right'
+                                  : 'top-full mt-1.5 origin-top-right'
+                              }`}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <div className="py-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenActionId(null);
+                                    setSelectedPtkDetail(t);
+                                  }}
+                                  className="w-full text-left px-3.5 py-2 hover:bg-sky-50 text-slate-700 hover:text-sky-700 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
+                                >
+                                  <div className="w-6 h-6 rounded-lg bg-sky-50 text-sky-700 flex items-center justify-center shrink-0 border border-sky-200">
+                                    <Eye className="w-3.5 h-3.5" />
+                                  </div>
+                                  <span>Lihat Detail (51 Kolom)</span>
+                                </button>
+                                
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenActionId(null);
+                                    handleOpenEdit(t);
+                                  }}
+                                  className="w-full text-left px-3.5 py-2 hover:bg-amber-50 text-slate-700 hover:text-amber-700 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
+                                >
+                                  <div className="w-6 h-6 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center shrink-0 border border-amber-200">
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                  </div>
+                                  <span>Edit Data PTK</span>
+                                </button>
+                              </div>
+
+                              <div className="py-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenActionId(null);
+                                    handleDelete(t.id, t.nama);
+                                  }}
+                                  className="w-full text-left px-3.5 py-2 hover:bg-rose-50 text-rose-600 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
+                                >
+                                  <div className="w-6 h-6 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 border border-rose-200">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </div>
+                                  <span>Hapus PTK</span>
+                                </button>
+                              </div>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>

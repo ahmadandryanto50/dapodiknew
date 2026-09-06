@@ -9,9 +9,6 @@ import {
   Settings, 
   Search, 
   Bell, 
-  Clock, 
-  Lightbulb, 
-  Camera, 
   Cog, 
   RefreshCw, 
   CheckCircle2, 
@@ -194,10 +191,10 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
 
   return (
     <div id="welcome-hero-container" className="relative min-h-[calc(100vh-4rem)] w-full bg-gradient-to-br from-[#0c4a6e] via-[#0284c7] to-[#0369a1] text-white flex flex-col justify-between select-none overflow-x-clip">
-      {/* Background Animated Bokeh & Gradients */}
+      {/* Background Static Bokeh & Gradients (Optimized for old phones and laptops) */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         {/* Soft Radial glows */}
-        <div className="absolute -top-24 -left-24 w-96 h-96 bg-cyan-400/20 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute -top-24 -left-24 w-96 h-96 bg-cyan-400/20 rounded-full blur-3xl" />
         <div className="absolute top-1/3 -right-20 w-[32rem] h-[32rem] bg-blue-400/25 rounded-full blur-3xl" />
         <div className="absolute -bottom-32 left-1/4 w-[40rem] h-[40rem] bg-sky-300/15 rounded-full blur-3xl" />
 
@@ -215,7 +212,7 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
           <line x1="30%" y1="70%" x2="50%" y2="40%" stroke="url(#lineGrad)" strokeWidth="1.5" />
           <line x1="70%" y1="65%" x2="85%" y2="80%" stroke="url(#lineGrad)" strokeWidth="1.5" />
           
-          <circle cx="20%" cy="20%" r="4" fill="#38bdf8" className="animate-ping" />
+          <circle cx="20%" cy="20%" r="4" fill="#38bdf8" />
           <circle cx="50%" cy="40%" r="5" fill="#ffffff" />
           <circle cx="80%" cy="25%" r="6" fill="#38bdf8" />
           <circle cx="70%" cy="65%" r="4" fill="#fbbf24" />
@@ -406,32 +403,11 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
           {/* Center Graphic & Typography Banner */}
           <div className="lg:col-span-6 flex flex-col items-center text-center px-2 relative">
             
-            {/* Floating Visual Badges & Constellation Items */}
+            {/* Static Visual Logo Banner (Lightweight & Static for Old Devices) */}
             <div className="relative w-full flex items-center justify-center py-3">
-              {/* Floating Clock */}
-              <div className="absolute left-4 top-0 p-2.5 rounded-full bg-white/20 backdrop-blur-md border border-white/30 shadow-lg animate-bounce duration-1000">
-                <Clock className="w-5 h-5 text-amber-300" />
-              </div>
-              
-              {/* Floating Idea Bulb */}
-              <div className="absolute right-8 top-2 p-2.5 rounded-full bg-white/20 backdrop-blur-md border border-white/30 shadow-lg animate-pulse">
-                <Lightbulb className="w-5 h-5 text-yellow-300" />
-              </div>
-
-              {/* Floating Camera / Gallery */}
-              <div className="absolute right-24 -top-6 p-2 rounded-full bg-white/15 backdrop-blur-md border border-white/20">
-                <Camera className="w-4 h-4 text-cyan-200" />
-              </div>
-
-              {/* Central Glowing Shield Icon */}
-              <motion.div 
-                animate={{ y: [0, -10, 0] }}
-                transition={{
-                  duration: 2.8,
-                  repeat: Infinity,
-                  ease: "easeInOut"
-                }}
-                className="p-3.5 sm:p-4 rounded-full bg-gradient-to-tr from-cyan-400/35 via-white/25 to-blue-500/35 backdrop-blur-2xl border-2 border-white/50 shadow-2xl shadow-cyan-400/40 ring-4 ring-cyan-300/20 cursor-default transition-all duration-300 group select-none"
+              {/* Central Shield Icon - Static & Lightweight */}
+              <div 
+                className="p-3.5 sm:p-4 rounded-full bg-gradient-to-tr from-cyan-400/35 via-white/25 to-blue-500/35 backdrop-blur-md border-2 border-white/50 shadow-xl shadow-cyan-400/20 ring-4 ring-cyan-300/20 cursor-default select-none"
                 title="Logo Banner"
               >
                 <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-br from-white via-sky-50 to-sky-100 p-2.5 sm:p-3 flex items-center justify-center shadow-lg overflow-hidden border-2 border-white/80">
@@ -467,7 +443,7 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
                     <School className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" />
                   )}
                 </div>
-              </motion.div>
+              </div>
             </div>
 
             {/* Big Catchy Titles Exactly as shown in the picture */}

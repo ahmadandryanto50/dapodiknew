@@ -103,6 +103,7 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
   const [selectedStudentForCard, setSelectedStudentForCard] = useState<Student | null>(null);
   const [selectedStudentForDetail, setSelectedStudentForDetail] = useState<Student | null>(null);
   const [deletingStudent, setDeletingStudent] = useState<{ id: string; name: string } | null>(null);
+  const [openActionId, setOpenActionId] = useState<string | null>(null);
   
   // Import preview modal state
   const [importedPreviewStudents, setImportedPreviewStudents] = useState<Student[]>([]);
@@ -1046,86 +1047,187 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
                       </td>
                     )}
                     <td className="py-3 px-4 text-center">
-                      <div className="flex items-center justify-center gap-1.5">
+                      <div className="relative inline-block text-left">
                         <button
-                          onClick={() => setSelectedStudentForDetail(student)}
-                          className="p-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 transition-colors"
-                          title="Lihat Detail Lengkap 66 Kolom"
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenActionId(openActionId === student.id ? null : student.id);
+                          }}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-xs cursor-pointer ${
+                            openActionId === student.id
+                              ? 'bg-sky-600 text-white border-sky-600 shadow-md'
+                              : 'bg-white hover:bg-sky-50 text-slate-700 hover:text-sky-700 border-slate-300 hover:border-sky-300'
+                          }`}
+                          title="Pilih Aksi"
                         >
-                          <Eye className="w-3.5 h-3.5" />
+                          <span>Aksi</span>
+                          <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${openActionId === student.id ? 'rotate-180 text-white' : 'text-slate-400'}`} />
                         </button>
-                        <button
-                          onClick={() => setSelectedStudentForCard(student)}
-                          className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition-colors"
-                          title="Cetak Kartu Pelajar / Keterangan"
-                        >
-                          <CreditCard className="w-3.5 h-3.5" />
-                        </button>
-                        {activeSubTab === 'aktif' ? (
+
+                        {openActionId === student.id && (
                           <>
-                            <button
-                              onClick={() => handleOpenEditModal(student)}
-                              className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 transition-colors"
-                              title="Edit Biodata Siswa"
+                            {/* Invisible backdrop to close menu when clicking outside */}
+                            <div 
+                              className="fixed inset-0 z-20 cursor-default" 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenActionId(null);
+                              }} 
+                            />
+                            <div 
+                              className={`absolute right-0 z-30 w-52 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 text-xs text-slate-700 divide-y divide-slate-100 ${
+                                idx >= filteredStudents.length - 2 && filteredStudents.length > 2
+                                  ? 'bottom-full mb-1.5 origin-bottom-right'
+                                  : 'top-full mt-1.5 origin-top-right'
+                              }`}
+                              onClick={(e) => e.stopPropagation()}
                             >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => {
-                                setGraduatingStudent(student);
-                                setGraduationTahunLulus(normalizeTahunLulus(student.tahunLulus) || '2025');
-                                setGraduationNoSeriIjazah(student.noSeriIjazah || '');
-                              }}
-                              className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition-colors"
-                              title="Luluskan Siswa (Pindah ke Menu Alumni)"
-                            >
-                              <GraduationCap className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => setMovingStudent(student)}
-                              className="p-1.5 rounded-lg bg-fuchsia-50 hover:bg-fuchsia-100 text-fuchsia-700 border border-fuchsia-200 transition-colors"
-                              title="Keluarkan / Mutasi Siswa"
-                            >
-                              <UserCheck className="w-3.5 h-3.5" />
-                            </button>
+                              <div className="py-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenActionId(null);
+                                    setSelectedStudentForDetail(student);
+                                  }}
+                                  className="w-full text-left px-3.5 py-2 hover:bg-sky-50 text-slate-700 hover:text-sky-700 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
+                                >
+                                  <div className="w-6 h-6 rounded-lg bg-sky-50 text-sky-700 flex items-center justify-center shrink-0 border border-sky-200">
+                                    <Eye className="w-3.5 h-3.5" />
+                                  </div>
+                                  <span>Lihat Detail (66 Kolom)</span>
+                                </button>
+                                
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenActionId(null);
+                                    setSelectedStudentForCard(student);
+                                  }}
+                                  className="w-full text-left px-3.5 py-2 hover:bg-blue-50 text-slate-700 hover:text-blue-700 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
+                                >
+                                  <div className="w-6 h-6 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center shrink-0 border border-blue-200">
+                                    <CreditCard className="w-3.5 h-3.5" />
+                                  </div>
+                                  <span>Cetak Kartu Pelajar</span>
+                                </button>
+
+                                {activeSubTab === 'aktif' && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setOpenActionId(null);
+                                        handleOpenEditModal(student);
+                                      }}
+                                      className="w-full text-left px-3.5 py-2 hover:bg-amber-50 text-slate-700 hover:text-amber-700 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
+                                    >
+                                      <div className="w-6 h-6 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center shrink-0 border border-amber-200">
+                                        <Edit3 className="w-3.5 h-3.5" />
+                                      </div>
+                                      <span>Edit Biodata Siswa</span>
+                                    </button>
+                                    
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setOpenActionId(null);
+                                        setGraduatingStudent(student);
+                                        setGraduationTahunLulus(normalizeTahunLulus(student.tahunLulus) || '2025');
+                                        setGraduationNoSeriIjazah(student.noSeriIjazah || '');
+                                      }}
+                                      className="w-full text-left px-3.5 py-2 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
+                                    >
+                                      <div className="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-200">
+                                        <GraduationCap className="w-3.5 h-3.5" />
+                                      </div>
+                                      <span>Luluskan (Alumni)</span>
+                                    </button>
+                                    
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setOpenActionId(null);
+                                        setMovingStudent(student);
+                                      }}
+                                      className="w-full text-left px-3.5 py-2 hover:bg-fuchsia-50 text-slate-700 hover:text-fuchsia-700 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
+                                    >
+                                      <div className="w-6 h-6 rounded-lg bg-fuchsia-50 text-fuchsia-700 flex items-center justify-center shrink-0 border border-fuchsia-200">
+                                        <UserCheck className="w-3.5 h-3.5" />
+                                      </div>
+                                      <span>Keluarkan / Mutasi</span>
+                                    </button>
+                                  </>
+                                )}
+
+                                {activeSubTab === 'alumni' && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setOpenActionId(null);
+                                        handleOpenEditModal(student);
+                                      }}
+                                      className="w-full text-left px-3.5 py-2 hover:bg-amber-50 text-slate-700 hover:text-amber-700 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
+                                    >
+                                      <div className="w-6 h-6 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center shrink-0 border border-amber-200">
+                                        <Edit3 className="w-3.5 h-3.5" />
+                                      </div>
+                                      <span>Edit Data Alumni</span>
+                                    </button>
+                                    {onRestoreStudent && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setOpenActionId(null);
+                                          onRestoreStudent(student.id);
+                                        }}
+                                        className="w-full text-left px-3.5 py-2 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
+                                      >
+                                        <div className="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-200">
+                                          <RotateCcw className="w-3.5 h-3.5" />
+                                        </div>
+                                        <span>Kembalikan ke Aktif</span>
+                                      </button>
+                                    )}
+                                  </>
+                                )}
+
+                                {activeSubTab === 'keluar' && onRestoreStudent && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setOpenActionId(null);
+                                      onRestoreStudent(student.id);
+                                    }}
+                                    className="w-full text-left px-3.5 py-2 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
+                                  >
+                                    <div className="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-200">
+                                      <RotateCcw className="w-3.5 h-3.5" />
+                                    </div>
+                                    <span>Kembalikan ke Aktif</span>
+                                  </button>
+                                )}
+                              </div>
+
+                              <div className="py-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenActionId(null);
+                                    handleDelete(student.id, student.nama);
+                                  }}
+                                  className="w-full text-left px-3.5 py-2 hover:bg-rose-50 text-rose-600 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
+                                >
+                                  <div className="w-6 h-6 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 border border-rose-200">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </div>
+                                  <span>Hapus Siswa</span>
+                                </button>
+                              </div>
+                            </div>
                           </>
-                        ) : activeSubTab === 'alumni' ? (
-                          <>
-                            <button
-                              onClick={() => handleOpenEditModal(student)}
-                              className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 transition-colors"
-                              title="Edit Data & Tahun Lulus Alumni"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
-                            {onRestoreStudent && (
-                              <button
-                                onClick={() => onRestoreStudent(student.id)}
-                                className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition-colors"
-                                title="Tarik Kembali ke Siswa Aktif"
-                              >
-                                <RotateCcw className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </>
-                        ) : (
-                          onRestoreStudent && (
-                            <button
-                              onClick={() => onRestoreStudent(student.id)}
-                              className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition-colors"
-                              title="Tarik Data Kembali ke Siswa Aktif"
-                            >
-                              <RotateCcw className="w-3.5 h-3.5" />
-                            </button>
-                          )
                         )}
-                        <button
-                          onClick={() => handleDelete(student.id, student.nama)}
-                          className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition-colors"
-                          title="Hapus Siswa"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
                       </div>
                     </td>
                   </tr>
