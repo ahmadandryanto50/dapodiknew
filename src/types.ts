@@ -268,7 +268,7 @@ export interface AdminUser {
   role: 'Administrator' | 'Operator' | 'Kepala Sekolah' | 'Guru' | 'Siswa' | string;
   email: string;
   noHp?: string;
-  status: 'Aktif' | 'Nonaktif';
+  status: 'Aktif' | 'Nonaktif' | 'Tidak Aktif' | string;
   lastLogin?: string;
 }
 

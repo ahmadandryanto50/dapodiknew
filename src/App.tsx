@@ -151,24 +151,7 @@ function getFilteredNotifications(notifs: NotificationItem[]): NotificationItem[
   if (!Array.isArray(notifs)) return [];
   // Permanent blacklist of dummy mock notifications so they never return in any browser
   const dummyIds = ['notif-1', 'notif-2', 'notif-3'];
-  let deletedIds: string[] = [...dummyIds];
-  let isCleared = false;
-  try {
-    const delStr = localStorage.getItem('dapodik_deleted_notif_ids');
-    if (delStr) {
-      const parsed = JSON.parse(delStr);
-      if (Array.isArray(parsed)) {
-        deletedIds = Array.from(new Set([...deletedIds, ...parsed]));
-      }
-    }
-    isCleared = localStorage.getItem('dapodik_notif_cleared_flag') === 'true';
-  } catch (e) {
-    console.error(e);
-  }
-  if (isCleared && deletedIds.length === dummyIds.length) {
-    return [];
-  }
-  return notifs.filter(n => n && n.id && !deletedIds.includes(n.id) && !dummyIds.includes(n.id));
+  return notifs.filter(n => n && n.id && !dummyIds.includes(n.id));
 }
 
 export default function App() {
@@ -367,6 +350,11 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [settingsInitialFilter, setSettingsInitialFilter] = useState<'all' | '1' | '2' | '3' | '4' | '5'>('all');
 
+  const notificationsRef = useRef<NotificationItem[]>(notifications);
+  useEffect(() => {
+    notificationsRef.current = notifications;
+  }, [notifications]);
+
   const handleOpenEditDisplay = (filter: 'all' | '1' | '2' | '3' | '4' | '5' = 'all') => {
     setSettingsInitialFilter(filter);
     setActiveTab('pengaturan');
@@ -381,7 +369,7 @@ export default function App() {
     customDisplayConfig = displayConfig,
     customSchoolProfile = schoolProfile,
     customAdministrators = administrators,
-    customNotifications = notifications,
+    customNotifications = notificationsRef.current,
     customAplikasiLinks = aplikasiLinks
   ) => {
     if (!isInitialized) return;
@@ -429,13 +417,11 @@ export default function App() {
       type,
       read: false
     };
-    setNotifications(prev => {
-      const updated = [newNotif, ...getFilteredNotifications(prev)];
-      localStorage.setItem('dapodik_notifications', JSON.stringify(updated));
-      localStorage.removeItem('dapodik_notif_cleared_flag');
-      saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, updated);
-      return updated;
-    });
+    const updated = [newNotif, ...getFilteredNotifications(notificationsRef.current)];
+    notificationsRef.current = updated;
+    setNotifications(updated);
+    localStorage.setItem('dapodik_notifications', JSON.stringify(updated));
+    saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, updated);
   };
 
   // Save to LocalStorage & Server Cache
@@ -521,15 +507,20 @@ export default function App() {
     setAdministrators(cleanAdmins);
     localStorage.setItem('dapodik_administrators', JSON.stringify(cleanAdmins));
 
-    // Update currentUser session immediately if current user's data/password was edited
+    // Update currentUser session immediately if current user's data/password or status was edited
     const savedUserStr = localStorage.getItem('dapodik_current_user');
     if (savedUserStr) {
       try {
         const currentSaved = JSON.parse(savedUserStr);
         const matched = cleanAdmins.find(a => a.username.toLowerCase() === currentSaved.username.toLowerCase());
         if (matched) {
-          setCurrentUser(matched);
-          localStorage.setItem('dapodik_current_user', JSON.stringify(matched));
+          if (matched.status === 'Nonaktif' || matched.status === 'Tidak Aktif' || (matched.status as string) === 'Tidak-Aktif') {
+            handleLogout();
+            showToast('Akun Anda telah dinonaktifkan oleh Administrator.');
+          } else {
+            setCurrentUser(matched);
+            localStorage.setItem('dapodik_current_user', JSON.stringify(matched));
+          }
         }
       } catch (e) {}
     }
@@ -1059,15 +1050,20 @@ export default function App() {
               if (JSON.stringify(prev) !== JSON.stringify(cleanAdmins)) {
                 localStorage.setItem('dapodik_administrators', JSON.stringify(cleanAdmins));
 
-                // Update current user session if password or profile changed on another device
+                // Update current user session if password or profile changed or status disabled on another device
                 const savedUserStr = localStorage.getItem('dapodik_current_user');
                 if (savedUserStr) {
                   try {
                     const currentSaved = JSON.parse(savedUserStr);
                     const matched = cleanAdmins.find((a: AdminUser) => a.username.toLowerCase() === currentSaved.username.toLowerCase());
-                    if (matched && (matched.password !== currentSaved.password || matched.nama !== currentSaved.nama || matched.role !== currentSaved.role)) {
-                      setCurrentUser(matched);
-                      localStorage.setItem('dapodik_current_user', JSON.stringify(matched));
+                    if (matched) {
+                      if (matched.status === 'Nonaktif' || matched.status === 'Tidak Aktif' || (matched.status as string) === 'Tidak-Aktif') {
+                        handleLogout();
+                        showToast('Akun Anda telah dinonaktifkan oleh Administrator.');
+                      } else if (matched.password !== currentSaved.password || matched.nama !== currentSaved.nama || matched.role !== currentSaved.role || matched.status !== currentSaved.status) {
+                        setCurrentUser(matched);
+                        localStorage.setItem('dapodik_current_user', JSON.stringify(matched));
+                      }
                     }
                   } catch (e) {}
                 }
@@ -1081,6 +1077,7 @@ export default function App() {
             setNotifications(prev => {
               const filtered = getFilteredNotifications(serverData.notifications);
               if (JSON.stringify(prev) !== JSON.stringify(filtered)) {
+                notificationsRef.current = filtered;
                 localStorage.setItem('dapodik_notifications', JSON.stringify(filtered));
                 return filtered;
               }
@@ -1625,57 +1622,36 @@ export default function App() {
   const unreadNotifCount = notifications.filter(n => !n.read).length;
 
   const handleMarkAllNotifRead = () => {
-    const updated = notifications.map(n => ({ ...n, read: true }));
+    const updated = notificationsRef.current.map(n => ({ ...n, read: true }));
+    notificationsRef.current = updated;
     setNotifications(updated);
     localStorage.setItem('dapodik_notifications', JSON.stringify(updated));
     saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, updated);
   };
 
   const handleMarkNotifRead = (id: string) => {
-    const updated = notifications.map(n => n.id === id ? { ...n, read: true } : n);
+    const updated = notificationsRef.current.map(n => n.id === id ? { ...n, read: true } : n);
+    notificationsRef.current = updated;
     setNotifications(updated);
     localStorage.setItem('dapodik_notifications', JSON.stringify(updated));
     saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, updated);
   };
 
   const handleDeleteNotif = (id: string) => {
-    const updated = notifications.filter(n => n.id !== id);
+    const updated = notificationsRef.current.filter(n => n.id !== id);
+    notificationsRef.current = updated;
     setNotifications(updated);
     localStorage.setItem('dapodik_notifications', JSON.stringify(updated));
-
-    try {
-      const delStr = localStorage.getItem('dapodik_deleted_notif_ids') || '[]';
-      const delList: string[] = JSON.parse(delStr);
-      if (!delList.includes(id)) {
-        delList.push(id);
-        localStorage.setItem('dapodik_deleted_notif_ids', JSON.stringify(delList));
-      }
-    } catch (e) {
-      console.error(e);
-    }
-
     saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, updated);
     showToast('Notifikasi dihapus...');
   };
 
   const handleClearAllNotif = () => {
-    setNotifications([]);
+    const updated: NotificationItem[] = [];
+    notificationsRef.current = updated;
+    setNotifications(updated);
     localStorage.setItem('dapodik_notifications', '[]');
-    localStorage.setItem('dapodik_notif_cleared_flag', 'true');
-
-    try {
-      const allIds = notifications.map(n => n.id);
-      const delStr = localStorage.getItem('dapodik_deleted_notif_ids') || '[]';
-      const delList: string[] = JSON.parse(delStr);
-      allIds.forEach(id => {
-        if (!delList.includes(id)) delList.push(id);
-      });
-      localStorage.setItem('dapodik_deleted_notif_ids', JSON.stringify(delList));
-    } catch (e) {
-      console.error(e);
-    }
-
-    saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, []);
+    saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, updated);
     showToast('Semua notifikasi berhasil dihapus...');
   };
 

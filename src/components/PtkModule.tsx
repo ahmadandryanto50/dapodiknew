@@ -637,15 +637,15 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
                           <>
                             {/* Invisible backdrop to close menu when clicking outside */}
                             <div 
-                              className="fixed inset-0 z-20 cursor-default" 
+                              className="fixed inset-0 z-40 cursor-default" 
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setOpenActionId(null);
                               }} 
                             />
                             <div 
-                              className={`absolute right-0 z-30 w-48 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 text-xs text-slate-700 divide-y divide-slate-100 ${
-                                idx >= filteredTeachers.length - 2 && filteredTeachers.length > 2
+                              className={`absolute right-0 z-50 w-48 bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200/80 py-1.5 text-xs text-slate-700 divide-y divide-slate-100 ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-150 ${
+                                idx >= Math.max(1, filteredTeachers.length - 2)
                                   ? 'bottom-full mb-1.5 origin-bottom-right'
                                   : 'top-full mt-1.5 origin-top-right'
                               }`}

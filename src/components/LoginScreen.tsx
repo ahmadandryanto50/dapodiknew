@@ -304,8 +304,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         }
 
         if (matched) {
-          if (matched.status === 'Nonaktif') {
-            setErrorMsg('Akun pengguna ini berstatus Nonaktif. Silakan hubungi Administrator Utama.');
+          if (matched.status === 'Nonaktif' || matched.status === 'Tidak Aktif' || (matched.status as string) === 'Tidak-Aktif') {
+            setErrorMsg('Akun pengguna ini berstatus Tidak Aktif / Nonaktif. Silakan hubungi Administrator Utama untuk mengaktifkan kembali.');
             setIsLoading(false);
             return;
           }

@@ -36,6 +36,7 @@ import {
   Edit2,
   LogOut,
   UserCheck,
+  UserX,
   Shield,
   UserPlus,
   MapPin,
@@ -1126,7 +1127,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
 
             {/* Administrators Table */}
             <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto min-h-[320px] pb-12">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                     <tr>
@@ -1140,169 +1141,215 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 text-slate-800">
-                    {adminList.map((admin) => (
-                      <tr key={admin.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-4 py-3.5">
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-lg bg-sky-100 flex items-center justify-center font-bold text-sky-700">
-                              {admin.nama ? admin.nama.substring(0, 1).toUpperCase() : 'A'}
+                    {adminList.map((admin, idx) => {
+                      const isNearBottom = idx >= Math.max(1, adminList.length - 2);
+                      const isMenuOpen = openActionAdminId === admin.id;
+
+                      return (
+                        <tr
+                          key={admin.id}
+                          className={`transition-colors ${
+                            isMenuOpen ? 'bg-sky-50/70 relative z-20' : 'hover:bg-slate-50'
+                          }`}
+                        >
+                          <td className="px-4 py-3.5">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-8 h-8 rounded-lg bg-sky-100 flex items-center justify-center font-bold text-sky-700">
+                                {admin.nama ? admin.nama.substring(0, 1).toUpperCase() : 'A'}
+                              </div>
+                              <div>
+                                <div className="font-bold text-slate-900">{admin.nama}</div>
+                                <div className="text-[10px] text-slate-500">ID: {admin.id}</div>
+                              </div>
                             </div>
-                            <div>
-                              <div className="font-bold text-slate-900">{admin.nama}</div>
-                              <div className="text-[10px] text-slate-500">ID: {admin.id}</div>
+                          </td>
+                          <td className="px-4 py-3.5 font-mono text-sky-700 font-bold">
+                            {admin.username}
+                          </td>
+                          <td className="px-4 py-3.5 font-mono text-slate-500">
+                            <div className="flex items-center gap-1.5">
+                              <span>••••••••</span>
+                              <span className="text-[10px] text-slate-500">
+                                ({revealedPasswords[admin.id] ? admin.password : '••••••'})
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setRevealedPasswords(prev => ({ ...prev, [admin.id]: !prev[admin.id] }))}
+                                className="p-1 text-slate-500 hover:text-sky-600 hover:bg-slate-100 rounded-lg transition-colors focus:outline-none"
+                                title={revealedPasswords[admin.id] ? "Sembunyikan Kata Sandi" : "Tampilkan Kata Sandi"}
+                              >
+                                {revealedPasswords[admin.id] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                              </button>
                             </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3.5 font-mono text-sky-700 font-bold">
-                          {admin.username}
-                        </td>
-                        <td className="px-4 py-3.5 font-mono text-slate-500">
-                          <div className="flex items-center gap-1.5">
-                            <span>••••••••</span>
-                            <span className="text-[10px] text-slate-500">
-                              ({revealedPasswords[admin.id] ? admin.password : '••••••'})
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+                              admin.role === 'Administrator'
+                                ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                : admin.role === 'Operator'
+                                ? 'bg-sky-50 text-sky-700 border-sky-200'
+                                : admin.role === 'Kepala Sekolah'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : admin.role === 'Guru'
+                                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                : admin.role === 'Siswa'
+                                ? 'bg-cyan-50 text-cyan-700 border-cyan-200'
+                                : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                            }`}>
+                              {admin.role}
                             </span>
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <div className="text-slate-800">{admin.email}</div>
+                            {admin.noHp && <div className="text-[10px] text-slate-500">{admin.noHp}</div>}
+                          </td>
+                          <td className="px-4 py-3.5">
                             <button
                               type="button"
-                              onClick={() => setRevealedPasswords(prev => ({ ...prev, [admin.id]: !prev[admin.id] }))}
-                              className="p-1 text-slate-500 hover:text-sky-600 hover:bg-slate-100 rounded-lg transition-colors focus:outline-none"
-                              title={revealedPasswords[admin.id] ? "Sembunyikan Kata Sandi" : "Tampilkan Kata Sandi"}
-                            >
-                              {revealedPasswords[admin.id] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                            </button>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
-                            admin.role === 'Administrator'
-                              ? 'bg-purple-50 text-purple-700 border-purple-200'
-                              : admin.role === 'Operator'
-                              ? 'bg-sky-50 text-sky-700 border-sky-200'
-                              : admin.role === 'Kepala Sekolah'
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : admin.role === 'Guru'
-                              ? 'bg-amber-50 text-amber-700 border-amber-200'
-                              : admin.role === 'Siswa'
-                              ? 'bg-cyan-50 text-cyan-700 border-cyan-200'
-                              : 'bg-indigo-50 text-indigo-700 border-indigo-200'
-                          }`}>
-                            {admin.role}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <div className="text-slate-800">{admin.email}</div>
-                          {admin.noHp && <div className="text-[10px] text-slate-500">{admin.noHp}</div>}
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const updated = adminList.map((a) =>
-                                a.id === admin.id ? { ...a, status: (a.status === 'Aktif' ? 'Nonaktif' : 'Aktif') as 'Aktif' | 'Nonaktif' } : a
-                              );
-                              setAdminList(updated);
-                              if (onSaveAdministrators) onSaveAdministrators(updated);
-                            }}
-                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold border transition-all ${
-                              admin.status === 'Aktif'
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                                : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
-                            }`}
-                          >
-                            {admin.status}
-                          </button>
-                        </td>
-                        <td className="px-4 py-3.5 text-right">
-                          <div className="relative inline-block text-left">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setOpenActionAdminId(openActionAdminId === admin.id ? null : admin.id);
+                              onClick={() => {
+                                const updated = adminList.map((a) =>
+                                  a.id === admin.id ? { ...a, status: (a.status === 'Aktif' ? 'Nonaktif' : 'Aktif') as 'Aktif' | 'Nonaktif' } : a
+                                );
+                                setAdminList(updated);
+                                if (onSaveAdministrators) onSaveAdministrators(updated);
                               }}
-                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-xs cursor-pointer ${
-                                openActionAdminId === admin.id
-                                  ? 'bg-sky-600 text-white border-sky-600 shadow-md'
-                                  : 'bg-white hover:bg-sky-50 text-slate-700 hover:text-sky-700 border-slate-300 hover:border-sky-300'
+                              className={`px-2.5 py-1 rounded-full text-[10px] font-bold border transition-all ${
+                                admin.status === 'Aktif'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                                  : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
                               }`}
-                              title="Pilih Aksi"
                             >
-                              <span>Aksi</span>
-                              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${openActionAdminId === admin.id ? 'rotate-180 text-white' : 'text-slate-400'}`} />
+                              {admin.status === 'Aktif' ? 'Aktif' : 'Tidak Aktif'}
                             </button>
+                          </td>
+                          <td className="px-4 py-3.5 text-right">
+                            <div className="relative inline-block text-left">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenActionAdminId(isMenuOpen ? null : admin.id);
+                                }}
+                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-xs cursor-pointer ${
+                                  isMenuOpen
+                                    ? 'bg-sky-600 text-white border-sky-600 shadow-md ring-2 ring-sky-300'
+                                    : 'bg-white hover:bg-sky-50 text-slate-700 hover:text-sky-700 border-slate-300 hover:border-sky-300'
+                                }`}
+                                title="Pilih Aksi"
+                              >
+                                <span>Aksi</span>
+                                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isMenuOpen ? 'rotate-180 text-white' : 'text-slate-400'}`} />
+                              </button>
 
-                            {openActionAdminId === admin.id && (
-                              <>
-                                {/* Invisible backdrop to close menu when clicking outside */}
-                                <div 
-                                  className="fixed inset-0 z-20 cursor-default" 
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setOpenActionAdminId(null);
-                                  }} 
-                                />
-                                <div 
-                                  className="absolute right-0 top-full mt-1.5 z-30 w-44 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 text-xs text-slate-700 divide-y divide-slate-100 origin-top-right"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <div className="py-1">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setOpenActionAdminId(null);
-                                        setEditingAdmin(admin);
-                                        setAdminFormData({ ...admin });
-                                        setIsAddAdminOpen(true);
-                                      }}
-                                      className="w-full text-left px-3.5 py-2 hover:bg-sky-50 text-slate-700 hover:text-sky-700 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
-                                    >
-                                      <div className="w-6 h-6 rounded-lg bg-sky-50 text-sky-700 flex items-center justify-center shrink-0 border border-sky-200">
-                                        <Edit2 className="w-3.5 h-3.5" />
-                                      </div>
-                                      <span>Edit Akun</span>
-                                    </button>
-                                  </div>
-
-                                  {adminList.length > 1 && (
+                              {isMenuOpen && (
+                                <>
+                                  {/* Invisible backdrop to close menu when clicking outside */}
+                                  <div 
+                                    className="fixed inset-0 z-40 cursor-default" 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setOpenActionAdminId(null);
+                                    }} 
+                                  />
+                                  <div 
+                                    className={`absolute right-0 z-50 w-48 bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200/80 py-1.5 text-xs text-slate-700 divide-y divide-slate-100 ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-150 ${
+                                      isNearBottom ? 'bottom-full mb-1.5 origin-bottom-right' : 'top-full mt-1.5 origin-top-right'
+                                    }`}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
                                     <div className="py-1">
                                       <button
                                         type="button"
                                         onClick={() => {
                                           setOpenActionAdminId(null);
-                                          if (confirm(`Apakah Anda yakin ingin menghapus akun "${admin.nama}" (${admin.username})? Data di aplikasi dan Database Cloud akan dihapus.`)) {
-                                            const updated = adminList.filter((a) => a.id !== admin.id && a.username.toLowerCase() !== admin.username.toLowerCase());
-                                            setAdminList(updated);
-
-                                            try {
-                                              const delStr = localStorage.getItem('dapodik_deleted_admins') || '[]';
-                                              const delList: string[] = JSON.parse(delStr);
-                                              if (!delList.includes(admin.username.toLowerCase())) {
-                                                delList.push(admin.username.toLowerCase());
-                                                localStorage.setItem('dapodik_deleted_admins', JSON.stringify(delList));
-                                              }
-                                            } catch (e) {
-                                              console.error(e);
-                                            }
-
-                                            if (onSaveAdministrators) onSaveAdministrators(updated);
-                                          }
+                                          setEditingAdmin(admin);
+                                          setAdminFormData({ ...admin });
+                                          setIsAddAdminOpen(true);
                                         }}
-                                        className="w-full text-left px-3.5 py-2 hover:bg-rose-50 text-rose-600 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
+                                        className="w-full text-left px-3.5 py-2 hover:bg-sky-50 text-slate-700 hover:text-sky-700 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
                                       >
-                                        <div className="w-6 h-6 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 border border-rose-200">
-                                          <Trash2 className="w-3.5 h-3.5" />
+                                        <div className="w-6 h-6 rounded-lg bg-sky-50 text-sky-700 flex items-center justify-center shrink-0 border border-sky-200">
+                                          <Edit2 className="w-3.5 h-3.5" />
                                         </div>
-                                        <span>Hapus Akun</span>
+                                        <span>Edit Akun</span>
                                       </button>
                                     </div>
-                                  )}
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+
+                                    <div className="py-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setOpenActionAdminId(null);
+                                          const isCurrentlyActive = admin.status === 'Aktif';
+                                          const newStatus = isCurrentlyActive ? 'Nonaktif' : 'Aktif';
+                                          const updated = adminList.map((a) =>
+                                            a.id === admin.id ? { ...a, status: newStatus as 'Aktif' | 'Nonaktif' } : a
+                                          );
+                                          setAdminList(updated);
+                                          if (onSaveAdministrators) onSaveAdministrators(updated);
+                                        }}
+                                        className={`w-full text-left px-3.5 py-2 flex items-center gap-2.5 font-medium transition-colors cursor-pointer ${
+                                          admin.status === 'Aktif'
+                                            ? 'hover:bg-amber-50 text-amber-700 hover:text-amber-800'
+                                            : 'hover:bg-emerald-50 text-emerald-700 hover:text-emerald-800'
+                                        }`}
+                                      >
+                                        <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 border ${
+                                          admin.status === 'Aktif'
+                                            ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                            : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                        }`}>
+                                          {admin.status === 'Aktif' ? (
+                                            <UserX className="w-3.5 h-3.5" />
+                                          ) : (
+                                            <UserCheck className="w-3.5 h-3.5" />
+                                          )}
+                                        </div>
+                                        <span>{admin.status === 'Aktif' ? 'Tidak Aktif' : 'Set Aktif'}</span>
+                                      </button>
+                                    </div>
+
+                                    {adminList.length > 1 && (
+                                      <div className="py-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setOpenActionAdminId(null);
+                                            if (confirm(`Apakah Anda yakin ingin menghapus akun "${admin.nama}" (${admin.username})? Data di aplikasi dan Database Cloud akan dihapus.`)) {
+                                              const updated = adminList.filter((a) => a.id !== admin.id && a.username.toLowerCase() !== admin.username.toLowerCase());
+                                              setAdminList(updated);
+
+                                              try {
+                                                const delStr = localStorage.getItem('dapodik_deleted_admins') || '[]';
+                                                const delList: string[] = JSON.parse(delStr);
+                                                if (!delList.includes(admin.username.toLowerCase())) {
+                                                  delList.push(admin.username.toLowerCase());
+                                                  localStorage.setItem('dapodik_deleted_admins', JSON.stringify(delList));
+                                                }
+                                              } catch (e) {
+                                                console.error(e);
+                                              }
+
+                                              if (onSaveAdministrators) onSaveAdministrators(updated);
+                                            }
+                                          }}
+                                          className="w-full text-left px-3.5 py-2 hover:bg-rose-50 text-rose-600 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
+                                        >
+                                          <div className="w-6 h-6 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 border border-rose-200">
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </div>
+                                          <span>Hapus Akun</span>
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
