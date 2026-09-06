@@ -190,6 +190,46 @@ function getFilteredNotifications(notifs: NotificationItem[], extraDeletedIds: s
     }));
 }
 
+function mergeNotifications(
+  list1: NotificationItem[] = [],
+  list2: NotificationItem[] = [],
+  extraDeletedIds: string[] = []
+): NotificationItem[] {
+  const dummyIds = ['notif-1', 'notif-2', 'notif-3'];
+  const deletedSet = new Set([...dummyIds, ...getDeletedNotifIds(), ...extraDeletedIds]);
+  const map = new Map<string, NotificationItem>();
+
+  const processItem = (n: NotificationItem, idx: number) => {
+    if (!n) return;
+    const rawId = n.id ? String(n.id) : `notif-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`;
+    if (deletedSet.has(rawId)) return;
+
+    if (!map.has(rawId)) {
+      map.set(rawId, { ...n, id: rawId });
+    } else {
+      const existing = map.get(rawId)!;
+      map.set(rawId, {
+        ...existing,
+        ...n,
+        id: rawId,
+        read: existing.read || Boolean(n.read)
+      });
+    }
+  };
+
+  if (Array.isArray(list1)) list1.forEach((item, idx) => processItem(item, idx));
+  if (Array.isArray(list2)) list2.forEach((item, idx) => processItem(item, idx));
+
+  const merged = Array.from(map.values());
+  merged.sort((a, b) => {
+    const timeA = a.time ? new Date(a.time).getTime() : 0;
+    const timeB = b.time ? new Date(b.time).getTime() : 0;
+    return timeB - timeA;
+  });
+
+  return merged;
+}
+
 export default function App() {
   // Authentication State
   const [administrators, setAdministrators] = useState<AdminUser[]>(() => {
@@ -461,7 +501,7 @@ export default function App() {
       type,
       read: false
     };
-    const updated = [newNotif, ...getFilteredNotifications(notificationsRef.current)];
+    const updated = mergeNotifications([newNotif], notificationsRef.current);
     notificationsRef.current = updated;
     setNotifications(updated);
     localStorage.setItem('dapodik_notifications', JSON.stringify(updated));
@@ -604,7 +644,7 @@ export default function App() {
       let newNotifs = notifications;
 
       if (Array.isArray(notifikasi)) {
-        newNotifs = getFilteredNotifications(notifikasi);
+        newNotifs = mergeNotifications(notificationsRef.current, notifikasi);
         setNotifications(newNotifs);
         notificationsRef.current = newNotifs;
         localStorage.setItem('dapodik_notifications', JSON.stringify(newNotifs));
@@ -831,10 +871,10 @@ export default function App() {
             saveDeletedNotifIds(serverData.deletedNotifIds);
           }
           if (serverData.notifications && Array.isArray(serverData.notifications)) {
-            const filtered = getFilteredNotifications(serverData.notifications);
-            setNotifications(filtered);
-            notificationsRef.current = filtered;
-            localStorage.setItem('dapodik_notifications', JSON.stringify(filtered));
+            const merged = mergeNotifications(notificationsRef.current, serverData.notifications, serverData.deletedNotifIds || []);
+            setNotifications(merged);
+            notificationsRef.current = merged;
+            localStorage.setItem('dapodik_notifications', JSON.stringify(merged));
           }
           if (serverData.aplikasiLinks && Array.isArray(serverData.aplikasiLinks) && serverData.aplikasiLinks.length > 0) {
             setAplikasiLinks(serverData.aplikasiLinks);
@@ -862,7 +902,7 @@ export default function App() {
             let finalNotifs = serverData?.notifications || notifications;
 
             if (Array.isArray(notifikasi)) {
-              finalNotifs = getFilteredNotifications(notifikasi);
+              finalNotifs = mergeNotifications(notificationsRef.current, notifikasi);
               setNotifications(finalNotifs);
               notificationsRef.current = finalNotifs;
               localStorage.setItem('dapodik_notifications', JSON.stringify(finalNotifs));
@@ -1143,13 +1183,16 @@ export default function App() {
               return prev;
             });
           }
+          if (serverData.deletedNotifIds && Array.isArray(serverData.deletedNotifIds)) {
+            saveDeletedNotifIds(serverData.deletedNotifIds);
+          }
           if (serverData.notifications && Array.isArray(serverData.notifications)) {
             setNotifications(prev => {
-              const filtered = getFilteredNotifications(serverData.notifications);
-              if (JSON.stringify(prev) !== JSON.stringify(filtered)) {
-                notificationsRef.current = filtered;
-                localStorage.setItem('dapodik_notifications', JSON.stringify(filtered));
-                return filtered;
+              const merged = mergeNotifications(notificationsRef.current, serverData.notifications, serverData.deletedNotifIds || []);
+              if (JSON.stringify(prev) !== JSON.stringify(merged)) {
+                notificationsRef.current = merged;
+                localStorage.setItem('dapodik_notifications', JSON.stringify(merged));
+                return merged;
               }
               return prev;
             });

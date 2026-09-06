@@ -34,12 +34,12 @@ async function startServer() {
     }
     // Fallback to default
     return res.json({
-      spreadsheetUrl: "",
-      webAppUrl: "",
+      spreadsheetUrl: "1XmLmshCOhSktRfzW8uG_8RqxlxVCQt5eUVekEFLwj_M",
+      webAppUrl: "https://script.google.com/macros/s/AKfycbwHOEkfJ7iJVAlTKUVboM7ZHd13dX9Z6adJBH6N2UwA-LbDmTrJvxPHuBB8T4kePUmJAQ/exec",
       sheetId: "",
       autoSync: true,
       lastSynced: null,
-      status: "disconnected",
+      status: "connected",
       mode: "appscript"
     });
   });
