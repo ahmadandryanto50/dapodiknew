@@ -72,9 +72,60 @@ async function startServer() {
   // API Route: Save Shared App Data Cache
   app.post("/api/app-data", (req, res) => {
     try {
-      const data = req.body;
-      fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), "utf-8");
-      return res.json({ success: true });
+      const incoming = req.body || {};
+      let currentData: any = {};
+      if (fs.existsSync(DATA_FILE)) {
+        try {
+          currentData = JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
+        } catch (e) {}
+      }
+
+      // Merge deletedNotifIds
+      const currentDeleted: string[] = Array.isArray(currentData.deletedNotifIds) ? currentData.deletedNotifIds : [];
+      const incomingDeleted: string[] = Array.isArray(incoming.deletedNotifIds) ? incoming.deletedNotifIds : [];
+      const mergedDeleted = Array.from(new Set([...currentDeleted, ...incomingDeleted]));
+
+      // Merge notifications carefully so no notification is ever lost by cross-device race conditions
+      const currentNotifs: any[] = Array.isArray(currentData.notifications) ? currentData.notifications : [];
+      const incomingNotifs: any[] = Array.isArray(incoming.notifications) ? incoming.notifications : [];
+      
+      const notifMap = new Map<string, any>();
+      const deletedSet = new Set<string>(['notif-1', 'notif-2', 'notif-3', ...mergedDeleted]);
+
+      // Add current notifs
+      currentNotifs.forEach((n: any) => {
+        if (n && n.id && !deletedSet.has(String(n.id))) {
+          notifMap.set(String(n.id), n);
+        }
+      });
+      // Add incoming notifs (if existing, update read status or properties)
+      incomingNotifs.forEach((n: any) => {
+        if (n && n.id && !deletedSet.has(String(n.id))) {
+          if (notifMap.has(String(n.id))) {
+            const exist = notifMap.get(String(n.id));
+            notifMap.set(String(n.id), { ...exist, ...n, read: Boolean(exist.read || n.read) });
+          } else {
+            notifMap.set(String(n.id), n);
+          }
+        }
+      });
+
+      const mergedNotifs = Array.from(notifMap.values());
+      mergedNotifs.sort((a: any, b: any) => {
+        const timeA = a.time ? new Date(a.time).getTime() : 0;
+        const timeB = b.time ? new Date(b.time).getTime() : 0;
+        return timeB - timeA;
+      });
+
+      const finalData = {
+        ...currentData,
+        ...incoming,
+        deletedNotifIds: mergedDeleted,
+        notifications: mergedNotifs
+      };
+
+      fs.writeFileSync(DATA_FILE, JSON.stringify(finalData, null, 2), "utf-8");
+      return res.json({ success: true, notifications: mergedNotifs });
     } catch (err) {
       console.error("Error writing app_data.json:", err);
       return res.status(500).json({ success: false, message: (err as Error).message });
