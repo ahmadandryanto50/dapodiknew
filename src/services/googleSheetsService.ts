@@ -1,4 +1,4 @@
-import { Student, TeacherStaff, SarprasItem, StudentReport, SyncConfig, AppDisplayConfig, SchoolProfile, AdminUser } from '../types';
+import { Student, TeacherStaff, SarprasItem, StudentReport, SyncConfig, AppDisplayConfig, SchoolProfile, AdminUser, NotificationItem } from '../types';
 
 export const APPS_SCRIPT_TEMPLATE = `/**
  * Google Apps Script untuk Dapodik Terintegrasi 2026
@@ -22,7 +22,8 @@ const HEADERS_MAP = {
   'Data_Alumni': ['id', 'nisn', 'nik', 'nama', 'jenisKelamin', 'tempatLahir', 'tanggalLahir', 'rombel', 'tahunLulus', 'noSeriIjazah', 'namaIbu', 'namaAyah', 'alamat', 'hp', 'status', 'alasanKeluar', 'agama', 'nis', 'skhun', 'sekolahAsal'],
   'Data_PTK': ['id', 'nuptk', 'nip', 'nama', 'jenisKelamin', 'statusKepegawaian', 'jenisPtk', 'mapel', 'pendidikanTerakhir', 'noHp', 'email', 'statusSertifikasi', 'tempatLahir', 'tanggalLahir', 'agama', 'alamatJalan', 'rt', 'rw', 'namaDusun', 'desaKelurahan', 'kecamatan', 'kodePos', 'tugasTambahan', 'skCpns', 'tanggalCpns', 'skPengangkatan', 'tmtPengangkatan', 'pangkatGolongan', 'nik', 'noKk'],
   'Data_Sarpras': ['id', 'kodeBarang', 'namaBarang', 'kategori', 'kondisi', 'jumlah', 'satuan', 'letakRuang', 'tahunPengadaan', 'layakPakai'],
-  'Data_Rapor': ['id', 'studentId', 'nisn', 'studentName', 'rombel', 'semester', 'tahunAjaran', 'scores', 'kehadiran', 'catatanWaliKelas', 'statusKenaikan']
+  'Data_Rapor': ['id', 'studentId', 'nisn', 'studentName', 'rombel', 'semester', 'tahunAjaran', 'scores', 'kehadiran', 'catatanWaliKelas', 'statusKenaikan'],
+  'Notifikasi': ['id', 'title', 'message', 'time', 'type', 'read']
 };
 
 function doGet(e) {
@@ -41,8 +42,9 @@ function doGet(e) {
     administrator: getSheetData(ss, 'Administrator'),
     profilSekolah: getSheetData(ss, 'Profil_Sekolah'),
     aplikasi: getSheetData(ss, 'Data_Aplikasi'),
+    notifikasi: getSheetData(ss, 'Notifikasi'),
     status: 'success',
-    version: '2026.2.8',
+    version: '2026.2.9',
     timestamp: new Date().toLocaleString('id-ID')
   };
   
@@ -70,6 +72,7 @@ function doPost(e) {
         administrator: getSheetData(ss, 'Administrator'),
         profilSekolah: getSheetData(ss, 'Profil_Sekolah'),
         aplikasi: getSheetData(ss, 'Data_Aplikasi'),
+        notifikasi: getSheetData(ss, 'Notifikasi'),
         status: 'success'
       };
       return ContentService.createTextOutput(JSON.stringify(result))
@@ -87,6 +90,7 @@ function doPost(e) {
       if (data.administrator !== undefined) saveSheetData(ss, 'Administrator', data.administrator);
       if (data.profilSekolah !== undefined) saveSheetData(ss, 'Profil_Sekolah', data.profilSekolah);
       if (data.aplikasi !== undefined) saveSheetData(ss, 'Data_Aplikasi', data.aplikasi);
+      if (data.notifikasi !== undefined) saveSheetData(ss, 'Notifikasi', data.notifikasi, HEADERS_MAP['Notifikasi']);
     } else if (data.type === 'SYNC_SISWA') {
       saveSheetData(ss, 'Data_Siswa', data.payload, HEADERS_MAP['Data_Siswa']);
     } else if (data.type === 'SYNC_SISWA_KELUAR') {
@@ -99,6 +103,8 @@ function doPost(e) {
       saveSheetData(ss, 'Data_Sarpras', data.payload, HEADERS_MAP['Data_Sarpras']);
     } else if (data.type === 'SYNC_RAPOR') {
       saveSheetData(ss, 'Data_Rapor', data.payload, HEADERS_MAP['Data_Rapor']);
+    } else if (data.type === 'SYNC_NOTIFIKASI') {
+      saveSheetData(ss, 'Notifikasi', data.payload, HEADERS_MAP['Notifikasi']);
     } else if (data.type === 'SYNC_PENGATURAN') {
       saveSheetData(ss, 'Data_Pengaturan', data.payload);
     } else if (data.type === 'SYNC_ADMINISTRATOR' || data.type === 'SYNC_ADMIN') {
@@ -111,7 +117,7 @@ function doPost(e) {
     
     return ContentService.createTextOutput(JSON.stringify({ 
       status: 'success', 
-      message: 'Data Dapodik (Siswa, Alumni, PTK, Sarpras, Profil & Pengaturan) berhasil disinkronkan ke Google Sheet!' 
+      message: 'Data Dapodik (Siswa, Alumni, PTK, Sarpras, Notifikasi & Pengaturan) berhasil disinkronkan ke Google Sheet!' 
     })).setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({ 
@@ -253,6 +259,9 @@ function checkAndInitializeSheets(ss) {
     'Data_Rapor': [
       HEADERS_MAP['Data_Rapor']
     ],
+    'Notifikasi': [
+      HEADERS_MAP['Notifikasi']
+    ],
     'Administrator': [
       ['id', 'username', 'password', 'nama', 'role', 'email', 'noHp', 'status', 'lastLogin'],
       ['adm-001', 'admin', 'admin123', 'Ahmad Andryanto (Administrator)', 'Administrator', 'ahmad.andryanto50@admin.smp.belajar.id', '081234567890', 'Aktif', ''],
@@ -373,6 +382,7 @@ export async function syncToGoogleSheets(
     administrator?: AdminUser[];
     profilSekolah?: Array<{ key: string; value: string }>;
     aplikasi?: any[];
+    notifikasi?: NotificationItem[];
   }
 ): Promise<{ success: boolean; message: string }> {
   if (!config.webAppUrl) {
@@ -423,6 +433,7 @@ export async function syncToGoogleSheets(
       administrator: data.administrator || [],
       profilSekolah: data.profilSekolah || [],
       aplikasi: data.aplikasi || [],
+      notifikasi: data.notifikasi || [],
       timestamp: new Date().toLocaleString('id-ID')
     };
 
@@ -487,6 +498,7 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
     administrator: AdminUser[];
     profilSekolah: Array<{ key: string; value: string }>;
     aplikasi?: any[];
+    notifikasi?: NotificationItem[];
   }
 }> {
   if (!config.webAppUrl) {
@@ -518,7 +530,15 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
           pengaturan: result.pengaturan || [],
           administrator: result.administrator || [],
           profilSekolah: result.profilSekolah || [],
-          aplikasi: result.aplikasi || []
+          aplikasi: result.aplikasi || [],
+          notifikasi: (result.notifikasi || []).map((n: any) => ({
+            id: String(n.id || ''),
+            title: String(n.title || ''),
+            message: String(n.message || ''),
+            time: String(n.time || ''),
+            type: (['info', 'success', 'warning', 'error'].includes(n.type) ? n.type : 'info') as 'info' | 'success' | 'warning' | 'error',
+            read: Boolean(n.read === true || n.read === 'true' || n.read === 'TRUE')
+          }))
         }
       };
     } else {
@@ -553,7 +573,15 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
             pengaturan: result.pengaturan || [],
             administrator: result.administrator || [],
             profilSekolah: result.profilSekolah || [],
-            aplikasi: result.aplikasi || []
+            aplikasi: result.aplikasi || [],
+            notifikasi: (result.notifikasi || []).map((n: any) => ({
+              id: String(n.id || ''),
+              title: String(n.title || ''),
+              message: String(n.message || ''),
+              time: String(n.time || ''),
+              type: (['info', 'success', 'warning', 'error'].includes(n.type) ? n.type : 'info') as 'info' | 'success' | 'warning' | 'error',
+              read: Boolean(n.read === true || n.read === 'true' || n.read === 'TRUE')
+            }))
           }
         };
       }

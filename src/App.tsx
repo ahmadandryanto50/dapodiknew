@@ -422,6 +422,7 @@ export default function App() {
     setNotifications(updated);
     localStorage.setItem('dapodik_notifications', JSON.stringify(updated));
     saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, updated);
+    triggerAutoSync(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, false, updated);
   };
 
   // Save to LocalStorage & Server Cache
@@ -541,7 +542,7 @@ export default function App() {
     setIsSyncing(false);
     
     if (res.success && res.data) {
-      const { siswa, ptk, sarpras: pulledSarpras, rapor, pengaturan, administrator, profilSekolah, aplikasi } = res.data;
+      const { siswa, ptk, sarpras: pulledSarpras, rapor, pengaturan, administrator, profilSekolah, aplikasi, notifikasi } = res.data;
       
       let newStudents = students;
       let newTeachers = teachers;
@@ -551,6 +552,14 @@ export default function App() {
       let newProfile = schoolProfile;
       let newDisplay = displayConfig;
       let newLinks = aplikasiLinks;
+      let newNotifs = notifications;
+
+      if (Array.isArray(notifikasi) && notifikasi.length > 0) {
+        newNotifs = getFilteredNotifications(notifikasi);
+        setNotifications(newNotifs);
+        notificationsRef.current = newNotifs;
+        localStorage.setItem('dapodik_notifications', JSON.stringify(newNotifs));
+      }
 
       if (Array.isArray(siswa)) {
         newStudents = sanitizeStudentDates(siswa);
@@ -672,7 +681,7 @@ export default function App() {
       }));
 
       // Broadcast fresh pulled data to server cache so other devices immediately sync
-      saveCacheToServer(newStudents, newTeachers, newSarpras, newReports, newDisplay, newProfile, newAdmins, notifications, newLinks);
+      saveCacheToServer(newStudents, newTeachers, newSarpras, newReports, newDisplay, newProfile, newAdmins, newNotifs, newLinks);
 
       if (!silent) {
         showToast('Data berhasil disinkronkan dari Database!');
@@ -787,7 +796,7 @@ export default function App() {
           setIsSyncing(false);
           
           if (res.success && res.data) {
-            const { siswa, ptk, sarpras: pulledSarpras, rapor, pengaturan, administrator, profilSekolah, aplikasi } = res.data;
+            const { siswa, ptk, sarpras: pulledSarpras, rapor, pengaturan, administrator, profilSekolah, aplikasi, notifikasi } = res.data;
             
             let finalStudents = serverData?.students || students;
             let finalTeachers = serverData?.teachers || teachers;
@@ -797,6 +806,14 @@ export default function App() {
             let finalProfile = serverData?.schoolProfile || schoolProfile;
             let finalDisplay = serverData?.displayConfig || displayConfig;
             let finalLinks = serverData?.aplikasiLinks || aplikasiLinks;
+            let finalNotifs = serverData?.notifications || notifications;
+
+            if (Array.isArray(notifikasi) && notifikasi.length > 0) {
+              finalNotifs = getFilteredNotifications(notifikasi);
+              setNotifications(finalNotifs);
+              notificationsRef.current = finalNotifs;
+              localStorage.setItem('dapodik_notifications', JSON.stringify(finalNotifs));
+            }
 
             if (Array.isArray(aplikasi) && aplikasi.length > 0) {
               finalLinks = aplikasi;
@@ -925,7 +942,7 @@ export default function App() {
             }));
 
             // Sync server cache with the pulled data
-            saveCacheToServer(finalStudents, finalTeachers, finalSarpras, finalReports, finalDisplay, finalProfile, finalAdmins, notifications, finalLinks);
+            saveCacheToServer(finalStudents, finalTeachers, finalSarpras, finalReports, finalDisplay, finalProfile, finalAdmins, finalNotifs, finalLinks);
             
             showToast('Sinkronisasi otomatis dari Database berhasil!');
           }
@@ -1291,7 +1308,8 @@ export default function App() {
     customDisplayConfig = displayConfig,
     customSchoolProfile = schoolProfile,
     customAdministrators = administrators,
-    force = false
+    force = false,
+    customNotifications = notificationsRef.current
   ) => {
     if (!syncConfig.webAppUrl) return;
     if (!syncConfig.autoSync && !force) return;
@@ -1304,7 +1322,8 @@ export default function App() {
       pengaturan: buildPengaturanPayload(customDisplayConfig, customSchoolProfile),
       administrator: customAdministrators,
       profilSekolah: buildProfilSekolahPayload(customSchoolProfile),
-      aplikasi: buildAplikasiPayload()
+      aplikasi: buildAplikasiPayload(),
+      notifikasi: customNotifications
     });
     setIsSyncing(false);
     if (res.success) {
@@ -1338,7 +1357,8 @@ export default function App() {
       pengaturan: buildPengaturanPayload(displayConfig, schoolProfile),
       administrator: administrators,
       profilSekolah: buildProfilSekolahPayload(schoolProfile),
-      aplikasi: buildAplikasiPayload()
+      aplikasi: buildAplikasiPayload(),
+      notifikasi: notifications
     });
     setIsSyncing(false);
     if (res.success) {
@@ -1627,6 +1647,7 @@ export default function App() {
     setNotifications(updated);
     localStorage.setItem('dapodik_notifications', JSON.stringify(updated));
     saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, updated);
+    triggerAutoSync(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, false, updated);
   };
 
   const handleMarkNotifRead = (id: string) => {
@@ -1635,6 +1656,7 @@ export default function App() {
     setNotifications(updated);
     localStorage.setItem('dapodik_notifications', JSON.stringify(updated));
     saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, updated);
+    triggerAutoSync(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, false, updated);
   };
 
   const handleDeleteNotif = (id: string) => {
@@ -1644,6 +1666,7 @@ export default function App() {
     localStorage.setItem('dapodik_notifications', JSON.stringify(updated));
     saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, updated);
     showToast('Notifikasi dihapus...');
+    triggerAutoSync(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, false, updated);
   };
 
   const handleClearAllNotif = () => {
@@ -1653,6 +1676,7 @@ export default function App() {
     localStorage.setItem('dapodik_notifications', '[]');
     saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, updated);
     showToast('Semua notifikasi berhasil dihapus...');
+    triggerAutoSync(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, false, updated);
   };
 
   // School Profile Handler
@@ -2105,6 +2129,7 @@ export default function App() {
         pengaturan={buildPengaturanPayload()}
         administrators={administrators}
         profilSekolah={buildProfilSekolahPayload()}
+        notifications={notifications}
         onPullData={() => handlePullFromSheets(false)}
       />
 

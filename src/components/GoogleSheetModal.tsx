@@ -13,7 +13,7 @@ import {
   Sparkles,
   Link as LinkIcon
 } from 'lucide-react';
-import { SyncConfig, Student, TeacherStaff, SarprasItem, StudentReport, AdminUser } from '../types';
+import { SyncConfig, Student, TeacherStaff, SarprasItem, StudentReport, AdminUser, NotificationItem } from '../types';
 import { APPS_SCRIPT_TEMPLATE, syncToGoogleSheets } from '../services/googleSheetsService';
 import confetti from 'canvas-confetti';
 
@@ -29,6 +29,7 @@ interface GoogleSheetModalProps {
   pengaturan?: Array<{ key: string; value: string }>;
   administrators?: AdminUser[];
   profilSekolah?: Array<{ key: string; value: string }>;
+  notifications?: NotificationItem[];
   onPullData?: () => void;
 }
 
@@ -44,6 +45,7 @@ export const GoogleSheetModal: React.FC<GoogleSheetModalProps> = ({
   pengaturan,
   administrators,
   profilSekolah,
+  notifications,
   onPullData
 }) => {
   const [webAppUrl, setWebAppUrl] = useState(syncConfig.webAppUrl);
@@ -91,7 +93,8 @@ export const GoogleSheetModal: React.FC<GoogleSheetModalProps> = ({
       rapor: reports,
       pengaturan: pengaturan || [],
       administrator: administrators || [],
-      profilSekolah: profilSekolah || []
+      profilSekolah: profilSekolah || [],
+      notifikasi: notifications || []
     });
 
     setIsTesting(false);
