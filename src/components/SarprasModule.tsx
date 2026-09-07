@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Building2, 
   Plus, 
@@ -39,6 +40,21 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<SarprasItem | null>(null);
   const [openActionId, setOpenActionId] = useState<string | null>(null);
+  const [actionMenuPos, setActionMenuPos] = useState<{ top: number; right?: number; left?: number } | null>(null);
+
+  useEffect(() => {
+    if (!openActionId) return;
+    const handleClose = () => {
+      setOpenActionId(null);
+      setActionMenuPos(null);
+    };
+    window.addEventListener('scroll', handleClose, { capture: true, passive: true });
+    window.addEventListener('resize', handleClose, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', handleClose, { capture: true });
+      window.removeEventListener('resize', handleClose);
+    };
+  }, [openActionId]);
 
   const [formData, setFormData] = useState<Omit<SarprasItem, 'id'>>({
     kodeBarang: '',
@@ -278,7 +294,31 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setOpenActionId(openActionId === item.id ? null : item.id);
+                          if (openActionId === item.id) {
+                            setOpenActionId(null);
+                            setActionMenuPos(null);
+                          } else {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const menuWidth = 200;
+                            let left: number | undefined = undefined;
+                            let right: number | undefined = undefined;
+
+                            if (rect.left < menuWidth + 24) {
+                              left = Math.max(12, rect.right - menuWidth);
+                            } else {
+                              right = window.innerWidth - rect.left + 8;
+                            }
+
+                            const estimatedHeight = 110;
+                            let top = rect.top + rect.height / 2 - (estimatedHeight / 2);
+                            const minTop = 64;
+                            const maxTop = window.innerHeight - estimatedHeight - 16;
+                            if (top < minTop) top = minTop;
+                            if (top > maxTop) top = Math.max(minTop, maxTop);
+
+                            setActionMenuPos({ top, right, left });
+                            setOpenActionId(item.id);
+                          }
                         }}
                         className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-xs cursor-pointer ${
                           openActionId === item.id
@@ -291,18 +331,24 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
                         <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${openActionId === item.id ? 'rotate-180 text-white' : 'text-slate-400'}`} />
                       </button>
 
-                      {openActionId === item.id && (
-                        <>
+                      {openActionId === item.id && actionMenuPos && createPortal(
+                        <div className="fixed inset-0 z-50 pointer-events-none">
                           {/* Invisible backdrop to close menu when clicking outside */}
                           <div 
-                            className="fixed inset-0 z-40 cursor-default" 
+                            className="fixed inset-0 z-40 cursor-default pointer-events-auto" 
                             onClick={(e) => {
                               e.stopPropagation();
                               setOpenActionId(null);
+                              setActionMenuPos(null);
                             }} 
                           />
                           <div 
-                            className="absolute right-full top-1/2 -translate-y-1/2 mr-2 z-50 w-48 bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200/90 py-1.5 text-xs text-slate-700 divide-y divide-slate-100 ring-1 ring-black/5 animate-in fade-in slide-in-from-right-2 duration-150 max-h-80 overflow-y-auto"
+                            style={{
+                              top: `${actionMenuPos.top}px`,
+                              right: actionMenuPos.right !== undefined ? `${actionMenuPos.right}px` : undefined,
+                              left: actionMenuPos.left !== undefined ? `${actionMenuPos.left}px` : undefined,
+                            }}
+                            className="fixed z-50 w-48 bg-white/98 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200/90 py-1.5 text-xs text-slate-700 divide-y divide-slate-100 ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-150 overflow-y-auto max-h-[calc(100vh-80px)] pointer-events-auto"
                             onClick={(e) => e.stopPropagation()}
                           >
                             <div className="py-1">
@@ -310,6 +356,7 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
                                 type="button"
                                 onClick={() => {
                                   setOpenActionId(null);
+                                  setActionMenuPos(null);
                                   handleOpenEdit(item);
                                 }}
                                 className="w-full text-left px-3.5 py-2 hover:bg-amber-50 text-slate-700 hover:text-amber-700 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
@@ -326,6 +373,7 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
                                 type="button"
                                 onClick={() => {
                                   setOpenActionId(null);
+                                  setActionMenuPos(null);
                                   handleDelete(item.id, item.namaBarang);
                                 }}
                                 className="w-full text-left px-3.5 py-2 hover:bg-rose-50 text-rose-600 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
@@ -337,7 +385,8 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
                               </button>
                             </div>
                           </div>
-                        </>
+                        </div>,
+                        document.body
                       )}
                     </div>
                   </td>

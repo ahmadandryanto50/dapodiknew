@@ -20,7 +20,9 @@ import {
   UserX,
   Search,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Printer,
+  FileSpreadsheet
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -35,9 +37,11 @@ import {
   Cell,
   Legend
 } from 'recharts';
-import { Student, TeacherStaff, SarprasItem, StudentReport } from '../types';
+import { Student, TeacherStaff, SarprasItem, StudentReport, SchoolProfile, AppDisplayConfig } from '../types';
 import { exportToCSV } from '../services/googleSheetsService';
 import { parseFlexibleDate } from '../utils/dateUtils';
+import { exportCompleteRekapToExcel } from '../utils/rekapExportHelper';
+import { OfficialRekapPrintModal } from './OfficialRekapPrintModal';
 
 interface LaporanModuleProps {
   students: Student[];
@@ -45,6 +49,8 @@ interface LaporanModuleProps {
   sarpras: SarprasItem[];
   reports: StudentReport[];
   onBackToHome: () => void;
+  schoolProfile?: SchoolProfile;
+  displayConfig?: AppDisplayConfig;
 }
 
 export const LaporanModule: React.FC<LaporanModuleProps> = ({
@@ -52,13 +58,19 @@ export const LaporanModule: React.FC<LaporanModuleProps> = ({
   teachers,
   sarpras,
   reports,
-  onBackToHome
+  onBackToHome,
+  schoolProfile,
+  displayConfig
 }) => {
   // Defensive array checks
   const allStudents = Array.isArray(students) ? students : [];
   const allTeachers = Array.isArray(teachers) ? teachers : [];
   const allSarpras = Array.isArray(sarpras) ? sarpras : [];
   const allReports = Array.isArray(reports) ? reports : [];
+
+  // State for Print Modal & Export Dropdown
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState<boolean>(false);
+  const [isExportDropdownOpen, setIsExportDropdownOpen] = useState<boolean>(false);
 
   // State for Alumni Year Filter & Collapsible Detail
   const [selectedAlumniYear, setSelectedAlumniYear] = useState<string>('ALL');
@@ -443,7 +455,18 @@ export const LaporanModule: React.FC<LaporanModuleProps> = ({
     { name: '> 15 Thn', palu: usiaOver15_Palu_L + usiaOver15_Palu_P, nonPalu: usiaOver15_NonPalu_L + usiaOver15_NonPalu_P }
   ];
 
-  const handleExportAll = () => {
+  const handleExportExcel = () => {
+    exportCompleteRekapToExcel({
+      students: allStudents,
+      teachers: allTeachers,
+      sarpras: allSarpras,
+      reports: allReports,
+      schoolProfile,
+      displayConfig
+    });
+  };
+
+  const handleExportCSV = () => {
     const summaryData = [
       { Kategori: 'Total Peserta Didik Aktif (Siswa)', Jumlah: activeStudents.length, Keterangan: `${maleStudents} Laki-laki, ${femaleStudents} Perempuan` },
       { Kategori: 'Jumlah Usia 13 s.d. 15 Tahun - Penduduk Kota Palu (KK)', Jumlah: totalUsia13_15_Palu, Keterangan: `L: ${usia13_15_Palu_L}, P: ${usia13_15_Palu_P} (${pctPalu}%)` },
@@ -461,36 +484,114 @@ export const LaporanModule: React.FC<LaporanModuleProps> = ({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="sticky top-[57px] z-30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/95 backdrop-blur-xl border border-slate-200/80 p-5 rounded-2xl shadow-md transition-all">
+      <div className="sticky top-[57px] z-30 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white/95 backdrop-blur-xl border border-slate-200/80 p-5 rounded-2xl shadow-md transition-all">
         <div className="flex items-center gap-3">
           <button
             onClick={onBackToHome}
-            className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors border border-slate-200/60"
+            className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors border border-slate-200/60 cursor-pointer"
             title="Kembali ke Beranda"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl font-bold text-slate-900">Laporan & Rekapitulasi Data Pokok</h1>
               <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
                 Validasi 100% Bersih
               </span>
             </div>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-500 mt-0.5">
               Statistik agregat sekolah, distribusi demografi, profil PTK, dan indeks kelaikan sarpras
             </p>
           </div>
         </div>
 
-        <button
-          onClick={handleExportAll}
-          className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm transition-all flex items-center gap-2"
-        >
-          <Download className="w-4 h-4" />
-          <span>Unduh Rekap Lengkap</span>
-        </button>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {/* Button: Cetak / Unduh PDF */}
+          <button
+            onClick={() => setIsPrintModalOpen(true)}
+            className="px-3.5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm transition-all flex items-center gap-1.5 cursor-pointer hover:shadow"
+            title="Buka pratinjau cetak resmi dan simpan ke file PDF"
+          >
+            <Printer className="w-4 h-4" />
+            <span>Cetak / Unduh PDF</span>
+          </button>
+
+          {/* Button: Unduh Excel */}
+          <button
+            onClick={handleExportExcel}
+            className="px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-all flex items-center gap-1.5 cursor-pointer hover:shadow"
+            title="Unduh seluruh rekapitulasi data dalam format Excel (.xlsx)"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>Unduh Excel (.xlsx)</span>
+          </button>
+
+          {/* Dropdown Options */}
+          <div className="relative">
+            <button
+              onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
+              className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors border border-slate-200 flex items-center gap-1 cursor-pointer"
+              title="Opsi ekspor data lainnya"
+            >
+              <Download className="w-4 h-4" />
+              <ChevronDown className="w-3.5 h-3.5" />
+            </button>
+
+            {isExportDropdownOpen && (
+              <div 
+                className="absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-40 animate-fadeIn text-xs"
+                onMouseLeave={() => setIsExportDropdownOpen(false)}
+              >
+                <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  Pilih Format Unduhan
+                </div>
+                <button
+                  onClick={() => {
+                    setIsExportDropdownOpen(false);
+                    handleExportExcel();
+                  }}
+                  className="w-full px-3 py-2 text-left text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 flex items-center gap-2 cursor-pointer transition-colors"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                  <div>
+                    <div className="font-bold">Excel Workbook (.xlsx)</div>
+                    <div className="text-[10px] text-slate-500">Multi-sheet lengkap terformat</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsExportDropdownOpen(false);
+                    setIsPrintModalOpen(true);
+                  }}
+                  className="w-full px-3 py-2 text-left text-slate-700 hover:bg-indigo-50 hover:text-indigo-800 flex items-center gap-2 cursor-pointer transition-colors"
+                >
+                  <Printer className="w-4 h-4 text-indigo-600" />
+                  <div>
+                    <div className="font-bold">Cetak / Simpan PDF</div>
+                    <div className="text-[10px] text-slate-500">Kop resmi & lembar pengesahan</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsExportDropdownOpen(false);
+                    handleExportCSV();
+                  }}
+                  className="w-full px-3 py-2 text-left text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2 cursor-pointer transition-colors border-t border-slate-100"
+                >
+                  <Download className="w-4 h-4 text-slate-500" />
+                  <div>
+                    <div className="font-bold">CSV Ringkasan Data</div>
+                    <div className="text-[10px] text-slate-500">Kompatibilitas tabel biasa</div>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* 4 Summary Stat Cards */}
@@ -1587,6 +1688,18 @@ export const LaporanModule: React.FC<LaporanModuleProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Official Rekap PDF Preview & Print Modal */}
+      <OfficialRekapPrintModal
+        isOpen={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        students={allStudents}
+        teachers={allTeachers}
+        sarpras={allSarpras}
+        reports={allReports}
+        schoolProfile={schoolProfile}
+        displayConfig={displayConfig}
+      />
     </div>
   );
 };

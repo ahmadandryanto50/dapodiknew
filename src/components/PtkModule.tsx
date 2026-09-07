@@ -1,4 +1,5 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   GraduationCap, 
   Plus, 
@@ -65,6 +66,21 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
   const [importFileName, setImportFileName] = useState('');
   const [selectedPtkDetail, setSelectedPtkDetail] = useState<TeacherStaff | null>(null);
   const [openActionId, setOpenActionId] = useState<string | null>(null);
+  const [actionMenuPos, setActionMenuPos] = useState<{ top: number; right?: number; left?: number } | null>(null);
+
+  useEffect(() => {
+    if (!openActionId) return;
+    const handleClose = () => {
+      setOpenActionId(null);
+      setActionMenuPos(null);
+    };
+    window.addEventListener('scroll', handleClose, { capture: true, passive: true });
+    window.addEventListener('resize', handleClose, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', handleClose, { capture: true });
+      window.removeEventListener('resize', handleClose);
+    };
+  }, [openActionId]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -620,7 +636,31 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setOpenActionId(openActionId === t.id ? null : t.id);
+                            if (openActionId === t.id) {
+                              setOpenActionId(null);
+                              setActionMenuPos(null);
+                            } else {
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              const menuWidth = 215;
+                              let left: number | undefined = undefined;
+                              let right: number | undefined = undefined;
+
+                              if (rect.left < menuWidth + 24) {
+                                left = Math.max(12, rect.right - menuWidth);
+                              } else {
+                                right = window.innerWidth - rect.left + 8;
+                              }
+
+                              const estimatedHeight = 160;
+                              let top = rect.top + rect.height / 2 - (estimatedHeight / 2);
+                              const minTop = 64;
+                              const maxTop = window.innerHeight - estimatedHeight - 16;
+                              if (top < minTop) top = minTop;
+                              if (top > maxTop) top = Math.max(minTop, maxTop);
+
+                              setActionMenuPos({ top, right, left });
+                              setOpenActionId(t.id);
+                            }
                           }}
                           className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-xs cursor-pointer ${
                             openActionId === t.id
@@ -633,18 +673,24 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
                           <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${openActionId === t.id ? 'rotate-180 text-white' : 'text-slate-400'}`} />
                         </button>
 
-                        {openActionId === t.id && (
-                          <>
+                        {openActionId === t.id && actionMenuPos && createPortal(
+                          <div className="fixed inset-0 z-50 pointer-events-none">
                             {/* Invisible backdrop to close menu when clicking outside */}
                             <div 
-                              className="fixed inset-0 z-40 cursor-default" 
+                              className="fixed inset-0 z-40 cursor-default pointer-events-auto" 
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setOpenActionId(null);
+                                setActionMenuPos(null);
                               }} 
                             />
                             <div 
-                              className="absolute right-full top-1/2 -translate-y-1/2 mr-2 z-50 w-52 bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200/90 py-1.5 text-xs text-slate-700 divide-y divide-slate-100 ring-1 ring-black/5 animate-in fade-in slide-in-from-right-2 duration-150 max-h-80 overflow-y-auto"
+                              style={{
+                                top: `${actionMenuPos.top}px`,
+                                right: actionMenuPos.right !== undefined ? `${actionMenuPos.right}px` : undefined,
+                                left: actionMenuPos.left !== undefined ? `${actionMenuPos.left}px` : undefined,
+                              }}
+                              className="fixed z-50 w-52 bg-white/98 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200/90 py-1.5 text-xs text-slate-700 divide-y divide-slate-100 ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-150 overflow-y-auto max-h-[calc(100vh-80px)] pointer-events-auto"
                               onClick={(e) => e.stopPropagation()}
                             >
                               <div className="py-1">
@@ -652,6 +698,7 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
                                   type="button"
                                   onClick={() => {
                                     setOpenActionId(null);
+                                    setActionMenuPos(null);
                                     setSelectedPtkDetail(t);
                                   }}
                                   className="w-full text-left px-3.5 py-2 hover:bg-sky-50 text-slate-700 hover:text-sky-700 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
@@ -666,6 +713,7 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
                                   type="button"
                                   onClick={() => {
                                     setOpenActionId(null);
+                                    setActionMenuPos(null);
                                     handleOpenEdit(t);
                                   }}
                                   className="w-full text-left px-3.5 py-2 hover:bg-amber-50 text-slate-700 hover:text-amber-700 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
@@ -682,6 +730,7 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
                                   type="button"
                                   onClick={() => {
                                     setOpenActionId(null);
+                                    setActionMenuPos(null);
                                     handleDelete(t.id, t.nama);
                                   }}
                                   className="w-full text-left px-3.5 py-2 hover:bg-rose-50 text-rose-600 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
@@ -693,7 +742,8 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
                                 </button>
                               </div>
                             </div>
-                          </>
+                          </div>,
+                          document.body
                         )}
                       </div>
                     </td>

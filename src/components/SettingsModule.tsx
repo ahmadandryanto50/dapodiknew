@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { formatDateIndonesian } from '../utils/dateUtils';
 import { compressImage } from '../utils/imageCompressor';
 import { getNormalizedMisi } from '../utils/misiUtils';
@@ -110,6 +111,21 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
 
   const [revealedPasswords, setRevealedPasswords] = useState<Record<string, boolean>>({});
   const [openActionAdminId, setOpenActionAdminId] = useState<string | null>(null);
+  const [actionMenuAdminPos, setActionMenuAdminPos] = useState<{ top: number; right?: number; left?: number } | null>(null);
+
+  useEffect(() => {
+    if (!openActionAdminId) return;
+    const handleClose = () => {
+      setOpenActionAdminId(null);
+      setActionMenuAdminPos(null);
+    };
+    window.addEventListener('scroll', handleClose, { capture: true, passive: true });
+    window.addEventListener('resize', handleClose, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', handleClose, { capture: true });
+      window.removeEventListener('resize', handleClose);
+    };
+  }, [openActionAdminId]);
 
   // Form states initialized from props
   const [formData, setFormData] = useState<AppDisplayConfig>({
@@ -1228,7 +1244,31 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setOpenActionAdminId(isMenuOpen ? null : admin.id);
+                                  if (isMenuOpen) {
+                                    setOpenActionAdminId(null);
+                                    setActionMenuAdminPos(null);
+                                  } else {
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    const menuWidth = 240;
+                                    let left: number | undefined = undefined;
+                                    let right: number | undefined = undefined;
+
+                                    if (rect.left < menuWidth + 24) {
+                                      left = Math.max(12, rect.right - menuWidth);
+                                    } else {
+                                      right = window.innerWidth - rect.left + 8;
+                                    }
+
+                                    const estimatedHeight = 50;
+                                    let top = rect.top + rect.height / 2 - (estimatedHeight / 2);
+                                    const minTop = 64;
+                                    const maxTop = window.innerHeight - estimatedHeight - 16;
+                                    if (top < minTop) top = minTop;
+                                    if (top > maxTop) top = Math.max(minTop, maxTop);
+
+                                    setActionMenuAdminPos({ top, right, left });
+                                    setOpenActionAdminId(admin.id);
+                                  }
                                 }}
                                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-xs cursor-pointer ${
                                   isMenuOpen
@@ -1241,24 +1281,31 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                                 <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isMenuOpen ? 'rotate-180 text-white' : 'text-slate-400'}`} />
                               </button>
 
-                              {isMenuOpen && (
-                                <>
+                              {isMenuOpen && actionMenuAdminPos && createPortal(
+                                <div className="fixed inset-0 z-50 pointer-events-none">
                                   {/* Invisible backdrop to close menu when clicking outside */}
                                   <div 
-                                    className="fixed inset-0 z-40 cursor-default" 
+                                    className="fixed inset-0 z-40 cursor-default pointer-events-auto" 
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       setOpenActionAdminId(null);
+                                      setActionMenuAdminPos(null);
                                     }} 
                                   />
                                   <div 
-                                    className="absolute right-full top-1/2 -translate-y-1/2 mr-2 z-50 flex items-center gap-1.5 p-1.5 bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200/90 ring-1 ring-black/5 animate-in fade-in slide-in-from-right-2 duration-150 whitespace-nowrap text-xs font-medium text-slate-700"
+                                    style={{
+                                      top: `${actionMenuAdminPos.top}px`,
+                                      right: actionMenuAdminPos.right !== undefined ? `${actionMenuAdminPos.right}px` : undefined,
+                                      left: actionMenuAdminPos.left !== undefined ? `${actionMenuAdminPos.left}px` : undefined,
+                                    }}
+                                    className="fixed z-50 flex items-center gap-1.5 p-1.5 bg-white/98 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200/90 ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-150 whitespace-nowrap text-xs font-medium text-slate-700 pointer-events-auto"
                                     onClick={(e) => e.stopPropagation()}
                                   >
                                     <button
                                       type="button"
                                       onClick={() => {
                                         setOpenActionAdminId(null);
+                                        setActionMenuAdminPos(null);
                                         setEditingAdmin(admin);
                                         setAdminFormData({ ...admin });
                                         setIsAddAdminOpen(true);
@@ -1276,6 +1323,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                                       type="button"
                                       onClick={() => {
                                         setOpenActionAdminId(null);
+                                        setActionMenuAdminPos(null);
                                         const isCurrentlyActive = admin.status === 'Aktif';
                                         const newStatus = isCurrentlyActive ? 'Nonaktif' : 'Aktif';
                                         const updated = adminList.map((a) =>
@@ -1310,6 +1358,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                                         type="button"
                                         onClick={() => {
                                           setOpenActionAdminId(null);
+                                          setActionMenuAdminPos(null);
                                           if (confirm(`Apakah Anda yakin ingin menghapus akun "${admin.nama}" (${admin.username})? Data di aplikasi dan Database Cloud akan dihapus.`)) {
                                             const updated = adminList.filter((a) => a.id !== admin.id && a.username.toLowerCase() !== admin.username.toLowerCase());
                                             setAdminList(updated);
@@ -1338,7 +1387,8 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                                       </button>
                                     )}
                                   </div>
-                                </>
+                                </div>,
+                                document.body
                               )}
                             </div>
                           </td>

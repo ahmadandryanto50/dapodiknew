@@ -2592,6 +2592,8 @@ export default function App() {
               sarpras={sarpras}
               reports={reports}
               onBackToHome={() => setActiveTab('home')}
+              schoolProfile={schoolProfile}
+              displayConfig={displayConfig}
             />
           </div>
         )}

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { StudentReport, Student, SubjectScore } from '../types';
 import { exportToCSV } from '../services/googleSheetsService';
+import { printElement } from '../utils/printHelper';
 
 interface RaporModuleProps {
   reports: StudentReport[];
@@ -404,7 +405,10 @@ export const RaporModule: React.FC<RaporModuleProps> = ({
       {/* Official Printed Report Modal */}
       {selectedReportForPrint && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white text-slate-900 rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl p-8 space-y-6">
+          <div 
+            id="printable-rapor-content"
+            className="bg-white text-slate-900 rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl p-8 space-y-6"
+          >
             <div className="flex items-center justify-between border-b pb-4 border-slate-200">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center text-white font-extrabold text-xl">
@@ -421,7 +425,7 @@ export const RaporModule: React.FC<RaporModuleProps> = ({
               </div>
               <button
                 onClick={() => setSelectedReportForPrint(null)}
-                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100"
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100 no-print cursor-pointer"
               >
                 <X className="w-6 h-6" />
               </button>
@@ -484,10 +488,10 @@ export const RaporModule: React.FC<RaporModuleProps> = ({
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 no-print">
               <button
-                onClick={() => window.print()}
-                className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-2 shadow-sm"
+                onClick={() => printElement('printable-rapor-content', `Rapor - ${selectedReportForPrint.studentName}`)}
+                className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-2 shadow-sm cursor-pointer"
               >
                 <Printer className="w-4 h-4" />
                 <span>Cetak / Simpan PDF</span>

@@ -99,3 +99,83 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Official Print & PDF Export Styles */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm 12mm 15mm 12mm;
+  }
+
+  body {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    font-size: 11pt !important;
+    line-height: 1.3 !important;
+  }
+
+  /* Hide navigation, buttons, modals backdrops, and interactive controls when printing */
+  header,
+  nav,
+  aside,
+  button,
+  .no-print,
+  .no-print * {
+    display: none !important;
+  }
+
+  /* When printing document modal, show only the print container */
+  body.printing-rekap * {
+    visibility: hidden;
+  }
+
+  body.printing-rekap #printable-rekap-document,
+  body.printing-rekap #printable-rekap-document *,
+  body.printing-rekap #printable-rapor-content,
+  body.printing-rekap #printable-rapor-content * {
+    visibility: visible;
+  }
+
+  body.printing-rekap #printable-rekap-document,
+  body.printing-rekap #printable-rapor-content {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  .page-break-avoid {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .page-break-before {
+    page-break-before: always !important;
+    break-before: page !important;
+  }
+
+  table {
+    page-break-inside: auto;
+    border-collapse: collapse !important;
+    width: 100% !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    page-break-after: auto;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tfoot {
+    display: table-footer-group;
+  }
+}
+
