@@ -425,7 +425,7 @@ function checkAndInitializeSheets(ss) {
 }
 `;
 
-async function callProxyOrDirectPost(webAppUrl: string, payload: any): Promise<{ success: boolean; message: string }> {
+async function callProxyOrDirectPost(webAppUrl: string, payload: any): Promise<{ success: boolean; message: string; data?: any }> {
   // 1. Try server-side proxy endpoint first (bypasses browser CORS & mobile browser restrictions)
   try {
     const proxyRes = await fetch('/api/sync-sheets', {
@@ -438,7 +438,8 @@ async function callProxyOrDirectPost(webAppUrl: string, payload: any): Promise<{
       if (json && json.success) {
         return {
           success: true,
-          message: 'Data berhasil dikirim & disinkronkan ke Database Spreadsheet!'
+          message: 'Data berhasil dikirim & disinkronkan ke Database Spreadsheet!',
+          data: json.data
         };
       }
     }
@@ -463,12 +464,14 @@ async function callProxyOrDirectPost(webAppUrl: string, payload: any): Promise<{
         if (resJson && resJson.status === 'success') {
           return {
             success: true,
-            message: resJson.message || 'Data berhasil dikirim & disinkronkan ke Database!'
+            message: resJson.message || 'Data berhasil dikirim & disinkronkan ke Database!',
+            data: resJson
           };
         } else if (resJson && resJson.status === 'error') {
           return {
             success: false,
-            message: 'Respons Database Error: ' + (resJson.message || 'Gagal memproses data.')
+            message: 'Respons Database Error: ' + (resJson.message || 'Gagal memproses data.'),
+            data: resJson
           };
         }
       } catch (parseError) {
