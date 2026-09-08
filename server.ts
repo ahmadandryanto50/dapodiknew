@@ -51,11 +51,19 @@ async function startServer() {
       if (!webAppUrl) {
         return res.status(400).json({ success: false, message: "webAppUrl is required" });
       }
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
+      
       const response = await fetch(webAppUrl, {
         method: "POST",
         headers: { "Content-Type": "text/plain" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        redirect: "follow",
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
+
       const text = await response.text();
       let data: any = {};
       try {
@@ -64,9 +72,9 @@ async function startServer() {
         data = { text };
       }
       return res.json({ success: true, data });
-    } catch (err) {
-      console.error("Error proxying to Google Sheets in /api/sync-sheets:", err);
-      return res.status(500).json({ success: false, message: (err as Error).message });
+    } catch (err: any) {
+      console.warn("Proxying to Google Sheets warning in /api/sync-sheets:", err?.message || err);
+      return res.json({ success: false, message: err?.message || "Gagal menghubungi endpoint Google Sheets" });
     }
   });
 
@@ -77,12 +85,56 @@ async function startServer() {
       if (!webAppUrl) {
         return res.status(400).json({ success: false, message: "webAppUrl is required" });
       }
-      const response = await fetch(webAppUrl);
-      const data = await response.json();
-      return res.json(data);
-    } catch (err) {
-      console.error("Error proxying from Google Sheets in /api/load-sheets:", err);
-      return res.status(500).json({ success: false, message: (err as Error).message });
+
+      let data: any = null;
+
+      // 1. Try GET first with 8s timeout
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        const response = await fetch(webAppUrl, {
+          redirect: "follow",
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        const text = await response.text();
+        try {
+          data = JSON.parse(text);
+        } catch (e) {}
+      } catch (getErr) {
+        // GET failed or timed out, attempt server-side POST fallback
+      }
+
+      // 2. If GET did not return valid status === 'success', try POST fallback on server
+      if (!data || data.status !== 'success') {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 8000);
+          const postRes = await fetch(webAppUrl, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain" },
+            body: JSON.stringify({ type: "LOAD_ALL" }),
+            redirect: "follow",
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+          const postText = await postRes.text();
+          data = JSON.parse(postText);
+        } catch (postErr) {}
+      }
+
+      if (data && data.status === 'success') {
+        return res.json(data);
+      } else {
+        return res.json({
+          status: 'error',
+          message: data?.message || 'Tidak dapat memuat data dari Spreadsheet saat ini.'
+        });
+      }
+    } catch (err: any) {
+      console.warn("Proxying from Google Sheets warning in /api/load-sheets:", err?.message || err);
+      return res.json({ status: 'error', message: err?.message || 'Gagal memuat data dari Google Sheets' });
     }
   });
 

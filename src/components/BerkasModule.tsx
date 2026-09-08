@@ -36,10 +36,20 @@ import {
   Building,
   Layers,
   FileCode,
-  Tag
+  Tag,
+  LogIn,
+  LogOut,
+  AlertCircle
 } from 'lucide-react';
 import { SchoolFileItem, FileAccessRequest, AdminUser } from '../types';
 import { GOOGLE_DRIVE_MAIN_FOLDER_URL, GOOGLE_DRIVE_FOLDER_ID, initialSchoolFiles, initialAccessRequests } from '../data/mockFiles';
+import {
+  subscribeGoogleDriveAuth,
+  signInWithGoogleDrive,
+  signOutGoogleDrive,
+  uploadFileToGoogleDrive,
+  isGoogleDriveConnected
+} from '../services/googleDriveService';
 
 interface BerkasModuleProps {
   currentUser: AdminUser | null;
@@ -74,6 +84,46 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
     }
     return initialAccessRequests;
   });
+
+  // Google Drive Real Auth State
+  const [driveUser, setDriveUser] = useState<any>(null);
+  const [isDriveLinked, setIsDriveLinked] = useState<boolean>(false);
+  const [isConnectingDrive, setIsConnectingDrive] = useState<boolean>(false);
+  const [currentUploadingFileName, setCurrentUploadingFileName] = useState<string>('');
+  const [driveConnectError, setDriveConnectError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = subscribeGoogleDriveAuth((user, token) => {
+      setDriveUser(user);
+      setIsDriveLinked(!!user && !!token);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleConnectDrive = async () => {
+    setIsConnectingDrive(true);
+    setDriveConnectError(null);
+    try {
+      const result = await signInWithGoogleDrive();
+      setSyncFeedback(`Akun Google Drive (${result.user.email}) berhasil terhubung!`);
+      setTimeout(() => setSyncFeedback(null), 4000);
+    } catch (err: any) {
+      console.error('Drive connection error:', err);
+      setDriveConnectError(err?.message || 'Gagal menghubungkan Google Drive. Pastikan jendela popup diizinkan oleh browser.');
+    } finally {
+      setIsConnectingDrive(false);
+    }
+  };
+
+  const handleDisconnectDrive = async () => {
+    try {
+      await signOutGoogleDrive();
+      setSyncFeedback('Koneksi Google Drive telah diputuskan.');
+      setTimeout(() => setSyncFeedback(null), 3500);
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   // Save changes to localStorage
   useEffect(() => {
@@ -114,6 +164,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
 
   // Upload Form State
+  const [folderChoiceMode, setFolderChoiceMode] = useState<'category' | 'custom'>('category');
   const [uploadCategory, setUploadCategory] = useState<string>('Kurikulum & Pembelajaran');
   const [customFolder, setCustomFolder] = useState<string>('');
   const [uploadPrivacy, setUploadPrivacy] = useState<'Restricted' | 'Guru Only' | 'Public'>('Restricted');
@@ -130,7 +181,16 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
   const [requestReason, setRequestReason] = useState<string>('');
   const [requestSuccessMsg, setRequestSuccessMsg] = useState<string | null>(null);
 
-  const isAdmin = currentUser?.role === 'Administrator';
+  // Delete Confirmation States
+  const [deletingFile, setDeletingFile] = useState<SchoolFileItem | null>(null);
+  const [deletingRequest, setDeletingRequest] = useState<FileAccessRequest | null>(null);
+
+  const isAdmin =
+    !currentUser ||
+    currentUser?.role === 'Administrator' ||
+    currentUser?.role === 'Operator' ||
+    currentUser?.username === 'admin' ||
+    (typeof currentUser?.role === 'string' && currentUser.role.toLowerCase().includes('admin'));
   const isOperator = currentUser?.role === 'Operator';
 
   // Extract all categories
@@ -173,6 +233,32 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
     return userReq ? userReq.status : 'none';
   };
 
+  // Check if current user has access to Google Drive Main Folder
+  const hasDriveMainFolderAccess = (): boolean => {
+    if (isAdmin) return true;
+    const currentUserName = (currentUser?.nama || currentUser?.username || '').toLowerCase();
+    const currentUserEmail = (currentUser?.email || '').toLowerCase();
+    return accessRequests.some(
+      req => req.fileId === 'gdrive-main-folder' &&
+             req.status === 'approved' &&
+             ((currentUserName && req.requesterName.toLowerCase() === currentUserName) ||
+              (currentUserEmail && req.requesterEmail.toLowerCase() === currentUserEmail))
+    );
+  };
+
+  // Get request status specifically for Google Drive Main Folder
+  const getDriveMainFolderRequestStatus = (): 'none' | 'pending' | 'approved' | 'rejected' => {
+    if (isAdmin) return 'approved';
+    const currentUserName = (currentUser?.nama || currentUser?.username || '').toLowerCase();
+    const currentUserEmail = (currentUser?.email || '').toLowerCase();
+    const matchingReq = accessRequests.find(
+      req => req.fileId === 'gdrive-main-folder' &&
+             ((currentUserName && req.requesterName.toLowerCase() === currentUserName) ||
+              (currentUserEmail && req.requesterEmail.toLowerCase() === currentUserEmail))
+    );
+    return matchingReq ? matchingReq.status : 'none';
+  };
+
   // Filtered files
   const filteredFiles = files.filter(f => {
     const matchCategory = selectedCategory === 'ALL' || f.category === selectedCategory;
@@ -187,6 +273,61 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
     return matchCategory && matchPrivacy && matchSearch;
   });
 
+  const [syncingFileId, setSyncingFileId] = useState<string | null>(null);
+
+  // Handle Single File Sync to Google Drive
+  const handleSyncSingleFileToDrive = async (file: SchoolFileItem) => {
+    setSyncingFileId(file.id);
+    setDriveConnectError(null);
+    try {
+      if (!isGoogleDriveConnected()) {
+        const authRes = await signInWithGoogleDrive();
+        setIsDriveLinked(true);
+        setDriveUser(authRes.user);
+      }
+
+      let fileBlob: Blob;
+      if (file.dataUrl && file.dataUrl.startsWith('data:')) {
+        const res = await fetch(file.dataUrl);
+        fileBlob = await res.blob();
+      } else {
+        fileBlob = new Blob([`Dokumen ${file.name} - Dapodik Sekolah`], { type: file.fileType || 'text/plain' });
+      }
+
+      const fileObj = new File([fileBlob], file.name, { type: file.fileType || 'application/octet-stream' });
+      const driveResult = await uploadFileToGoogleDrive(fileObj, {
+        category: file.category,
+        customFolderName: file.category,
+        description: file.description || `Berkas ${file.name}`,
+        parentFolderId: GOOGLE_DRIVE_FOLDER_ID
+      });
+
+      setFiles(prev =>
+        prev.map(f => {
+          if (f.id === file.id) {
+            return {
+              ...f,
+              id: driveResult.id,
+              driveFileUrl: driveResult.webViewLink,
+              driveFolderId: driveResult.folderId || GOOGLE_DRIVE_FOLDER_ID,
+              tags: Array.from(new Set([...(f.tags || []).filter(t => t !== 'Lokal'), 'GoogleDrive']))
+            };
+          }
+          return f;
+        })
+      );
+
+      const targetFolderMsg = driveResult.folderName ? ` ke folder "${driveResult.folderName}"` : '';
+      setSyncFeedback(`Berkas "${file.name}" berhasil diunggah langsung${targetFolderMsg} di Google Drive Anda!`);
+      setTimeout(() => setSyncFeedback(null), 5000);
+    } catch (err: any) {
+      console.error('Error syncing file to drive:', err);
+      setDriveConnectError(`Gagal upload "${file.name}" ke Google Drive: ${err?.message || err}`);
+    } finally {
+      setSyncingFileId(null);
+    }
+  };
+
   // Handle Multi-Upload
   const handleFileSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -199,68 +340,153 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
     setSelectedUploadFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleExecuteUpload = () => {
+  const handleExecuteUpload = async () => {
     if (selectedUploadFiles.length === 0) return;
 
     setIsUploading(true);
-    setUploadProgress(15);
+    setUploadProgress(5);
+    setDriveConnectError(null);
 
-    const targetCategory = customFolder.trim() ? customFolder.trim() : uploadCategory;
+    // If folderChoiceMode is 'custom' and customFolder is provided, use customFolder
+    // Otherwise use uploadCategory
+    const targetCategory = folderChoiceMode === 'custom'
+      ? (customFolder.trim() || 'Folder Baru')
+      : (customFolder.trim() && folderChoiceMode === 'custom' ? customFolder.trim() : uploadCategory);
 
-    // Simulate upload progression
-    const interval = setInterval(() => {
-      setUploadProgress(prev => {
-        if (prev >= 90) {
-          clearInterval(interval);
-          return 95;
+    const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 16);
+    const newItems: SchoolFileItem[] = [];
+
+    // Check / prompt Google Drive connection
+    let isConnected = isGoogleDriveConnected();
+    if (!isConnected) {
+      try {
+        const authRes = await signInWithGoogleDrive();
+        if (authRes?.accessToken) {
+          isConnected = true;
+          setIsDriveLinked(true);
+          setDriveUser(authRes.user);
         }
-        return prev + 25;
-      });
-    }, 250);
+      } catch (authErr: any) {
+        console.warn('Google Drive auth was not completed before upload:', authErr);
+      }
+    }
 
-    setTimeout(() => {
-      clearInterval(interval);
-      setUploadProgress(100);
+    const total = selectedUploadFiles.length;
+    let successCount = 0;
+    let failedCount = 0;
+    let lastError = '';
 
-      const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 16);
-      const newItems: SchoolFileItem[] = selectedUploadFiles.map((file, idx) => {
-        const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
-        return {
-          id: `file-up-${Date.now()}-${idx}`,
-          name: file.name,
+    for (let i = 0; i < total; i++) {
+      const file = selectedUploadFiles[i];
+      setCurrentUploadingFileName(file.name);
+      setUploadProgress(Math.round(((i + 0.3) / total) * 90));
+
+      let driveResult: any = null;
+      try {
+        driveResult = await uploadFileToGoogleDrive(file, {
           category: targetCategory,
-          fileSize: file.size,
-          fileType: file.type || 'application/octet-stream',
-          fileExtension: ext,
-          uploadedAt: nowStr,
-          uploadedBy: currentUser?.nama || 'Administrator Sekolah',
-          uploadedByRole: currentUser?.role || 'Administrator',
-          driveFolderId: GOOGLE_DRIVE_FOLDER_ID,
-          driveFileUrl: GOOGLE_DRIVE_MAIN_FOLDER_URL,
-          privacy: uploadPrivacy,
-          description: uploadDescription || `Berkas resmi diunggah ke repositori ${targetCategory}.`,
-          tags: [ext.toUpperCase(), targetCategory.split(' ')[0], 'GoogleDrive'],
-          allowedUserIds: ['admin'],
-          allowedRoles: uploadPrivacy === 'Public' ? ['*'] : uploadPrivacy === 'Guru Only' ? ['Administrator', 'Guru', 'Operator'] : ['Administrator']
-        };
-      });
+          customFolderName: targetCategory,
+          description: uploadDescription || `Berkas resmi ${targetCategory} diunggah via Dapodik.`,
+          parentFolderId: GOOGLE_DRIVE_FOLDER_ID
+        });
+        if (driveResult && driveResult.id) {
+          successCount++;
+        }
+      } catch (uploadErr: any) {
+        failedCount++;
+        lastError = uploadErr?.message || 'Gagal mengunggah ke Google Drive';
+        console.error('Google Drive direct upload error for file:', file.name, uploadErr);
+      }
 
-      setFiles(prev => [...newItems, ...prev]);
-      setIsUploading(false);
-      setIsUploadModalOpen(false);
-      setSelectedUploadFiles([]);
-      setUploadDescription('');
-      setCustomFolder('');
-      setUploadProgress(0);
-      setSyncFeedback(`Berhasil mengunggah ${newItems.length} berkas baru & tersimpan di Google Drive!`);
-      setTimeout(() => setSyncFeedback(null), 4000);
-    }, 1200);
+      // Read local base64 for instant in-app preview
+      let dataUrl: string | undefined = undefined;
+      try {
+        dataUrl = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => resolve('');
+          reader.readAsDataURL(file);
+        });
+      } catch (e) {
+        // ignore
+      }
+
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
+
+      const fileItem: SchoolFileItem = {
+        id: driveResult?.id || `file-up-${Date.now()}-${i}`,
+        name: file.name,
+        category: targetCategory,
+        fileSize: file.size,
+        fileType: file.type || 'application/octet-stream',
+        fileExtension: ext,
+        uploadedAt: nowStr,
+        uploadedBy: currentUser?.nama || driveUser?.displayName || driveUser?.email || 'Administrator Sekolah',
+        uploadedByRole: currentUser?.role || 'Administrator',
+        driveFolderId: driveResult?.folderId || GOOGLE_DRIVE_FOLDER_ID,
+        driveFileUrl: driveResult?.webViewLink || (driveResult?.id ? `https://drive.google.com/file/d/${driveResult.id}/view` : GOOGLE_DRIVE_MAIN_FOLDER_URL),
+        dataUrl: dataUrl,
+        privacy: uploadPrivacy,
+        description: uploadDescription || `Berkas resmi diunggah ke repositori ${targetCategory}.`,
+        tags: [ext.toUpperCase(), targetCategory.split(' ')[0], driveResult ? 'GoogleDrive' : 'Lokal'],
+        allowedUserIds: ['admin'],
+        allowedRoles: uploadPrivacy === 'Public' ? ['*'] : uploadPrivacy === 'Guru Only' ? ['Administrator', 'Guru', 'Operator'] : ['Administrator']
+      };
+
+      newItems.push(fileItem);
+      setUploadProgress(Math.round(((i + 1) / total) * 100));
+    }
+
+    setFiles(prev => [...newItems, ...prev]);
+    setIsUploading(false);
+    setIsUploadModalOpen(false);
+    setSelectedUploadFiles([]);
+    setUploadDescription('');
+    setCustomFolder('');
+    setFolderChoiceMode('category');
+    setUploadProgress(0);
+    setCurrentUploadingFileName('');
+
+    if (successCount > 0 && failedCount === 0) {
+      setSyncFeedback(`Sukses! ${successCount} berkas berhasil diunggah dan tersimpan ke folder "${targetCategory}" di Google Drive!`);
+    } else if (successCount > 0 && failedCount > 0) {
+      setSyncFeedback(`${successCount} berkas berhasil disimpan di folder "${targetCategory}" Google Drive, ${failedCount} tersimpan lokal (${lastError}).`);
+    } else if (failedCount > 0) {
+      setDriveConnectError(`Berkas tersimpan lokal. Gagal upload ke Google Drive: ${lastError}. Silakan klik "Hubungkan Akun Google" dan klik tombol "Ke Drive" pada berkas.`);
+    } else {
+      setSyncFeedback(`Berhasil mengunggah ${newItems.length} berkas ke repositori sekolah (${targetCategory}).`);
+    }
+    setTimeout(() => setSyncFeedback(null), 6000);
   };
 
   // Handle Request Access Submission
   const handleOpenRequestModal = (file: SchoolFileItem) => {
     setSelectedFileForRequest(file);
-    setRequestName(currentUser?.nama || '');
+    setRequestName(currentUser?.nama || currentUser?.username || '');
+    setRequestRole(currentUser?.role || 'Guru Mata Pelajaran');
+    setRequestEmail(currentUser?.email || '');
+    setRequestReason('');
+    setRequestSuccessMsg(null);
+    setIsRequestModalOpen(true);
+  };
+
+  // Handle Request Access specifically for Google Drive Main Folder
+  const handleOpenDriveFolderRequest = () => {
+    const driveFolderItem: SchoolFileItem = {
+      id: 'gdrive-main-folder',
+      name: 'Folder Google Drive Utama Sekolah (Repository Cloud)',
+      category: 'Google Drive Repository',
+      fileSize: 0,
+      uploadedBy: 'Administrator',
+      uploadedByRole: 'Administrator',
+      uploadedAt: 'Penyimpanan Pusat Cloud',
+      privacy: 'Restricted',
+      fileExtension: 'gdrive',
+      fileType: 'folder',
+      tags: ['GoogleDrive', 'RootFolder']
+    };
+    setSelectedFileForRequest(driveFolderItem);
+    setRequestName(currentUser?.nama || currentUser?.username || '');
     setRequestRole(currentUser?.role || 'Guru Mata Pelajaran');
     setRequestEmail(currentUser?.email || '');
     setRequestReason('');
@@ -327,21 +553,103 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
     );
   };
 
-  const handleDeleteFile = (fileId: string) => {
+  const handleDeleteFile = (fileOrId: SchoolFileItem | string) => {
     if (!isAdmin) return;
-    if (confirm('Apakah Anda yakin ingin menghapus berkas ini dari repositori?')) {
-      setFiles(prev => prev.filter(f => f.id !== fileId));
+    const target = typeof fileOrId === 'string' ? files.find(f => f.id === fileOrId) : fileOrId;
+    if (target) {
+      setDeletingFile(target);
     }
   };
 
-  // Sync to Google Drive Simulation
-  const handleSyncToDrive = () => {
+  const confirmDeleteFile = () => {
+    if (!deletingFile) return;
+    const targetFile = deletingFile;
+    setFiles(prev => prev.filter(f => f.id !== targetFile.id));
+    setAccessRequests(prev => prev.filter(r => r.fileId !== targetFile.id));
+    if (previewFile?.id === targetFile.id) {
+      setPreviewFile(null);
+    }
+    setDeletingFile(null);
+    setSyncFeedback(`Berkas "${targetFile.name}" berhasil dihapus dari repositori sekolah.`);
+    setTimeout(() => setSyncFeedback(null), 4000);
+  };
+
+  const confirmDeleteRequest = () => {
+    if (!deletingRequest) return;
+    const targetReq = deletingRequest;
+    setAccessRequests(prev => prev.filter(r => r.id !== targetReq.id));
+    setDeletingRequest(null);
+    setSyncFeedback(`Riwayat permintaan izin akses berkas "${targetReq.fileName}" berhasil dihapus.`);
+    setTimeout(() => setSyncFeedback(null), 4000);
+  };
+
+  // Sync to Google Drive
+  const handleSyncToDrive = async () => {
     setIsSyncing(true);
-    setTimeout(() => {
+    setDriveConnectError(null);
+    try {
+      if (!isGoogleDriveConnected()) {
+        const authRes = await signInWithGoogleDrive();
+        setIsDriveLinked(true);
+        setDriveUser(authRes.user);
+      }
+
+      const localFiles = files.filter(f => !f.tags?.includes('GoogleDrive') || f.tags?.includes('Lokal'));
+      if (localFiles.length === 0) {
+        setSyncFeedback('Semua berkas di repositori sudah tersinkron rapi di Google Drive!');
+        setTimeout(() => setSyncFeedback(null), 4000);
+        setIsSyncing(false);
+        return;
+      }
+
+      let syncedCount = 0;
+      for (const file of localFiles) {
+        try {
+          let fileBlob: Blob;
+          if (file.dataUrl && file.dataUrl.startsWith('data:')) {
+            const res = await fetch(file.dataUrl);
+            fileBlob = await res.blob();
+          } else {
+            fileBlob = new Blob([`Dokumen ${file.name} - Dapodik Sekolah`], { type: file.fileType || 'text/plain' });
+          }
+          const fileObj = new File([fileBlob], file.name, { type: file.fileType || 'application/octet-stream' });
+          const driveResult = await uploadFileToGoogleDrive(fileObj, {
+            category: file.category,
+            customFolderName: file.category,
+            description: file.description || `Berkas ${file.name}`,
+            parentFolderId: GOOGLE_DRIVE_FOLDER_ID
+          });
+
+          if (driveResult && driveResult.id) {
+            syncedCount++;
+            setFiles(prev =>
+              prev.map(f => {
+                if (f.id === file.id) {
+                  return {
+                    ...f,
+                    id: driveResult.id,
+                    driveFileUrl: driveResult.webViewLink,
+                    driveFolderId: driveResult.folderId || GOOGLE_DRIVE_FOLDER_ID,
+                    tags: Array.from(new Set([...(f.tags || []).filter(t => t !== 'Lokal'), 'GoogleDrive']))
+                  };
+                }
+                return f;
+              })
+            );
+          }
+        } catch (syncErr) {
+          console.error('Error syncing individual file:', file.name, syncErr);
+        }
+      }
+
+      setSyncFeedback(`Sinkronisasi selesai! ${syncedCount} dari ${localFiles.length} berkas berhasil tersimpan ke folder masing-masing di Google Drive.`);
+      setTimeout(() => setSyncFeedback(null), 5000);
+    } catch (err: any) {
+      console.error('Sync error:', err);
+      setDriveConnectError(`Gagal sinkronisasi ke Google Drive: ${err?.message || err}`);
+    } finally {
       setIsSyncing(false);
-      setSyncFeedback('Semua berkas berhasil disinkronkan dengan folder Google Drive!');
-      setTimeout(() => setSyncFeedback(null), 3500);
-    }, 1500);
+    }
   };
 
   // File Icon Helper
@@ -376,8 +684,11 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
           <div className="space-y-3 max-w-2xl">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-xs font-semibold text-amber-300">
               <HardDrive className="w-3.5 h-3.5" />
-              <span>Google Drive Cloud Repository</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Google Drive Cloud Storage</span>
+              <span className={`w-2 h-2 rounded-full ${isDriveLinked ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+              <span className="text-[11px] text-sky-100 font-normal">
+                {isDriveLinked ? `Terhubung (${driveUser?.email || 'Akun Google'})` : 'Belum Terhubung'}
+              </span>
             </div>
 
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-3">
@@ -386,21 +697,95 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
             </h1>
 
             <p className="text-sky-100 text-xs sm:text-sm leading-relaxed">
-              Penyimpanan terpusat dokumen resmi sekolah, SK PTK, Kurikulum KOSP, berkas kesiswaan, dan sertifikat. Terhubung langsung secara otomatis dengan folder Google Drive satuan pendidikan.
+              Penyimpanan terpusat dokumen resmi sekolah, SK PTK, Kurikulum KOSP, berkas kesiswaan, dan sertifikat. Terhubung langsung secara otomatis dengan Google Drive satuan pendidikan.
             </p>
 
-            {/* Google Drive Link Indicator */}
+            {/* Google Drive Link Indicator & Auth */}
             <div className="flex flex-wrap items-center gap-2.5 pt-1 text-xs">
-              <a
-                href={GOOGLE_DRIVE_MAIN_FOLDER_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 border border-white/30 text-white font-semibold transition-all hover:scale-[1.02] cursor-pointer"
-              >
-                <Folder className="w-4 h-4 text-amber-300" />
-                <span>Buka Folder Google Drive Utama</span>
-                <ExternalLink className="w-3.5 h-3.5 opacity-80" />
-              </a>
+              {/* Button: Buka Folder Google Drive Utama with Role / Approval gating */}
+              {hasDriveMainFolderAccess() ? (
+                <a
+                  href={GOOGLE_DRIVE_MAIN_FOLDER_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 border border-white/30 text-white font-semibold transition-all hover:scale-[1.02] cursor-pointer"
+                  title="Buka Folder Google Drive Utama Sekolah"
+                >
+                  <Folder className="w-4 h-4 text-amber-300" />
+                  <span>Buka Folder Google Drive Utama</span>
+                  <ExternalLink className="w-3.5 h-3.5 opacity-80" />
+                </a>
+              ) : getDriveMainFolderRequestStatus() === 'pending' ? (
+                <button
+                  type="button"
+                  onClick={handleOpenDriveFolderRequest}
+                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-amber-400/20 hover:bg-amber-400/30 border border-amber-300/40 text-amber-100 font-semibold transition-all hover:scale-[1.02] cursor-pointer"
+                  title="Permintaan akses Folder Google Drive Utama sedang menunggu persetujuan Administrator"
+                >
+                  <FolderLock className="w-4 h-4 text-amber-300" />
+                  <span>Buka Folder Google Drive Utama</span>
+                  <span className="px-2 py-0.5 rounded-md bg-amber-500/30 text-amber-200 text-[10px] font-bold border border-amber-400/30 flex items-center gap-1">
+                    <Clock className="w-3 h-3 text-amber-300" />
+                    <span>Menunggu Izin Admin</span>
+                  </span>
+                </button>
+              ) : getDriveMainFolderRequestStatus() === 'rejected' ? (
+                <button
+                  type="button"
+                  onClick={handleOpenDriveFolderRequest}
+                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-300/40 text-rose-100 font-semibold transition-all hover:scale-[1.02] cursor-pointer"
+                  title="Permintaan ditolak. Klik untuk mengajukan ulang izin akses ke Administrator"
+                >
+                  <FolderLock className="w-4 h-4 text-rose-300" />
+                  <span>Buka Folder Google Drive Utama</span>
+                  <span className="px-2 py-0.5 rounded-md bg-rose-500/30 text-rose-200 text-[10px] font-bold border border-rose-400/30 flex items-center gap-1">
+                    <RefreshCw className="w-3 h-3 text-rose-300" />
+                    <span>Minta Ulang Izin</span>
+                  </span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleOpenDriveFolderRequest}
+                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 border border-white/30 text-white font-semibold transition-all hover:scale-[1.02] cursor-pointer"
+                  title="Akses Folder Google Drive Utama terproteksi khusus Administrator. Klik untuk meminta izin akses ke Administrator"
+                >
+                  <FolderLock className="w-4 h-4 text-amber-300" />
+                  <span>Buka Folder Google Drive Utama</span>
+                  <span className="px-2 py-0.5 rounded-md bg-amber-400/25 text-amber-200 text-[10px] font-bold border border-amber-400/30 flex items-center gap-1">
+                    <Key className="w-3 h-3 text-amber-300" />
+                    <span>Minta Izin Admin</span>
+                  </span>
+                </button>
+              )}
+
+              {isDriveLinked ? (
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-950/60 border border-emerald-400/40 text-[11px] text-emerald-200">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="font-medium">Otorisasi Aktif: {driveUser?.email}</span>
+                  <button
+                    onClick={handleDisconnectDrive}
+                    className="ml-1 text-emerald-300 hover:text-white underline cursor-pointer text-[10px]"
+                    title="Putuskan Akun"
+                  >
+                    Ganti
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={handleConnectDrive}
+                  disabled={isConnectingDrive}
+                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white text-slate-900 font-bold hover:bg-sky-50 border border-white/40 shadow-sm transition-all hover:scale-[1.02] cursor-pointer"
+                >
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                  </svg>
+                  <span>{isConnectingDrive ? 'Menghubungkan...' : 'Hubungkan Akun Google'}</span>
+                </button>
+              )}
 
               <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-950/40 border border-white/10 text-[11px] text-sky-200">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
@@ -439,6 +824,13 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
           <div className="mt-4 p-3 rounded-xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 text-xs font-semibold flex items-center gap-2 animate-fade-in">
             <CheckCircle2 className="w-4 h-4 text-emerald-300 shrink-0" />
             <span>{syncFeedback}</span>
+          </div>
+        )}
+
+        {driveConnectError && (
+          <div className="mt-3 p-3 rounded-xl bg-rose-500/20 border border-rose-400/40 text-rose-200 text-xs font-semibold flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-300 shrink-0" />
+            <span>{driveConnectError}</span>
           </div>
         )}
       </div>
@@ -678,6 +1070,17 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
                       <div className="flex items-center gap-1.5 shrink-0">
                         {canAccess ? (
                           <>
+                            {(!file.tags?.includes('GoogleDrive') || file.tags?.includes('Lokal')) && (
+                              <button
+                                onClick={() => handleSyncSingleFileToDrive(file)}
+                                disabled={syncingFileId === file.id}
+                                className="px-2 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-[10px] flex items-center gap-1 transition-colors cursor-pointer"
+                                title="Unggah / Sinkronkan ke Google Drive"
+                              >
+                                <RefreshCw className={`w-3 h-3 text-amber-700 ${syncingFileId === file.id ? 'animate-spin' : ''}`} />
+                                <span>{syncingFileId === file.id ? 'Mengunggah...' : 'Ke Drive'}</span>
+                              </button>
+                            )}
                             <button
                               onClick={() => setPreviewFile(file)}
                               className="px-2.5 py-1.5 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 font-bold flex items-center gap-1 transition-colors cursor-pointer"
@@ -697,9 +1100,12 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
                             </a>
                             {isAdmin && (
                               <button
-                                onClick={() => handleDeleteFile(file.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteFile(file);
+                                }}
                                 className="p-1.5 rounded-xl hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
-                                title="Hapus Berkas"
+                                title="Hapus Berkas (Administrator)"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -796,6 +1202,17 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
                           <td className="py-3 px-4 text-center">
                             {canAccess ? (
                               <div className="flex items-center justify-center gap-1.5">
+                                {(!file.tags?.includes('GoogleDrive') || file.tags?.includes('Lokal')) && (
+                                  <button
+                                    onClick={() => handleSyncSingleFileToDrive(file)}
+                                    disabled={syncingFileId === file.id}
+                                    className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-[10px] flex items-center gap-1 transition-colors cursor-pointer"
+                                    title="Unggah / Sinkronkan ke Google Drive"
+                                  >
+                                    <RefreshCw className={`w-3 h-3 text-amber-700 ${syncingFileId === file.id ? 'animate-spin' : ''}`} />
+                                    <span>{syncingFileId === file.id ? 'Mengunggah...' : 'Ke Drive'}</span>
+                                  </button>
+                                )}
                                 <button
                                   onClick={() => setPreviewFile(file)}
                                   className="px-2.5 py-1 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 font-bold flex items-center gap-1 transition-colors cursor-pointer"
@@ -813,8 +1230,12 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
                                 </a>
                                 {isAdmin && (
                                   <button
-                                    onClick={() => handleDeleteFile(file.id)}
-                                    className="p-1 rounded-lg hover:bg-rose-50 text-rose-600"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteFile(file);
+                                    }}
+                                    className="p-1 rounded-lg hover:bg-rose-50 text-rose-600 transition-colors cursor-pointer"
+                                    title="Hapus Berkas (Administrator)"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
@@ -964,8 +1385,24 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
                     accessRequests.map(req => (
                       <tr key={req.id} className="hover:bg-slate-50/80 transition-colors">
                         <td className="py-3 px-4">
-                          <div className="font-bold text-slate-900">{req.fileName}</div>
-                          <div className="text-[10px] text-slate-400">ID: {req.fileId}</div>
+                          <div className="flex items-center gap-2">
+                            {req.fileId === 'gdrive-main-folder' && (
+                              <div className="w-7 h-7 rounded-lg bg-amber-100 border border-amber-300 text-amber-700 flex items-center justify-center shrink-0">
+                                <FolderLock className="w-4 h-4" />
+                              </div>
+                            )}
+                            <div>
+                              <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                                <span>{req.fileName}</span>
+                                {req.fileId === 'gdrive-main-folder' && (
+                                  <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-extrabold border border-amber-200">
+                                    Drive Utama
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[10px] text-slate-400">ID: {req.fileId}</div>
+                            </div>
+                          </div>
                         </td>
                         <td className="py-3 px-4">
                           <div className="font-bold text-slate-900">{req.requesterName}</div>
@@ -1023,8 +1460,15 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
                                 </button>
                               </div>
                             ) : (
-                              <div className="text-[11px] text-slate-400">
-                                Ditinjau: {req.reviewedBy || 'Admin'} ({req.reviewedAt})
+                              <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-500">
+                                <span>Ditinjau: {req.reviewedBy || 'Admin'} ({req.reviewedAt})</span>
+                                <button
+                                  onClick={() => setDeletingRequest(req)}
+                                  className="p-1 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                                  title="Hapus Riwayat Permintaan Ini"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
                               </div>
                             )}
                           </td>
@@ -1044,15 +1488,15 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
       {/* ========================================================================= */}
       {isUploadModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-100 space-y-5 animate-scale-up">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-100 space-y-4 animate-scale-up">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-600 flex items-center justify-center">
                   <Upload className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-slate-900 text-base">Unggah Berkas Baru</h3>
-                  <p className="text-[11px] text-slate-500">Mendukung multi-upload banyak file sekaligus ke Google Drive</p>
+                  <h3 className="font-extrabold text-slate-900 text-base">Unggah Berkas Baru ke Google Drive</h3>
+                  <p className="text-[11px] text-slate-500">Mendukung multi-upload otomatis tersimpan di Cloud Storage</p>
                 </div>
               </div>
               <button
@@ -1062,6 +1506,47 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {/* Google Drive Status inside Modal */}
+            {isDriveLinked ? (
+              <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-200 text-emerald-900 text-xs flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 overflow-hidden">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span className="truncate font-medium">
+                    Google Drive Terhubung: <strong>{driveUser?.email}</strong>
+                  </span>
+                </div>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-800 text-[10px] font-bold shrink-0">
+                  Otomatis Sinkron
+                </span>
+              </div>
+            ) : (
+              <div className="p-3.5 bg-amber-50 rounded-2xl border border-amber-200 text-slate-800 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <div className="font-bold text-amber-900 flex items-center gap-1.5">
+                    <HardDrive className="w-4 h-4 text-amber-600" />
+                    <span>Koneksikan Akun Google Drive</span>
+                  </div>
+                  <p className="text-[11px] text-slate-600">
+                    Hubungkan akun Google Anda agar berkas langsung tersimpan ke Google Drive pribadi/sekolah.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleConnectDrive}
+                  disabled={isConnectingDrive}
+                  className="px-3.5 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-900 font-bold border border-slate-300 shadow-xs text-xs flex items-center gap-1.5 shrink-0 transition-all cursor-pointer"
+                >
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                  </svg>
+                  <span>{isConnectingDrive ? 'Menghubungkan...' : 'Hubungkan Akun'}</span>
+                </button>
+              </div>
+            )}
 
             {/* Drag & Drop Box */}
             <div
@@ -1086,7 +1571,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
 
             {/* Selected Files List */}
             {selectedUploadFiles.length > 0 && (
-              <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+              <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
                 <div className="text-xs font-bold text-slate-700 flex justify-between">
                   <span>Berkas Terpilih ({selectedUploadFiles.length})</span>
                   <button
@@ -1117,38 +1602,120 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
               </div>
             )}
 
-            {/* Category / Folder Selection */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Kategori Folder *</label>
-                <select
-                  value={uploadCategory}
-                  onChange={e => setUploadCategory(e.target.value)}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-sky-500"
-                >
-                  <option value="Kurikulum & Pembelajaran">Kurikulum & Pembelajaran</option>
-                  <option value="Kepegawaian & SK PTK">Kepegawaian & SK PTK</option>
-                  <option value="Kesiswaan & Ijazah">Kesiswaan & Ijazah</option>
-                  <option value="Sarpras & Inventaris">Sarpras & Inventaris</option>
-                  <option value="Keuangan & BOS">Keuangan & BOS</option>
-                  <option value="Akreditasi & SPM">Akreditasi & SPM</option>
-                  <option value="Surat & Administrasi">Surat & Administrasi</option>
-                  <option value="Umum">Umum</option>
-                </select>
+            {/* Category / Folder Selection Mode */}
+            <div className="space-y-3 bg-slate-50/90 p-3.5 rounded-2xl border border-slate-200 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="font-extrabold text-slate-900 flex items-center gap-1.5">
+                  <Folder className="w-4 h-4 text-amber-500" />
+                  <span>Tujuan Folder di Google Drive & Dapodik *</span>
+                </span>
+                <span className="text-[11px] text-slate-500 font-medium">Pilih salah satu metode</span>
               </div>
 
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">
-                  Atau Buat Folder Baru Sendiri
-                </label>
-                <input
-                  type="text"
-                  value={customFolder}
-                  onChange={e => setCustomFolder(e.target.value)}
-                  placeholder="Ketik nama folder baru..."
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-sky-500"
-                />
+              {/* Mode Switch Tabs */}
+              <div className="grid grid-cols-2 gap-2 p-1 bg-slate-200/70 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFolderChoiceMode('category');
+                  }}
+                  className={`py-2 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    folderChoiceMode === 'category'
+                      ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Folder className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Pilih Kategori Folder</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFolderChoiceMode('custom');
+                  }}
+                  className={`py-2 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    folderChoiceMode === 'custom'
+                      ? 'bg-amber-400 text-slate-950 shadow-sm font-extrabold'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Plus className="w-3.5 h-3.5 text-slate-950" />
+                  <span>Buat Folder Baru Sendiri</span>
+                </button>
               </div>
+
+              {/* Mode Content */}
+              {folderChoiceMode === 'category' ? (
+                <div className="space-y-1.5">
+                  <label className="block font-semibold text-slate-700">
+                    Kategori Folder Tujuan (Tersimpan otomatis ke folder kategori di Google Drive):
+                  </label>
+                  <select
+                    value={uploadCategory}
+                    onChange={e => setUploadCategory(e.target.value)}
+                    className="w-full p-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 font-medium focus:outline-none focus:border-sky-500 shadow-xs"
+                  >
+                    <option value="Kurikulum & Pembelajaran">Kurikulum & Pembelajaran</option>
+                    <option value="Kepegawaian & SK PTK">Kepegawaian & SK PTK</option>
+                    <option value="Kesiswaan & Ijazah">Kesiswaan & Ijazah</option>
+                    <option value="Sarpras & Inventaris">Sarpras & Inventaris</option>
+                    <option value="Keuangan & BOS">Keuangan & BOS</option>
+                    <option value="Akreditasi & SPM">Akreditasi & SPM</option>
+                    <option value="Surat & Administrasi">Surat & Administrasi</option>
+                    <option value="Umum">Umum</option>
+                    {categories.filter((c: string) => ![
+                      'Semua Kategori',
+                      'Kurikulum & Pembelajaran',
+                      'Kepegawaian & SK PTK',
+                      'Kesiswaan & Ijazah',
+                      'Sarpras & Inventaris',
+                      'Keuangan & BOS',
+                      'Akreditasi & SPM',
+                      'Surat & Administrasi',
+                      'Umum'
+                    ].includes(c)).map((customCat: string) => (
+                      <option key={customCat} value={customCat}>
+                        📁 {customCat} (Folder Kustom)
+                      </option>
+                    ))}
+                  </select>
+                  <div className="text-[11px] text-emerald-800 bg-emerald-50 px-2.5 py-1.5 rounded-lg border border-emerald-200 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>Folder otomatis dibuat & berkas masuk ke folder <strong>"{uploadCategory}"</strong> di Google Drive.</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="block font-semibold text-slate-700">
+                      Nama Folder Baru yang Ingin Dibuat Sendiri:
+                    </label>
+                    <span className="text-[10px] text-amber-800 font-bold bg-amber-100 px-2 py-0.5 rounded-full">
+                      Kategori Otomatis
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    value={customFolder}
+                    onChange={e => {
+                      setCustomFolder(e.target.value);
+                      if (folderChoiceMode !== 'custom') setFolderChoiceMode('custom');
+                    }}
+                    placeholder="Contoh: Arsip Soal Ujian 2026, SPJ BOS Tahap 1, dll..."
+                    className="w-full p-2.5 bg-white border border-amber-300 focus:border-amber-500 rounded-xl text-slate-900 font-medium focus:outline-none shadow-xs"
+                    autoFocus
+                  />
+                  <div className="text-[11px] text-amber-950 bg-amber-50 px-2.5 py-1.5 rounded-lg border border-amber-200 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    <span>
+                      {customFolder.trim()
+                        ? `Folder baru "${customFolder.trim()}" akan otomatis dibuat di Google Drive & tampil di menu Kategori Folder.`
+                        : 'Ketik nama folder baru. Berkas akan masuk ke folder baru ini di Google Drive & menu kategori.'}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Privacy Level */}
@@ -1210,14 +1777,16 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
 
             {/* Upload Progress Bar */}
             {isUploading && (
-              <div className="space-y-1">
-                <div className="flex justify-between text-xs font-bold text-sky-800">
-                  <span>Mengunggah ke Google Drive...</span>
+              <div className="space-y-1.5 p-3 bg-sky-50 rounded-2xl border border-sky-100">
+                <div className="flex justify-between text-xs font-bold text-sky-900">
+                  <span className="truncate max-w-[300px]">
+                    {currentUploadingFileName ? `Mengunggah: ${currentUploadingFileName}` : 'Menyimpan ke Google Drive...'}
+                  </span>
                   <span>{uploadProgress}%</span>
                 </div>
-                <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                <div className="w-full bg-sky-200 rounded-full h-2 overflow-hidden">
                   <div
-                    className="bg-sky-500 h-2 transition-all duration-300 rounded-full"
+                    className="bg-sky-600 h-2 transition-all duration-300 rounded-full"
                     style={{ width: `${uploadProgress}%` }}
                   />
                 </div>
@@ -1258,8 +1827,16 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
                   <Key className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-slate-900 text-base">Permintaan Izin Akses Berkas</h3>
-                  <p className="text-[11px] text-slate-500">Kirim permintaan resmi kepada Administrator</p>
+                  <h3 className="font-extrabold text-slate-900 text-base">
+                    {selectedFileForRequest.id === 'gdrive-main-folder'
+                      ? 'Izin Akses Folder Google Drive Utama'
+                      : 'Permintaan Izin Akses Berkas'}
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    {selectedFileForRequest.id === 'gdrive-main-folder'
+                      ? 'Hanya Administrator yang memiliki akses langsung. Ajukan permohonan akses di sini.'
+                      : 'Kirim permintaan resmi kepada Administrator sekolah'}
+                  </p>
                 </div>
               </div>
               <button
@@ -1271,12 +1848,28 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
             </div>
 
             {/* Target File Info */}
-            <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-1">
-              <div className="font-bold text-slate-900">{selectedFileForRequest.name}</div>
+            <div className={`p-3.5 rounded-2xl border text-xs space-y-1 ${
+              selectedFileForRequest.id === 'gdrive-main-folder'
+                ? 'bg-amber-50/80 border-amber-200 text-amber-950'
+                : 'bg-slate-50 border-slate-200 text-slate-900'
+            }`}>
+              <div className="font-bold flex items-center gap-2">
+                {selectedFileForRequest.id === 'gdrive-main-folder' && (
+                  <FolderLock className="w-4 h-4 text-amber-600 shrink-0" />
+                )}
+                <span>{selectedFileForRequest.name}</span>
+              </div>
               <div className="text-slate-500 flex items-center gap-2 text-[11px]">
                 <span>Kategori: {selectedFileForRequest.category}</span>
-                <span>•</span>
-                <span>Ukuran: {formatBytes(selectedFileForRequest.fileSize)}</span>
+                {selectedFileForRequest.fileSize > 0 && (
+                  <>
+                    <span>•</span>
+                    <span>Ukuran: {formatBytes(selectedFileForRequest.fileSize)}</span>
+                  </>
+                )}
+                {selectedFileForRequest.id === 'gdrive-main-folder' && (
+                  <span className="text-amber-700 font-medium">• Hak Akses Khusus Administrator</span>
+                )}
               </div>
             </div>
 
@@ -1437,12 +2030,122 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
             </div>
 
             {/* Modal Footer */}
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+            <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
+              {isAdmin ? (
+                <button
+                  onClick={() => {
+                    handleDeleteFile(previewFile);
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer border border-rose-200"
+                  title="Hapus Berkas dari Repositori"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                  <span>Hapus Berkas</span>
+                </button>
+              ) : <div />}
               <button
                 onClick={() => setPreviewFile(null)}
                 className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
               >
                 Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: CONFIRM DELETE FILE */}
+      {/* ========================================================================= */}
+      {deletingFile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4 animate-scale-up">
+            <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
+              <div className="w-12 h-12 rounded-2xl bg-rose-100 border border-rose-200 text-rose-600 flex items-center justify-center shrink-0 shadow-xs">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-slate-900 text-base">Hapus Berkas</h3>
+                <p className="text-xs text-slate-500">Konfirmasi tindakan Administrator</p>
+              </div>
+            </div>
+
+            <div className="p-4 bg-rose-50/70 rounded-2xl border border-rose-200/80 space-y-2 text-xs">
+              <div className="font-bold text-slate-900 text-sm">{deletingFile.name}</div>
+              <div className="text-slate-600 flex flex-wrap gap-2 text-[11px]">
+                <span className="bg-white px-2 py-0.5 rounded-md border border-slate-200">
+                  📁 {deletingFile.category}
+                </span>
+                <span className="bg-white px-2 py-0.5 rounded-md border border-slate-200">
+                  📦 {formatBytes(deletingFile.fileSize)}
+                </span>
+                <span className="bg-white px-2 py-0.5 rounded-md border border-slate-200">
+                  🕒 {deletingFile.uploadedAt}
+                </span>
+              </div>
+              <p className="text-rose-800 text-[11px] pt-1">
+                Apakah Anda yakin ingin menghapus berkas ini dari repositori sekolah? Berkas tidak akan lagi dapat diakses oleh pengguna lain.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeletingFile(null)}
+                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteFile}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-rose-600/20 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Ya, Hapus Berkas</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: CONFIRM DELETE ACCESS REQUEST */}
+      {/* ========================================================================= */}
+      {deletingRequest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4 animate-scale-up">
+            <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
+              <div className="w-12 h-12 rounded-2xl bg-rose-100 border border-rose-200 text-rose-600 flex items-center justify-center shrink-0 shadow-xs">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-slate-900 text-base">Hapus Riwayat Permintaan</h3>
+                <p className="text-xs text-slate-500">Konfirmasi penghapusan log izin akses</p>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5 text-xs text-slate-700">
+              <div><strong>Berkas:</strong> {deletingRequest.fileName}</div>
+              <div><strong>Pemohon:</strong> {deletingRequest.requesterName} ({deletingRequest.requesterRole})</div>
+              <div><strong>Waktu:</strong> {deletingRequest.requestedAt}</div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeletingRequest(null)}
+                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteRequest}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-rose-600/20 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Ya, Hapus Riwayat</span>
               </button>
             </div>
           </div>

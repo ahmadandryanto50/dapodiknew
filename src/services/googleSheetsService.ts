@@ -583,48 +583,21 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
       if (result && result.status === 'success') {
         return parseSheetsResult(result);
       }
+      if (result && result.message) {
+        return {
+          success: false,
+          message: result.message
+        };
+      }
     }
   } catch (proxyErr) {
-    // Continue to direct browser fetch
+    // Proxy request error
   }
 
-  // 2. Direct browser GET request
-  try {
-    const response = await fetch(config.webAppUrl);
-    if (!response.ok) {
-      throw new Error(`HTTP status ${response.status}`);
-    }
-    const result = await response.json();
-    if (result && result.status === 'success') {
-      return parseSheetsResult(result);
-    } else {
-      return {
-        success: false,
-        message: result?.message || 'Gagal mengurai respons dari Google Apps Script.'
-      };
-    }
-  } catch (error: any) {
-    console.warn('GET request failed, trying POST fallback:', error);
-    try {
-      // POST fallback for strict network sandbox or iframe restrictions
-      const response = await fetch(config.webAppUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ type: 'LOAD_ALL' })
-      });
-      const result = await response.json();
-      if (result && result.status === 'success') {
-        return parseSheetsResult(result);
-      }
-    } catch (fallbackError: any) {
-      console.error('POST fallback failed:', fallbackError);
-    }
-    
-    return {
-      success: false,
-      message: 'Gagal terhubung ke Database. Pastikan deploy Apps Script Anda sudah diatur ke "Anyone" (Siapa saja).'
-    };
-  }
+  return {
+    success: false,
+    message: 'Gagal terhubung ke Database Spreadsheet. Pastikan deploy Apps Script Anda sudah diatur ke "Anyone" (Siapa saja).'
+  };
 }
 
 export function exportToCSV(data: any[], filename: string) {

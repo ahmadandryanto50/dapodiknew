@@ -112,6 +112,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   const [revealedPasswords, setRevealedPasswords] = useState<Record<string, boolean>>({});
   const [openActionAdminId, setOpenActionAdminId] = useState<string | null>(null);
   const [actionMenuAdminPos, setActionMenuAdminPos] = useState<{ top: number; right?: number; left?: number } | null>(null);
+  const [deletingAdminUser, setDeletingAdminUser] = useState<AdminUser | null>(null);
 
   useEffect(() => {
     if (!openActionAdminId) return;
