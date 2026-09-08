@@ -492,19 +492,13 @@ async function callProxyOrDirectPost(webAppUrl: string, payload: any): Promise<{
           data: json.data
         };
       } else {
-        return {
-          success: false,
-          message: json.message || 'Gagal menghubungi Endpoint Google Sheets via Proxy'
-        };
+        console.warn('Proxy returned error, falling back to direct browser post:', json?.message);
       }
     } else {
-       return {
-         success: false,
-         message: 'Proxy Error: ' + proxyRes.statusText
-       };
+      console.warn('Proxy status not OK, falling back to direct browser post:', proxyRes.status, proxyRes.statusText);
     }
   } catch (proxyErr) {
-    // If backend proxy is not reachable (e.g. static hosting on Vercel/GitHub Pages), continue to direct browser fetch
+    console.warn('Proxy connection failed, falling back to direct browser post:', proxyErr);
   }
 
   // 2. Direct browser fetch with mode: 'no-cors'
