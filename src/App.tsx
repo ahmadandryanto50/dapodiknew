@@ -1348,11 +1348,23 @@ export default function App() {
             });
           }
           const serverFiles = serverData.schoolFiles || serverData.files;
-          if (serverFiles && Array.isArray(serverFiles)) {
+          if (serverFiles && Array.isArray(serverFiles) && serverFiles.length > 0) {
             setSchoolFiles(prev => {
-              if (JSON.stringify(prev) !== JSON.stringify(serverFiles)) {
-                localStorage.setItem('dapodik_school_files_v3', JSON.stringify(serverFiles));
-                return serverFiles;
+              const merged = serverFiles.map((sf: any) => {
+                const existing = prev.find(p => p.id === sf.id);
+                if (existing?.dataUrl && !sf.dataUrl) {
+                  return { ...sf, dataUrl: existing.dataUrl };
+                }
+                return sf;
+              });
+              prev.forEach(p => {
+                if (!merged.some(m => m.id === p.id)) {
+                  merged.unshift(p);
+                }
+              });
+              if (JSON.stringify(prev) !== JSON.stringify(merged)) {
+                localStorage.setItem('dapodik_school_files_v3', JSON.stringify(merged));
+                return merged;
               }
               return prev;
             });
