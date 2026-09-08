@@ -10,8 +10,8 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  // Support JSON bodies up to 10MB (in case of large profile photo base64 strings)
-  app.use(express.json({ limit: '10mb' }));
+  // Support JSON bodies up to 50MB (for file uploads and base64 strings)
+  app.use(express.json({ limit: '50mb' }));
 
   // Prevent caching on all API responses so multi-device/browser sync is always instantaneous and fresh
   app.use("/api", (req, res, next) => {

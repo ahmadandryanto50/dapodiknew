@@ -117,6 +117,42 @@ function doPost(e) {
       saveSheetData(ss, 'Permintaan_Akses_Berkas', data.payload, HEADERS_MAP['Permintaan_Akses_Berkas']);
     } else if (data.type === 'SYNC_BERKAS') {
       saveSheetData(ss, 'Data_Berkas', data.payload, HEADERS_MAP['Data_Berkas']);
+    } else if (data.type === 'UPLOAD_FILE_TO_DRIVE') {
+      var folder = null;
+      var folderName = data.folderName || data.category || 'Berkas Dapodik';
+      if (data.parentFolderId) {
+        try {
+          folder = DriveApp.getFolderById(data.parentFolderId);
+        } catch(err) {}
+      }
+      if (!folder) {
+        var folders = DriveApp.getFoldersByName(folderName);
+        if (folders.hasNext()) {
+          folder = folders.next();
+        } else {
+          folder = DriveApp.createFolder(folderName);
+        }
+      }
+      var decodedBytes = Utilities.base64Decode(data.base64Data);
+      var blob = Utilities.newBlob(decodedBytes, data.mimeType || 'application/octet-stream', data.fileName);
+      var createdFile = folder.createFile(blob);
+      if (data.description) {
+        try { createdFile.setDescription(data.description); } catch(e) {}
+      }
+      try {
+        createdFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      } catch(e) {}
+      
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        id: createdFile.getId(),
+        name: createdFile.getName(),
+        webViewLink: createdFile.getUrl(),
+        size: createdFile.getSize(),
+        mimeType: createdFile.getMimeType(),
+        folderId: folder.getId(),
+        folderName: folder.getName()
+      })).setMimeType(ContentService.MimeType.JSON);
     } else if (data.type === 'SYNC_PENGATURAN') {
       saveSheetData(ss, 'Data_Pengaturan', data.payload);
     } else if (data.type === 'SYNC_ADMINISTRATOR' || data.type === 'SYNC_ADMIN') {
@@ -850,4 +886,61 @@ export async function syncBerkasToGoogleSheets(
     payload: sanitized
   };
   return await callProxyOrDirectPost(config.webAppUrl, payload);
+}
+
+export async function uploadFileToDriveViaAppsScript(
+  config: SyncConfig,
+  fileInfo: {
+    name: string;
+    type?: string;
+    base64Data: string;
+    category?: string;
+    folderName?: string;
+    description?: string;
+    parentFolderId?: string;
+  }
+): Promise<{
+  success: boolean;
+  message?: string;
+  id?: string;
+  name?: string;
+  webViewLink?: string;
+  folderId?: string;
+  folderName?: string;
+  size?: number;
+  mimeType?: string;
+}> {
+  if (!config.webAppUrl) {
+    return { success: false, message: 'URL Google Apps Script belum dikonfigurasi.' };
+  }
+  const payload = {
+    type: 'UPLOAD_FILE_TO_DRIVE',
+    fileName: fileInfo.name,
+    mimeType: fileInfo.type || 'application/octet-stream',
+    base64Data: fileInfo.base64Data,
+    folderName: fileInfo.folderName || fileInfo.category || 'Berkas Dapodik',
+    description: fileInfo.description || '',
+    parentFolderId: fileInfo.parentFolderId || ''
+  };
+
+  const res = await callProxyOrDirectPost(config.webAppUrl, payload);
+  if (res.success && res.data) {
+    const d = res.data;
+    if (d.status === 'success' && d.id) {
+      return {
+        success: true,
+        id: d.id,
+        name: d.name || fileInfo.name,
+        webViewLink: d.webViewLink || `https://drive.google.com/file/d/${d.id}/view`,
+        folderId: d.folderId,
+        folderName: d.folderName,
+        size: d.size,
+        mimeType: d.mimeType
+      };
+    }
+  }
+  return {
+    success: false,
+    message: res.message || (res.data && res.data.message) || 'Gagal mengunggah berkas ke Google Drive via Spreadsheet.'
+  };
 }

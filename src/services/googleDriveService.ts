@@ -117,7 +117,16 @@ export const signInWithGoogleDrive = async (): Promise<{ user: any; accessToken:
     return { user: cachedUser, accessToken: cachedAccessToken };
   } catch (error: any) {
     console.error('Google Drive sign in error:', error);
-    throw error;
+    const errCode = error?.code || '';
+    const errMsg = error?.message || '';
+    if (errCode === 'auth/popup-blocked' || errMsg.includes('popup-blocked')) {
+      throw new Error('Jendela popup login diblokir browser. Silakan izinkan Pop-up pada bilah URL browser Anda lalu coba klik "Hubungkan Akun Google" kembali.');
+    } else if (errCode === 'auth/popup-closed-by-user' || errCode === 'auth/cancelled-popup-request') {
+      throw new Error('Login Google dibatalkan.');
+    }
+    // Clean any Firebase prefix
+    const cleanMsg = errMsg.replace(/^Firebase:\s*/i, '').replace(/\(auth\/[^)]+\)\.?/i, '').trim();
+    throw new Error(cleanMsg || 'Gagal menghubungkan Akun Google Drive.');
   }
 };
 
@@ -190,10 +199,9 @@ const folderCache = new Map<string, string>();
  * Create a folder in Google Drive
  */
 export const createFolderInGoogleDrive = async (folderName: string, parentFolderId?: string): Promise<{ id: string; name: string; webViewLink: string }> => {
-  let token = await getAccessToken();
+  const token = await getAccessToken();
   if (!token) {
-    const authResult = await signInWithGoogleDrive();
-    token = authResult.accessToken;
+    throw new Error('Google Drive belum terhubung. Silakan klik tombol "Hubungkan Akun Google".');
   }
 
   const metadata: Record<string, any> = {
@@ -240,10 +248,9 @@ export const getOrCreateFolderInGoogleDrive = async (
     return { id: cachedId, name: cleanName };
   }
 
-  let token = await getAccessToken();
+  const token = await getAccessToken();
   if (!token) {
-    const authResult = await signInWithGoogleDrive();
-    token = authResult.accessToken;
+    return { id: parentFolderId || '', name: cleanName };
   }
 
   // 1. Search for existing folder by name inside parentFolderId or Drive
@@ -304,12 +311,10 @@ export const uploadFileToGoogleDrive = async (
     parentFolderId?: string;
   }
 ): Promise<DriveUploadResult> => {
-  let token = await getAccessToken();
+  const token = await getAccessToken();
   
   if (!token) {
-    // Attempt sign in if not currently signed in
-    const authResult = await signInWithGoogleDrive();
-    token = authResult.accessToken;
+    throw new Error('Akun Google Drive belum terhubung. Silakan klik tombol "Hubungkan Akun Google" jika ingin mengunggah via OAuth.');
   }
 
   // Determine target subfolder (Category Folder OR Custom Folder)
