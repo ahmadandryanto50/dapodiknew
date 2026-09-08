@@ -32,14 +32,18 @@ import {
   User,
   Menu,
   X,
-  ZoomIn
+  ZoomIn,
+  Upload,
+  FolderLock
 } from 'lucide-react';
 import { ActiveTab, SyncConfig, Student, TeacherStaff, SarprasItem, StudentReport, AppDisplayConfig, SchoolProfile, AdminUser } from '../types';
+import { getPtkBreakdown } from '../utils/ptkClassification';
 import { SafeImage } from './SafeImage';
 
 interface WelcomeHeroProps {
   onNavigate: (tab: ActiveTab) => void;
   onOpenEditDisplay?: (filter?: 'all' | '1' | '2' | '3' | '4' | '5') => void;
+  onOpenUploadBerkas?: () => void;
   syncConfig: SyncConfig;
   displayConfig: AppDisplayConfig;
   schoolProfile: SchoolProfile;
@@ -61,6 +65,7 @@ interface WelcomeHeroProps {
 export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
   onNavigate,
   onOpenEditDisplay,
+  onOpenUploadBerkas,
   syncConfig,
   displayConfig,
   schoolProfile,
@@ -103,11 +108,9 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
 
   const activeStudents = students.filter(s => !s.status || s.status === 'Aktif');
 
-  const totalGuru = teachers.filter(t => {
-    const j = String(t.jenisPtk || '').toLowerCase();
-    return (['Guru Mapel', 'Guru Kelas'].includes(t.jenisPtk) || j.includes('guru')) && !j.includes('kepala');
-  }).length;
-  const totalTendik = teachers.length - totalGuru;
+  const ptkBreakdown = getPtkBreakdown(teachers);
+  const totalGuru = ptkBreakdown.pendidikCount;
+  const totalTendik = ptkBreakdown.tendikCount;
 
   const menuItems = [
     {
@@ -165,6 +168,14 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
       count: 'Pintasan',
       desc: 'Portal Pintasan Dapodik',
       color: 'from-violet-500/20 to-fuchsia-500/20 border-violet-400/30 text-violet-300'
+    },
+    {
+      id: 'berkas' as ActiveTab,
+      label: 'Arsip & Berkas',
+      icon: FolderLock,
+      count: 'Drive',
+      desc: 'Google Drive & Dokumen',
+      color: 'from-amber-500/20 to-yellow-500/20 border-amber-400/30 text-amber-300'
     },
     {
       id: 'pengaturan' as ActiveTab,
@@ -509,7 +520,7 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
             </form>
 
             {/* School Operator Card */}
-            <div className="p-3.5 rounded-2xl bg-white/10 hover:bg-white/15 backdrop-blur-md border border-white/20 text-xs flex items-center justify-between gap-3">
+            <div className="p-3.5 rounded-2xl bg-white/10 hover:bg-white/15 backdrop-blur-md border border-white/20 text-xs flex items-center justify-between gap-3 shadow-sm">
               <div 
                 className="flex items-center gap-3 overflow-hidden cursor-pointer group"
                 onClick={() => setIsOperatorModalOpen(true)}
@@ -554,6 +565,40 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
               >
                 <ZoomIn className="w-3.5 h-3.5" />
                 <span>Foto</span>
+              </button>
+            </div>
+
+            {/* Google Drive & Arsip Berkas Mini Card */}
+            <div className="p-3.5 rounded-2xl bg-white/10 hover:bg-white/15 backdrop-blur-md border border-white/20 text-xs flex flex-col gap-2.5 shadow-sm">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-gradient-to-br from-amber-400/30 to-yellow-500/20 text-amber-300 border border-amber-300/30">
+                    <FolderLock className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-white text-xs">Arsip & Berkas Sekolah</div>
+                    <div className="text-[10px] text-sky-200">Google Drive & Dokumen PTK</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onNavigate('berkas')}
+                  className="px-2 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-[10px] font-bold text-sky-100 hover:text-white flex items-center gap-1 transition-all cursor-pointer"
+                >
+                  <span>Buka</span>
+                  <ChevronRight className="w-3 h-3" />
+                </button>
+              </div>
+
+              <button
+                type="button"
+                id="hero-widget-unggah-berkas-btn"
+                onClick={() => onOpenUploadBerkas ? onOpenUploadBerkas() : onNavigate('berkas')}
+                className="w-full py-2 px-3 rounded-full bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-2 shadow-md hover:scale-[1.02] active:scale-98 transition-all cursor-pointer"
+                title="Unggah Berkas Baru"
+              >
+                <Upload className="w-3.5 h-3.5 text-slate-950 stroke-[2.5]" />
+                <span>Unggah Berkas Baru</span>
               </button>
             </div>
 

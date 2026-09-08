@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import { Student, TeacherStaff, SarprasItem, StudentReport, SchoolProfile, AppDisplayConfig } from '../types';
 import { formatDateIndonesian } from './dateUtils';
+import { getPtkBreakdown } from './ptkClassification';
 
 export interface RekapExportData {
   students: Student[];
@@ -144,12 +145,10 @@ export function exportCompleteRekapToExcel({
   const pctNonPalu = totalUsia13_15 > 0 ? Math.round((totalUsia13_15_NonPalu / totalUsia13_15) * 100) : 0;
 
   // PTK stats
-  const pendidikList = allTeachers.filter(t => {
-    const jenis = (t.jenisPtk || '').toLowerCase();
-    return jenis.includes('guru') || jenis.includes('kepala sekolah') || jenis.includes('pendidik');
-  });
-  const tendikList = allTeachers.filter(t => !pendidikList.includes(t));
-  const certifiedCount = allTeachers.filter(t => (t.statusSertifikasi || '').toLowerCase().includes('sudah')).length;
+  const ptkBreakdown = getPtkBreakdown(allTeachers);
+  const pendidikList = ptkBreakdown.pendidikList;
+  const tendikList = ptkBreakdown.tendikList;
+  const certifiedCount = ptkBreakdown.sertifikasiSudahCount;
 
   // Sarpras stats
   const sarprasBaik = allSarpras.filter(s => s.kondisi === 'Baik').length;
@@ -431,7 +430,7 @@ export function exportCompleteRekapToExcel({
   const sheet4Data = [
     ['REKAPITULASI PROFIL PENDIDIK & TENAGA KEPENDIDIKAN (PTK)'],
     [schoolName.toUpperCase()],
-    [`Total PTK: ${allTeachers.length} (Pendidik: ${pendidikList.length}, Tendik: ${tendikList.length})`],
+    [`Total PTK: ${allTeachers.length} (Pendidik/Guru: ${pendidikList.length}, Tenaga Kependidikan: ${tendikList.length})`],
     [],
     ['NO', 'NAMA LENGKAP', 'NIP / NUPTK', 'JENIS KELAMIN', 'JENIS PTK', 'STATUS KEPEGAWAIAN', 'STATUS SERTIFIKASI', 'PENDIDIKAN TERAKHIR', 'MATA PELAJARAN'],
   ];

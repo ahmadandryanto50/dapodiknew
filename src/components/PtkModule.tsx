@@ -36,6 +36,7 @@ import {
   parsePtkImportFile, 
   DAPODIK_PTK_HEADERS 
 } from '../utils/ptkTemplateHelper';
+import { isTenagaKependidikan, isPendidik, getPtkBreakdown } from '../utils/ptkClassification';
 
 interface PtkModuleProps {
   teachers: TeacherStaff[];
@@ -145,11 +146,9 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
 
   const [deletingPtk, setDeletingPtk] = useState<{ id: string; name: string } | null>(null);
 
-  const totalGuru = teachers.filter(t => {
-    const j = String(t.jenisPtk || '').toLowerCase();
-    return (['Guru Mapel', 'Guru Kelas'].includes(t.jenisPtk) || j.includes('guru')) && !j.includes('kepala');
-  }).length;
-  const totalTendik = teachers.length - totalGuru;
+  const ptkBreakdown = getPtkBreakdown(teachers);
+  const totalGuru = ptkBreakdown.pendidikCount;
+  const totalTendik = ptkBreakdown.tendikCount;
 
   const filteredTeachers = teachers.filter(t => {
     const namaStr = String(t.nama || '');
@@ -162,15 +161,20 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
                         nuptkStr.includes(search) ||
                         (nipStr && nipStr.includes(search)) ||
                         mapelStr.toLowerCase().includes(queryStr);
+    const statusLower = String(t.statusKepegawaian || '').toLowerCase();
     const matchStatus = filterStatus === 'ALL' || 
                         t.statusKepegawaian === filterStatus ||
-                        (filterStatus === 'GTY' && String(t.statusKepegawaian).toUpperCase().includes('GTY')) ||
-                        (filterStatus === 'GTT' && String(t.statusKepegawaian).toUpperCase().includes('GTT')) ||
-                        (filterStatus === 'Tenaga Honor Sekolah' && (t.statusKepegawaian === 'Tenaga Honor Sekolah' || t.statusKepegawaian === 'Honor Sekolah')) ||
-                        (filterStatus === 'Guru Honor Sekolah' && (t.statusKepegawaian === 'Guru Honor Sekolah' || t.statusKepegawaian === 'Honor Sekolah'));
+                        (filterStatus === 'PPPK Paruh Waktu' && (statusLower.includes('paruh') || statusLower.includes('part time'))) ||
+                        (filterStatus === 'PPPK' && statusLower.includes('pppk') && !statusLower.includes('paruh')) ||
+                        (filterStatus === 'PNS' && (statusLower.includes('pns') || statusLower.includes('asn'))) ||
+                        (filterStatus === 'GTY' && statusLower.includes('gty')) ||
+                        (filterStatus === 'GTT' && statusLower.includes('gtt')) ||
+                        (filterStatus === 'Tenaga Honor Sekolah' && (t.statusKepegawaian === 'Tenaga Honor Sekolah' || isTenagaKependidikan(t))) ||
+                        (filterStatus === 'Guru Honor Sekolah' && (t.statusKepegawaian === 'Guru Honor Sekolah' || (statusLower.includes('honor') && isPendidik(t))));
     const matchJenis = filterJenis === 'ALL' || 
                        t.jenisPtk === filterJenis ||
-                       (filterJenis === 'Tenaga Kependidikan' && !['Guru Mapel', 'Guru Kelas'].includes(t.jenisPtk) && !t.jenisPtk.toLowerCase().includes('guru'));
+                       (filterJenis === 'Tenaga Kependidikan' && isTenagaKependidikan(t)) ||
+                       (filterJenis === 'Pendidik' && isPendidik(t));
     return matchSearch && matchStatus && matchJenis;
   });
 
@@ -403,9 +407,9 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
           </button>
           <div>
             <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className="text-xl font-bold text-slate-900">Pendidik & Tendik</h1>
+              <h1 className="text-xl font-bold text-slate-900">Pendidik & Tenaga Kependidikan</h1>
               <span className="px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200/80 whitespace-nowrap shrink-0">
-                {totalGuru} Guru &bull; {totalTendik} Tendik (Total {teachers.length} PTK)
+                {totalGuru} Guru &bull; {totalTendik} Tenaga Kependidikan (Total {teachers.length} PTK)
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
@@ -546,13 +550,16 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
             className="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-amber-500 focus:bg-white transition-colors"
           >
             <option value="ALL">Semua Jenis Tugas PTK</option>
-            <option value="Kepala Sekolah">Kepala Sekolah</option>
+            <option value="Pendidik">-- Semua Guru / Pendidik ({totalGuru}) --</option>
+            <option value="Tenaga Kependidikan">-- Semua Tenaga Kependidikan ({totalTendik}) --</option>
             <option value="Guru Mapel">Guru Mapel</option>
+            <option value="Guru BK">Guru BK (Bimbingan Konseling)</option>
             <option value="Guru Kelas">Guru Kelas</option>
+            <option value="Kepala Sekolah">Kepala Sekolah</option>
             <option value="Tenaga Administrasi">Tenaga Administrasi (TU)</option>
             <option value="Laboran">Laboran</option>
             <option value="Pustakawan">Pustakawan</option>
-            <option value="Tenaga Kependidikan">Tenaga Kependidikan</option>
+            <option value="Tenaga Kependidikan">Tenaga Kependidikan (Lainnya)</option>
           </select>
         </div>
       </div>
@@ -1265,13 +1272,14 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
                         onChange={(e) => setFormData({ ...formData, jenisPtk: e.target.value as any })}
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-amber-500 focus:bg-white focus:outline-none"
                       >
-                        <option value="Kepala Sekolah">Kepala Sekolah</option>
-                        <option value="Guru Mapel">Guru Mapel</option>
-                        <option value="Guru Kelas">Guru Kelas</option>
-                        <option value="Tenaga Administrasi">Tenaga Administrasi</option>
-                        <option value="Laboran">Laboran</option>
-                        <option value="Pustakawan">Pustakawan</option>
-                        <option value="Tenaga Kependidikan">Tenaga Kependidikan</option>
+                        <option value="Guru Mapel">Guru Mapel (Pendidik)</option>
+                        <option value="Guru BK">Guru BK / Bimbingan Konseling (Pendidik)</option>
+                        <option value="Guru Kelas">Guru Kelas (Pendidik)</option>
+                        <option value="Kepala Sekolah">Kepala Sekolah (Tenaga Kependidikan)</option>
+                        <option value="Tenaga Administrasi">Tenaga Administrasi / TU (Tenaga Kependidikan)</option>
+                        <option value="Laboran">Laboran (Tenaga Kependidikan)</option>
+                        <option value="Pustakawan">Pustakawan (Tenaga Kependidikan)</option>
+                        <option value="Tenaga Kependidikan">Tenaga Kependidikan / Staf / Satpam / Kebersihan</option>
                       </select>
                     </div>
 

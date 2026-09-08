@@ -8,6 +8,7 @@ import {
   FileText,
   BarChart3,
   Laptop,
+  FolderLock,
   Settings
 } from 'lucide-react';
 import { ActiveTab, AdminUser } from '../types';
@@ -43,6 +44,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
     { id: 'rapor', label: 'Rapor', icon: FileText },
     { id: 'laporan', label: 'Laporan', icon: BarChart3 },
     { id: 'aplikasi', label: 'Aplikasi', icon: Laptop },
+    { id: 'berkas', label: 'Berkas', icon: FolderLock },
     ...(currentUser?.role === 'Administrator' || currentUser?.role === 'Operator'
       ? [{ id: 'pengaturan' as ActiveTab, label: 'Pengaturan', icon: Settings }]
       : [])

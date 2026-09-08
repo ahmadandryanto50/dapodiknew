@@ -249,8 +249,12 @@ export async function parsePtkImportFile(file: File): Promise<{ teachers: Teache
 
         const headers: string[] = (rawRows[headerRowIdx] || []).map((h: any) => String(h).trim());
 
-        const getColVal = (row: any[], headerName: string): any => {
-          const idx = headers.findIndex(h => h.toLowerCase() === headerName.toLowerCase());
+        const getColVal = (row: any[], headerName: string, aliases: string[] = []): any => {
+          const searchNames = [headerName, ...aliases].map(s => s.toLowerCase().replace(/[^a-z0-9]/g, ''));
+          const idx = headers.findIndex(h => {
+            const cleanH = h.toLowerCase().replace(/[^a-z0-9]/g, '');
+            return searchNames.includes(cleanH);
+          });
           if (idx !== -1 && row[idx] !== undefined && row[idx] !== null) {
             const raw = row[idx];
             if (raw instanceof Date) return raw;
@@ -265,52 +269,97 @@ export async function parsePtkImportFile(file: File): Promise<{ teachers: Teache
           const row = rawRows[r];
           if (!row || row.length === 0) continue;
 
-          const nama = getColVal(row, 'Nama');
-          const nuptk = getColVal(row, 'Nuptk');
+          const nama = getColVal(row, 'Nama', ['Nama Lengkap', 'Nama PTK', 'Nama Guru']);
+          const nuptk = getColVal(row, 'Nuptk', ['NUPTK', 'Nomor NUPTK', 'No NUPTK']);
 
           if (!nama && !nuptk) continue; // skip empty rows
 
-          const jkRaw = getColVal(row, 'L/P').toUpperCase();
+          const jkRaw = String(getColVal(row, 'L/P', ['Jenis Kelamin', 'JK', 'Gender'])).toUpperCase();
           const jenisKelamin: 'L' | 'P' = jkRaw.startsWith('P') ? 'P' : 'L';
 
-          const statusKep = getColVal(row, 'Status Kepegawaian') || 'PNS';
-          const jenisPtk = getColVal(row, 'Jenis Ptk') || 'Guru Mapel';
-          const sertifikasiRaw = getColVal(row, 'Sertifikasi') || 'Sudah';
-          const statusSertifikasi = (sertifikasiRaw.toLowerCase().includes('sudah') || sertifikasiRaw.toLowerCase().includes('ya')) ? 'Sudah' : 'Belum';
+          // Status Kepegawaian normalization
+          const rawStatusKep = String(getColVal(row, 'Status Kepegawaian', ['Status Pegawai', 'Status Kepegawaian Saat Ini', 'Status PTK', 'Status Kep']) || '').trim();
+          let statusKep = 'PNS';
+          const lowerStatus = rawStatusKep.toLowerCase();
+          if (lowerStatus.includes('paruh waktu') || lowerStatus.includes('paruh-waktu') || lowerStatus.includes('part time')) {
+            statusKep = 'PPPK Paruh Waktu';
+          } else if (lowerStatus.includes('pppk') || lowerStatus.includes('p3k')) {
+            statusKep = 'PPPK';
+          } else if (lowerStatus.includes('pns') || lowerStatus.includes('cpns') || lowerStatus === 'asn') {
+            statusKep = 'PNS';
+          } else if (lowerStatus.includes('gty')) {
+            statusKep = 'GTY';
+          } else if (lowerStatus.includes('gtt')) {
+            statusKep = 'GTT';
+          } else if (lowerStatus.includes('tenaga honor')) {
+            statusKep = 'Tenaga Honor Sekolah';
+          } else if (lowerStatus.includes('guru honor') || lowerStatus.includes('honor')) {
+            statusKep = 'Guru Honor Sekolah';
+          } else if (rawStatusKep) {
+            statusKep = rawStatusKep;
+          }
+
+          // Jenis PTK normalization
+          const rawJenisPtk = String(getColVal(row, 'Jenis Ptk', ['Jenis PTK', 'Jenis PTK Saat Ini', 'Tugas PTK', 'Tugas', 'Jabatan', 'Jenis Ketenagaan', 'Jenis Pegawai']) || '').trim();
+          const rawMapel = getColVal(row, 'Mata Pelajaran', ['Mapel', 'Mata Pelajaran Diajarkan', 'Bidang Tugas']) || '';
+          const rawTugasTambahan = getColVal(row, 'Tugas Tambahan', ['Tugas Tambahan PTK', 'Tugas Tambahan Sekolah']) || '';
+
+          let jenisPtk = rawJenisPtk;
+          if (!jenisPtk) {
+            const combinedNonTeaching = `${rawMapel} ${rawTugasTambahan} ${rawStatusKep}`.toLowerCase();
+            if (combinedNonTeaching.includes('tata usaha') || combinedNonTeaching.includes('administrasi') || combinedNonTeaching.includes('tu') || combinedNonTeaching.includes('tas')) {
+              jenisPtk = 'Tenaga Administrasi';
+            } else if (combinedNonTeaching.includes('laboran') || combinedNonTeaching.includes('laboratorium')) {
+              jenisPtk = 'Laboran';
+            } else if (combinedNonTeaching.includes('pustakawan') || combinedNonTeaching.includes('perpustakaan')) {
+              jenisPtk = 'Pustakawan';
+            } else if (combinedNonTeaching.includes('operator') || combinedNonTeaching.includes('ops')) {
+              jenisPtk = 'Tenaga Kependidikan';
+            } else if (combinedNonTeaching.includes('penjaga') || combinedNonTeaching.includes('satpam') || combinedNonTeaching.includes('security') || combinedNonTeaching.includes('kebersihan')) {
+              jenisPtk = 'Tenaga Kependidikan';
+            } else if (combinedNonTeaching.includes('kepala sekolah')) {
+              jenisPtk = 'Kepala Sekolah';
+            } else {
+              jenisPtk = 'Guru Mapel';
+            }
+          }
+
+          const sertifikasiRaw = String(getColVal(row, 'Sertifikasi', ['Status Sertifikasi', 'Sudah Sertifikasi']) || 'Sudah');
+          const statusSertifikasi = (sertifikasiRaw.toLowerCase().includes('sudah') || sertifikasiRaw.toLowerCase().includes('ya') || sertifikasiRaw.toLowerCase().includes('lulus')) ? 'Sudah' : 'Belum';
 
           const teacher: TeacherStaff = {
             id: `ptk-imp-${Date.now()}-${r}`,
             nama: nama || 'Tanpa Nama',
             nuptk: nuptk || Math.floor(1000000000000000 + Math.random() * 9000000000000000).toString(),
             jenisKelamin,
-            nip: getColVal(row, 'Nip') || '-',
+            nip: getColVal(row, 'Nip', ['NIP', 'Nomor Induk Pegawai']) || '-',
             statusKepegawaian: statusKep,
             jenisPtk: jenisPtk,
-            mapel: getColVal(row, 'Tugas Tambahan') || getColVal(row, 'Mata Pelajaran') || 'Guru Kelas',
-            pendidikanTerakhir: getColVal(row, 'Pangkat Golongan') || 'S1 Pendidikan',
-            noHp: getColVal(row, 'HP') || getColVal(row, 'Telepon') || '-',
-            email: getColVal(row, 'Email') || '-',
+            mapel: rawMapel || rawTugasTambahan || (jenisPtk.toLowerCase().includes('administrasi') ? 'Tenaga Administrasi (TU)' : 'Guru Mata Pelajaran'),
+            pendidikanTerakhir: getColVal(row, 'Pendidikan Terakhir', ['Pendidikan', 'Pangkat Golongan', 'Kualifikasi']) || 'S1 Pendidikan',
+            noHp: getColVal(row, 'HP', ['No HP', 'Nomor HP', 'Handphone', 'Telepon']) || '-',
+            email: getColVal(row, 'Email', ['E-mail', 'Surel']) || '-',
             statusSertifikasi,
 
             // All 51 Columns Dapodik PTK
             tempatLahir: getColVal(row, 'Tempat Lahir'),
             tanggalLahir: formatDateIndonesian(getColVal(row, 'Tanggal Lahir')),
             agama: getColVal(row, 'Agama'),
-            alamatJalan: getColVal(row, 'Alamat Jalan'),
+            alamatJalan: getColVal(row, 'Alamat Jalan', ['Alamat', 'Jalan']),
             rt: getColVal(row, 'RT'),
             rw: getColVal(row, 'RW'),
-            namaDusun: getColVal(row, 'Nama Dusun'),
-            desaKelurahan: getColVal(row, 'Desa/Kelurahan'),
+            namaDusun: getColVal(row, 'Nama Dusun', ['Dusun']),
+            desaKelurahan: getColVal(row, 'Desa/Kelurahan', ['Desa', 'Kelurahan']),
             kecamatan: getColVal(row, 'Kecamatan'),
             kodePos: getColVal(row, 'Kode Pos'),
             telepon: getColVal(row, 'Telepon'),
-            tugasTambahan: getColVal(row, 'Tugas Tambahan'),
-            skCpns: getColVal(row, 'SK CPNS'),
+            tugasTambahan: rawTugasTambahan,
+            skCpns: getColVal(row, 'SK CPNS', ['SK CPNS/PPPK']),
             tanggalCpns: formatDateIndonesian(getColVal(row, 'Tanggal CPNS')),
             skPengangkatan: getColVal(row, 'SK Pengangkatan'),
             tmtPengangkatan: formatDateIndonesian(getColVal(row, 'TMT Pengangkatan')),
             lembagaPengangkatan: getColVal(row, 'Lembaga Pengangkatan'),
-            pangkatGolongan: getColVal(row, 'Pangkat Golongan'),
+            pangkatGolongan: getColVal(row, 'Pangkat Golongan', ['Golongan', 'Pangkat']),
             sumberGaji: getColVal(row, 'Sumber Gaji'),
             namaIbuKandung: getColVal(row, 'Nama Ibu Kandung'),
             statusPerkawinan: getColVal(row, 'Status Perkawinan'),
@@ -326,10 +375,10 @@ export async function parsePtkImportFile(file: File): Promise<{ teachers: Teache
             namaWajibPajak: getColVal(row, 'Nama Wajib Pajak'),
             kewarganegaraan: getColVal(row, 'Kewarganegaraan'),
             bank: getColVal(row, 'Bank'),
-            nomorRekeningBank: getColVal(row, 'Nomor Rekening Bank'),
+            nomorRekeningBank: getColVal(row, 'Nomor Rekening Bank', ['No Rekening']),
             rekeningAtasNama: getColVal(row, 'Rekening Atas Nama'),
-            nik: getColVal(row, 'NIK'),
-            noKk: getColVal(row, 'No KK'),
+            nik: getColVal(row, 'NIK', ['No KTP', 'Nomor Induk Kependudukan']),
+            noKk: getColVal(row, 'No KK', ['Nomor KK', 'Kartu Keluarga']),
             karpeg: getColVal(row, 'Karpeg'),
             karisKarsu: getColVal(row, 'Karis/Karsu'),
             lintang: getColVal(row, 'Lintang'),

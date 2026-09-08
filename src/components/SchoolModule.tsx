@@ -3,6 +3,7 @@ import { SafeImage } from './SafeImage';
 import { formatDateIndonesian } from '../utils/dateUtils';
 import { compressImage } from '../utils/imageCompressor';
 import { getNormalizedMisi } from '../utils/misiUtils';
+import { getPtkBreakdown } from '../utils/ptkClassification';
 import { 
   School, 
   Edit3, 
@@ -95,13 +96,11 @@ export const SchoolModule: React.FC<SchoolModuleProps> = ({
   const activeStudents = students.filter(s => !s.status || s.status === 'Aktif');
   const totalLaki = activeStudents.filter(s => s.jenisKelamin === 'L').length;
   const totalPerempuan = activeStudents.filter(s => s.jenisKelamin === 'P').length;
-  const totalGuru = teachers.filter(t => {
-    const j = String(t.jenisPtk || '').toLowerCase();
-    return (['Guru Mapel', 'Guru Kelas'].includes(t.jenisPtk) || j.includes('guru')) && !j.includes('kepala');
-  }).length;
-  const totalTendik = teachers.length - totalGuru;
-  const totalPNS = teachers.filter(t => t.statusKepegawaian === 'PNS' || t.statusKepegawaian === 'PPPK').length;
-  const totalHonorer = teachers.filter(t => t.statusKepegawaian !== 'PNS' && t.statusKepegawaian !== 'PPPK').length;
+  const ptkBreakdown = getPtkBreakdown(teachers);
+  const totalGuru = ptkBreakdown.pendidikCount;
+  const totalTendik = ptkBreakdown.tendikCount;
+  const totalPNS = ptkBreakdown.pnsCount + ptkBreakdown.pppkTotalCount;
+  const totalHonorer = ptkBreakdown.honorerCount + ptkBreakdown.lainnyaCount;
   const sarprasBaik = sarpras.filter(s => s.kondisi === 'Baik').length;
 
   return (
@@ -224,7 +223,7 @@ export const SchoolModule: React.FC<SchoolModuleProps> = ({
               <span className="text-lg font-extrabold text-slate-900">{teachers.length}</span>
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total PTK</span>
               <span className="text-[10px] font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full mt-1 border border-amber-200/80">
-                {totalGuru} Guru &bull; {totalTendik} Tendik
+                {totalGuru} Guru &bull; {totalTendik} Tenaga Kependidikan
               </span>
             </div>
             <div className="bg-white/95 backdrop-blur-md p-3.5 rounded-2xl border border-sky-100 shadow-xs flex flex-col items-center justify-center text-center">
@@ -623,11 +622,11 @@ export const SchoolModule: React.FC<SchoolModuleProps> = ({
               <h3 className="text-sm font-bold text-amber-800 flex items-center justify-between border-b border-slate-100 pb-3">
                 <span className="flex items-center gap-2">
                   <GraduationCap className="w-4 h-4 text-amber-600" />
-                  <span>Pendidik & Tendik (PTK)</span>
+                  <span>Pendidik & Tenaga Kependidikan (PTK)</span>
                 </span>
                 <div className="text-right">
                   <span className="text-lg font-extrabold text-slate-900">{teachers.length}</span>
-                  <div className="text-[10px] font-semibold text-amber-700">{totalGuru} Guru, {totalTendik} Tendik</div>
+                  <div className="text-[10px] font-semibold text-amber-700">{totalGuru} Guru, {totalTendik} Tenaga Kependidikan</div>
                 </div>
               </h3>
               <div className="space-y-2 text-xs">
@@ -636,7 +635,7 @@ export const SchoolModule: React.FC<SchoolModuleProps> = ({
                   <span className="font-bold text-sky-700">{totalGuru} Orang</span>
                 </div>
                 <div className="flex justify-between py-1.5 border-b border-slate-100">
-                  <span className="text-slate-500 font-medium">Tenaga Kependidikan (Tendik)</span>
+                  <span className="text-slate-500 font-medium">Tenaga Kependidikan</span>
                   <span className="font-bold text-amber-700">{totalTendik} Orang</span>
                 </div>
                 <div className="flex justify-between py-1.5 border-b border-slate-100">

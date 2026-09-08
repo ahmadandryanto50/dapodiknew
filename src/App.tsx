@@ -35,6 +35,7 @@ import { RaporModule } from './components/RaporModule';
 import { LaporanModule } from './components/LaporanModule';
 import { SettingsModule } from './components/SettingsModule';
 import { AplikasiModule } from './components/AplikasiModule';
+import { BerkasModule } from './components/BerkasModule';
 import { GoogleSheetModal } from './components/GoogleSheetModal';
 import { QuickSearchModal } from './components/QuickSearchModal';
 import { NotificationDrawer } from './components/NotificationDrawer';
@@ -57,6 +58,7 @@ import {
   LogOut,
   Shield,
   Laptop,
+  FolderLock,
   Menu,
   X
 } from 'lucide-react';
@@ -262,8 +264,20 @@ export default function App() {
 
   const [teachers, setTeachers] = useState<TeacherStaff[]>(() => {
     const saved = localStorage.getItem('dapodik_teachers');
-    const data = saved ? JSON.parse(saved) : initialTeachers;
-    return sanitizeTeacherDates(data);
+    const ver = localStorage.getItem('dapodik_teachers_ver');
+    if (saved && ver === 'v6_25guru_9tendik_clean') {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return sanitizeTeacherDates(parsed);
+        }
+      } catch (e) {
+        console.error('Failed to parse dapodik_teachers', e);
+      }
+    }
+    localStorage.setItem('dapodik_teachers_ver', 'v6_25guru_9tendik_clean');
+    localStorage.setItem('dapodik_teachers', JSON.stringify(initialTeachers));
+    return sanitizeTeacherDates(initialTeachers);
   });
 
   const [sarpras, setSarpras] = useState<SarprasItem[]>(() => {
@@ -432,6 +446,7 @@ export default function App() {
   const [isInitialized, setIsInitialized] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [settingsInitialFilter, setSettingsInitialFilter] = useState<'all' | '1' | '2' | '3' | '4' | '5'>('all');
+  const [berkasAutoOpenUpload, setBerkasAutoOpenUpload] = useState<boolean>(false);
 
   const notificationsRef = useRef<NotificationItem[]>(notifications);
   useEffect(() => {
@@ -2407,6 +2422,17 @@ export default function App() {
                 <Laptop className="w-3.5 h-3.5" />
                 <span>Aplikasi</span>
               </button>
+              <button
+                onClick={() => setActiveTab('berkas')}
+                className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  activeTab === 'berkas' 
+                    ? 'bg-white text-slate-900 shadow-md shadow-sky-950/20' 
+                    : 'text-sky-100 hover:text-white hover:bg-white/15'
+                }`}
+              >
+                <FolderLock className="w-3.5 h-3.5" />
+                <span>Berkas</span>
+              </button>
               {(currentUser?.role === 'Administrator' || currentUser?.role === 'Operator') && (
                 <button
                   onClick={() => setActiveTab('pengaturan')}
@@ -2484,8 +2510,13 @@ export default function App() {
         {activeTab === 'home' && (
           <WelcomeHero
             onNavigate={(tab) => {
+              setBerkasAutoOpenUpload(false);
               setSettingsInitialFilter('all');
               setActiveTab(tab);
+            }}
+            onOpenUploadBerkas={() => {
+              setBerkasAutoOpenUpload(true);
+              setActiveTab('berkas');
             }}
             onOpenEditDisplay={handleOpenEditDisplay}
             syncConfig={syncConfig}
@@ -2606,6 +2637,19 @@ export default function App() {
               isSyncing={isSyncing}
               aplikasiLinks={aplikasiLinks}
               setAplikasiLinks={setAplikasiLinks}
+            />
+          </div>
+        )}
+
+        {activeTab === 'berkas' && (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <BerkasModule
+              currentUser={currentUser}
+              onBackToHome={() => {
+                setBerkasAutoOpenUpload(false);
+                setActiveTab('home');
+              }}
+              autoOpenUpload={berkasAutoOpenUpload}
             />
           </div>
         )}
@@ -2738,6 +2782,7 @@ export default function App() {
                 { id: 'rapor' as ActiveTab, label: 'Penilaian Rapor', icon: FileText, desc: 'Capaian kompetensi & nilai' },
                 { id: 'laporan' as ActiveTab, label: 'Laporan & Statistik', icon: BarChart3, desc: 'Rekapitulasi grafik & analisis' },
                 { id: 'aplikasi' as ActiveTab, label: 'Portal Aplikasi', icon: Laptop, desc: 'Tautan eksternal & pintasan' },
+                { id: 'berkas' as ActiveTab, label: 'Arsip & Berkas', icon: FolderLock, desc: 'Google Drive & repositori dokumen' },
                 ...(currentUser?.role === 'Administrator' || currentUser?.role === 'Operator' ? [
                   { id: 'pengaturan' as ActiveTab, label: 'Pengaturan Database', icon: Settings, desc: 'Konfigurasi cloud & akun' }
                 ] : [])

@@ -130,6 +130,9 @@ export const initialStudents: Student[] = [
 ];
 
 export const initialTeachers: TeacherStaff[] = [
+  // =========================================================================
+  // I. TENAGA KEPENDIDIKAN (9 ORANG TERMASUK KEPALA SEKOLAH)
+  // =========================================================================
   {
     id: 'ptk-001',
     nuptk: '1234567890123456',
@@ -138,7 +141,8 @@ export const initialTeachers: TeacherStaff[] = [
     jenisKelamin: 'L',
     statusKepegawaian: 'PNS',
     jenisPtk: 'Kepala Sekolah',
-    mapel: 'Manajemen Pendidikan',
+    mapel: 'Manajemen Pendidikan & Kepemimpinan Sekolah',
+    tugasTambahan: 'Kepala Sekolah',
     pendidikanTerakhir: 'S2 Manajemen Pendidikan',
     noHp: '081234567890',
     email: 'bambang.sudarsono@sekolah.belajar.id',
@@ -146,6 +150,129 @@ export const initialTeachers: TeacherStaff[] = [
   },
   {
     id: 'ptk-002',
+    nuptk: '5678901234567890',
+    nip: '198204152009011008',
+    nama: 'Agus Setiawan, S.AP.',
+    jenisKelamin: 'L',
+    statusKepegawaian: 'PNS',
+    jenisPtk: 'Tenaga Administrasi',
+    mapel: 'Kepala Tata Usaha',
+    tugasTambahan: 'Kepala Tenaga Administrasi Sekolah (KTAS)',
+    pendidikanTerakhir: 'S1 Administrasi Publik',
+    noHp: '089612345678',
+    email: 'agus.setiawan@sekolah.belajar.id',
+    statusSertifikasi: 'Belum'
+  },
+  {
+    id: 'ptk-003',
+    nuptk: '6789012345678901',
+    nip: '199008202022211007',
+    nama: 'Mohamad Fadli, S.Kom.',
+    jenisKelamin: 'L',
+    statusKepegawaian: 'PPPK',
+    jenisPtk: 'Tenaga Kependidikan',
+    mapel: 'Operator Dapodik & IT',
+    tugasTambahan: 'Operator SIM Sekolah',
+    pendidikanTerakhir: 'S1 Sistem Informasi',
+    noHp: '085712340011',
+    email: 'fadli.operator@sekolah.belajar.id',
+    statusSertifikasi: 'Belum'
+  },
+  {
+    id: 'ptk-004',
+    nuptk: '7890123456789012',
+    nip: '198603122014022003',
+    nama: 'Hj. Endang Sri Wahyuni, S.Sos.',
+    jenisKelamin: 'P',
+    statusKepegawaian: 'PNS',
+    jenisPtk: 'Tenaga Administrasi',
+    mapel: 'Administrasi Kepegawaian & Keuangan',
+    tugasTambahan: 'Bendahara Sekolah',
+    pendidikanTerakhir: 'S1 Sosiologi',
+    noHp: '081345678901',
+    email: 'endang.sri@sekolah.belajar.id',
+    statusSertifikasi: 'Belum'
+  },
+  {
+    id: 'ptk-005',
+    nuptk: '8901234567890123',
+    nip: '199511102024212009',
+    nama: 'Rina Agustina, A.Md.',
+    jenisKelamin: 'P',
+    statusKepegawaian: 'PPPK Paruh Waktu',
+    jenisPtk: 'Tenaga Administrasi',
+    mapel: 'Administrasi Kesiswaan & Arsip',
+    tugasTambahan: 'Staf Kesiswaan',
+    pendidikanTerakhir: 'D3 Administrasi Perkantoran',
+    noHp: '082233445566',
+    email: 'rina.agustina@sekolah.belajar.id',
+    statusSertifikasi: 'Belum'
+  },
+  {
+    id: 'ptk-006',
+    nuptk: '9012345678901234',
+    nip: '199107142023211004',
+    nama: 'Budi Prasetyo, S.I.Pust.',
+    jenisKelamin: 'L',
+    statusKepegawaian: 'PPPK',
+    jenisPtk: 'Pustakawan',
+    mapel: 'Pengelola Perpustakaan',
+    tugasTambahan: 'Kepala Perpustakaan',
+    pendidikanTerakhir: 'S1 Ilmu Perpustakaan',
+    noHp: '087811223344',
+    email: 'budi.pustaka@sekolah.belajar.id',
+    statusSertifikasi: 'Belum'
+  },
+  {
+    id: 'ptk-007',
+    nuptk: '0123456789012345',
+    nip: '199309052024211006',
+    nama: 'Rahmat Hidayat, S.Si.',
+    jenisKelamin: 'L',
+    statusKepegawaian: 'PPPK Paruh Waktu',
+    jenisPtk: 'Laboran',
+    mapel: 'Pengelola Laboratorium IPA & Komputer',
+    tugasTambahan: 'Laboran IPA',
+    pendidikanTerakhir: 'S1 Biologi',
+    noHp: '085299887766',
+    email: 'rahmat.laboran@sekolah.belajar.id',
+    statusSertifikasi: 'Belum'
+  },
+  {
+    id: 'ptk-008',
+    nuptk: '1122334455667788',
+    nama: 'Hasan Basri',
+    jenisKelamin: 'L',
+    statusKepegawaian: 'Tenaga Honor Sekolah',
+    jenisPtk: 'Tenaga Kependidikan',
+    mapel: 'Petugas Keamanan & Ketertiban',
+    tugasTambahan: 'Satpam / Security Sekolah',
+    pendidikanTerakhir: 'SMA Sederajat',
+    noHp: '081299881122',
+    email: 'hasan.keamanan@sekolah.belajar.id',
+    statusSertifikasi: 'Belum'
+  },
+  {
+    id: 'ptk-009',
+    nuptk: '2233445566778899',
+    nama: 'Syarifudin',
+    jenisKelamin: 'L',
+    statusKepegawaian: 'Tenaga Honor Sekolah',
+    jenisPtk: 'Tenaga Kependidikan',
+    mapel: 'Petugas Kebersihan & Perawatan Lingkungan',
+    tugasTambahan: 'Caraka / Kebersihan',
+    pendidikanTerakhir: 'SMP Sederajat',
+    noHp: '085344556677',
+    email: 'syarif.kebersihan@sekolah.belajar.id',
+    statusSertifikasi: 'Belum'
+  },
+
+  // =========================================================================
+  // II. GURU / PENDIDIK (25 ORANG)
+  // =========================================================================
+  // 1. Matematika (3 orang)
+  {
+    id: 'ptk-010',
     nuptk: '2345678901234567',
     nip: '198503152010012015',
     nama: 'Siti Rahmawati, S.Pd.',
@@ -159,7 +286,329 @@ export const initialTeachers: TeacherStaff[] = [
     statusSertifikasi: 'Sudah'
   },
   {
-    id: 'ptk-003',
+    id: 'ptk-011',
+    nuptk: '3141592653589793',
+    nip: '198806142022211009',
+    nama: 'Ahmad Dani, M.Pd.',
+    jenisKelamin: 'L',
+    statusKepegawaian: 'PPPK',
+    jenisPtk: 'Guru Mapel',
+    mapel: 'Matematika',
+    pendidikanTerakhir: 'S2 Pendidikan Matematika',
+    noHp: '081277889900',
+    email: 'ahmad.dani@sekolah.belajar.id',
+    statusSertifikasi: 'Sudah'
+  },
+  {
+    id: 'ptk-012',
+    nuptk: '2718281828459045',
+    nama: 'Putri Handayani, S.Pd.',
+    jenisKelamin: 'P',
+    statusKepegawaian: 'Guru Honor Sekolah',
+    jenisPtk: 'Guru Mapel',
+    mapel: 'Matematika',
+    pendidikanTerakhir: 'S1 Pendidikan Matematika',
+    noHp: '085211223344',
+    email: 'putri.handayani@sekolah.belajar.id',
+    statusSertifikasi: 'Belum'
+  },
+
+  // 2. Bahasa Indonesia (3 orang)
+  {
+    id: 'ptk-013',
+    nuptk: '4567890123456789',
+    nip: '198302102008012006',
+    nama: 'Nurul Hidayati, S.Pd.',
+    jenisKelamin: 'P',
+    statusKepegawaian: 'PNS',
+    jenisPtk: 'Guru Mapel',
+    mapel: 'Bahasa Indonesia',
+    pendidikanTerakhir: 'S1 Pendidikan Bahasa Indonesia',
+    noHp: '082145678901',
+    email: 'nurul.hidayati@sekolah.belajar.id',
+    statusSertifikasi: 'Sudah'
+  },
+  {
+    id: 'ptk-014',
+    nuptk: '1414213562373095',
+    nip: '198905222023211008',
+    nama: 'Wahyu Pratama, S.Pd.',
+    jenisKelamin: 'L',
+    statusKepegawaian: 'PPPK',
+    jenisPtk: 'Guru Mapel',
+    mapel: 'Bahasa Indonesia',
+    pendidikanTerakhir: 'S1 Pendidikan Bahasa dan Sastra Indonesia',
+    noHp: '081355667788',
+    email: 'wahyu.pratama@sekolah.belajar.id',
+    statusSertifikasi: 'Sudah'
+  },
+  {
+    id: 'ptk-015',
+    nuptk: '1732050807568877',
+    nama: 'Tri Wahyuningsih, S.Pd.',
+    jenisKelamin: 'P',
+    statusKepegawaian: 'Guru Honor Sekolah',
+    jenisPtk: 'Guru Mapel',
+    mapel: 'Bahasa Indonesia',
+    pendidikanTerakhir: 'S1 Pendidikan Bahasa Indonesia',
+    noHp: '085377889900',
+    email: 'tri.wahyuningsih@sekolah.belajar.id',
+    statusSertifikasi: 'Belum'
+  },
+
+  // 3. IPA (3 orang)
+  {
+    id: 'ptk-016',
+    nuptk: '2236067977499789',
+    nip: '198009182006041005',
+    nama: 'Hendra Wijaya, S.Pd., M.Si.',
+    jenisKelamin: 'L',
+    statusKepegawaian: 'PNS',
+    jenisPtk: 'Guru Mapel',
+    mapel: 'Ilmu Pengetahuan Alam (IPA)',
+    pendidikanTerakhir: 'S2 Magister Sains Fisika',
+    noHp: '081199882233',
+    email: 'hendra.wijaya@sekolah.belajar.id',
+    statusSertifikasi: 'Sudah'
+  },
+  {
+    id: 'ptk-017',
+    nuptk: '2449489742783178',
+    nip: '199104122022212004',
+    nama: 'Maya Anggraini, S.Pd.',
+    jenisKelamin: 'P',
+    statusKepegawaian: 'PPPK',
+    jenisPtk: 'Guru Mapel',
+    mapel: 'Ilmu Pengetahuan Alam (IPA)',
+    pendidikanTerakhir: 'S1 Pendidikan Biologi',
+    noHp: '082199883344',
+    email: 'maya.anggraini@sekolah.belajar.id',
+    statusSertifikasi: 'Sudah'
+  },
+  {
+    id: 'ptk-018',
+    nuptk: '2645751311064590',
+    nama: 'Dedi Kurniawan, S.Pd.',
+    jenisKelamin: 'L',
+    statusKepegawaian: 'PPPK Paruh Waktu',
+    jenisPtk: 'Guru Mapel',
+    mapel: 'Ilmu Pengetahuan Alam (IPA)',
+    pendidikanTerakhir: 'S1 Pendidikan Fisika',
+    noHp: '085788990011',
+    email: 'dedi.kurniawan@sekolah.belajar.id',
+    statusSertifikasi: 'Belum'
+  },
+
+  // 4. Bahasa Inggris (3 orang)
+  {
+    id: 'ptk-019',
+    nuptk: '2828427124746190',
+    nip: '198411032009022004',
+    nama: 'Dian Novita, S.Pd., M.Hum.',
+    jenisKelamin: 'P',
+    statusKepegawaian: 'PNS',
+    jenisPtk: 'Guru Mapel',
+    mapel: 'Bahasa Inggris',
+    pendidikanTerakhir: 'S2 Magister Humaniora',
+    noHp: '081266778899',
+    email: 'dian.novita@sekolah.belajar.id',
+    statusSertifikasi: 'Sudah'
+  },
+  {
+    id: 'ptk-020',
+    nuptk: '3000000000000001',
+    nip: '199001152023211003',
+    nama: 'Faisal Akbar, S.Pd.',
+    jenisKelamin: 'L',
+    statusKepegawaian: 'PPPK',
+    jenisPtk: 'Guru Mapel',
+    mapel: 'Bahasa Inggris',
+    pendidikanTerakhir: 'S1 Pendidikan Bahasa Inggris',
+    noHp: '081344559988',
+    email: 'faisal.akbar@sekolah.belajar.id',
+    statusSertifikasi: 'Sudah'
+  },
+  {
+    id: 'ptk-021',
+    nuptk: '3162277660168379',
+    nama: 'Anita Larasati, S.Pd.',
+    jenisKelamin: 'P',
+    statusKepegawaian: 'GTY',
+    jenisPtk: 'Guru Mapel',
+    mapel: 'Bahasa Inggris',
+    pendidikanTerakhir: 'S1 Pendidikan Bahasa Inggris',
+    noHp: '085266771122',
+    email: 'anita.larasati@sekolah.belajar.id',
+    statusSertifikasi: 'Belum'
+  },
+
+  // 5. IPS (3 orang)
+  {
+    id: 'ptk-022',
+    nuptk: '3316624790355400',
+    nip: '197908122007011008',
+    nama: 'Drs. Mulyadi, M.Pd.',
+    jenisKelamin: 'L',
+    statusKepegawaian: 'PNS',
+    jenisPtk: 'Guru Mapel',
+    mapel: 'Ilmu Pengetahuan Sosial (IPS)',
+    pendidikanTerakhir: 'S2 Pendidikan IPS',
+    noHp: '081133445566',
+    email: 'mulyadi.ips@sekolah.belajar.id',
+    statusSertifikasi: 'Sudah'
+  },
+  {
+    id: 'ptk-023',
+    nuptk: '3464101615137754',
+    nip: '199209252022212006',
+    nama: 'Dewi Kartika, S.Pd.',
+    jenisKelamin: 'P',
+    statusKepegawaian: 'PPPK',
+    jenisPtk: 'Guru Mapel',
+    mapel: 'Ilmu Pengetahuan Sosial (IPS)',
+    pendidikanTerakhir: 'S1 Pendidikan Sejarah',
+    noHp: '082211445588',
+    email: 'dewi.kartika@sekolah.belajar.id',
+    statusSertifikasi: 'Sudah'
+  },
+  {
+    id: 'ptk-024',
+    nuptk: '3605551275463989',
+    nama: 'Arif Wicaksono, S.Pd.',
+    jenisKelamin: 'L',
+    statusKepegawaian: 'Guru Honor Sekolah',
+    jenisPtk: 'Guru Mapel',
+    mapel: 'Ilmu Pengetahuan Sosial (IPS)',
+    pendidikanTerakhir: 'S1 Pendidikan Geografi',
+    noHp: '085733441199',
+    email: 'arif.wicaksono@sekolah.belajar.id',
+    statusSertifikasi: 'Belum'
+  },
+
+  // 6. Pendidikan Agama Islam & Budi Pekerti (2 orang)
+  {
+    id: 'ptk-025',
+    nuptk: '3741657386773941',
+    nip: '197706192003121004',
+    nama: 'Ust. H. Muhammad Ridwan, S.Ag., M.Pd.I.',
+    jenisKelamin: 'L',
+    statusKepegawaian: 'PNS',
+    jenisPtk: 'Guru Mapel',
+    mapel: 'Pendidikan Agama Islam & Budi Pekerti',
+    pendidikanTerakhir: 'S2 Pendidikan Agama Islam',
+    noHp: '081277112233',
+    email: 'ridwan.pai@sekolah.belajar.id',
+    statusSertifikasi: 'Sudah'
+  },
+  {
+    id: 'ptk-026',
+    nuptk: '3872983346207417',
+    nip: '198712102023212005',
+    nama: 'Syarifah Nur, S.Pd.I.',
+    jenisKelamin: 'P',
+    statusKepegawaian: 'PPPK',
+    jenisPtk: 'Guru Mapel',
+    mapel: 'Pendidikan Agama Islam & Budi Pekerti',
+    pendidikanTerakhir: 'S1 Pendidikan Agama Islam',
+    noHp: '082344556611',
+    email: 'syarifah.nur@sekolah.belajar.id',
+    statusSertifikasi: 'Sudah'
+  },
+
+  // 7. Pendidikan Agama Kristen & Budi Pekerti (1 orang)
+  {
+    id: 'ptk-027',
+    nuptk: '4000000000000002',
+    nip: '198604172011011003',
+    nama: 'Yohanes Christian, S.Th.',
+    jenisKelamin: 'L',
+    statusKepegawaian: 'PNS',
+    jenisPtk: 'Guru Mapel',
+    mapel: 'Pendidikan Agama Kristen & Budi Pekerti',
+    pendidikanTerakhir: 'S1 Teologi Pendidikan',
+    noHp: '081399887711',
+    email: 'yohanes.christian@sekolah.belajar.id',
+    statusSertifikasi: 'Sudah'
+  },
+
+  // 8. PPKn / Pendidikan Pancasila (2 orang)
+  {
+    id: 'ptk-028',
+    nuptk: '4123105625617660',
+    nip: '198110052008012011',
+    nama: 'Ratna Juwita, S.Pd., M.H.',
+    jenisKelamin: 'P',
+    statusKepegawaian: 'PNS',
+    jenisPtk: 'Guru Mapel',
+    mapel: 'Pendidikan Pancasila dan Kewarganegaraan (PPKn)',
+    pendidikanTerakhir: 'S2 Magister Hukum',
+    noHp: '081288994455',
+    email: 'ratna.juwita@sekolah.belajar.id',
+    statusSertifikasi: 'Sudah'
+  },
+  {
+    id: 'ptk-029',
+    nuptk: '4242640687119285',
+    nama: 'Eko Prasetyo, S.Pd.',
+    jenisKelamin: 'L',
+    statusKepegawaian: 'PPPK Paruh Waktu',
+    jenisPtk: 'Guru Mapel',
+    mapel: 'Pendidikan Pancasila dan Kewarganegaraan (PPKn)',
+    pendidikanTerakhir: 'S1 PPKn',
+    noHp: '085699881144',
+    email: 'eko.prasetyo@sekolah.belajar.id',
+    statusSertifikasi: 'Belum'
+  },
+
+  // 9. PJOK / Penjasorkes (2 orang)
+  {
+    id: 'ptk-030',
+    nuptk: '4358898943540673',
+    nip: '198407282010011009',
+    nama: 'Bayu Anggoro, S.Pd.',
+    jenisKelamin: 'L',
+    statusKepegawaian: 'PNS',
+    jenisPtk: 'Guru Mapel',
+    mapel: 'Pendidikan Jasmani, Olahraga, dan Kesehatan (PJOK)',
+    pendidikanTerakhir: 'S1 Pendidikan Kepelatihan Olahraga',
+    noHp: '081377881122',
+    email: 'bayu.anggoro@sekolah.belajar.id',
+    statusSertifikasi: 'Sudah'
+  },
+  {
+    id: 'ptk-031',
+    nuptk: '4472135954999579',
+    nip: '199302182023211006',
+    nama: 'Fajar Ramadhan, S.Pd.',
+    jenisKelamin: 'L',
+    statusKepegawaian: 'PPPK',
+    jenisPtk: 'Guru Mapel',
+    mapel: 'Pendidikan Jasmani, Olahraga, dan Kesehatan (PJOK)',
+    pendidikanTerakhir: 'S1 Pendidikan Jasmani',
+    noHp: '082155669900',
+    email: 'fajar.ramadhan@sekolah.belajar.id',
+    statusSertifikasi: 'Sudah'
+  },
+
+  // 10. Seni Budaya (1 orang)
+  {
+    id: 'ptk-032',
+    nuptk: '4582575694955840',
+    nip: '199405102022212007',
+    nama: 'Indah Permatasari, S.Sn.',
+    jenisKelamin: 'P',
+    statusKepegawaian: 'PPPK',
+    jenisPtk: 'Guru Mapel',
+    mapel: 'Seni Budaya & Prakarya',
+    pendidikanTerakhir: 'S1 Seni Pertunjukan',
+    noHp: '081299447788',
+    email: 'indah.seni@sekolah.belajar.id',
+    statusSertifikasi: 'Sudah'
+  },
+
+  // 11. Informatika / TIK (1 orang)
+  {
+    id: 'ptk-033',
     nuptk: '3456789012345678',
     nip: '199208202022211005',
     nama: 'Rian Hidayat, S.Kom.',
@@ -172,31 +621,21 @@ export const initialTeachers: TeacherStaff[] = [
     email: 'rian.hidayat@sekolah.belajar.id',
     statusSertifikasi: 'Sudah'
   },
+
+  // 12. Bimbingan dan Konseling (BK) (1 orang)
   {
-    id: 'ptk-004',
-    nuptk: '4567890123456789',
-    nama: 'Nurul Hidayati, S.Pd.',
+    id: 'ptk-034',
+    nuptk: '4690415759823429',
+    nip: '198608142011012014',
+    nama: 'Lilis Suryani, S.Pd., Kons.',
     jenisKelamin: 'P',
-    statusKepegawaian: 'GTY',
-    jenisPtk: 'Guru Mapel',
-    mapel: 'Bahasa Indonesia',
-    pendidikanTerakhir: 'S1 Pendidikan Bahasa Indonesia',
-    noHp: '082145678901',
-    email: 'nurul.hidayati@sekolah.belajar.id',
-    statusSertifikasi: 'Belum'
-  },
-  {
-    id: 'ptk-005',
-    nuptk: '5678901234567890',
-    nama: 'Agus Setiawan, A.Md.',
-    jenisKelamin: 'L',
-    statusKepegawaian: 'Tenaga Honor Sekolah',
-    jenisPtk: 'Tenaga Administrasi',
-    mapel: 'Operator Dapodik / TU',
-    pendidikanTerakhir: 'D3 Administrasi Perkantoran',
-    noHp: '089612345678',
-    email: 'agus.setiawan@sekolah.belajar.id',
-    statusSertifikasi: 'Belum'
+    statusKepegawaian: 'PNS',
+    jenisPtk: 'Guru BK',
+    mapel: 'Bimbingan dan Konseling (BK)',
+    pendidikanTerakhir: 'S1 Bimbingan dan Konseling',
+    noHp: '081366554433',
+    email: 'lilis.suryani@sekolah.belajar.id',
+    statusSertifikasi: 'Sudah'
   }
 ];
 

@@ -38,6 +38,7 @@ import {
   Legend
 } from 'recharts';
 import { Student, TeacherStaff, SarprasItem, StudentReport, SchoolProfile, AppDisplayConfig } from '../types';
+import { isTenagaKependidikan, isPendidik, getPtkBreakdown } from '../utils/ptkClassification';
 import { exportToCSV } from '../services/googleSheetsService';
 import { parseFlexibleDate } from '../utils/dateUtils';
 import { exportCompleteRekapToExcel } from '../utils/rekapExportHelper';
@@ -211,11 +212,9 @@ export const LaporanModule: React.FC<LaporanModuleProps> = ({
 
   allTeachers.forEach(t => {
     if (!t) return;
-    const jenisPtkStr = String(t.jenisPtk || '').toLowerCase();
-    const isPendidik = (['Guru Mapel', 'Guru Kelas'].includes(t.jenisPtk) || jenisPtkStr.includes('guru')) && 
-                       !jenisPtkStr.includes('kepala');
+    const isTendik = isTenagaKependidikan(t);
     
-    if (isPendidik) {
+    if (!isTendik) {
       if (t.jenisKelamin === 'L') pendidikL += 1;
       else pendidikP += 1;
     } else {
@@ -231,7 +230,12 @@ export const LaporanModule: React.FC<LaporanModuleProps> = ({
   const ptkStatusCounts: Record<string, number> = {};
   allTeachers.forEach(t => {
     if (!t) return;
-    const stKey = (t.statusKepegawaian && t.statusKepegawaian.trim()) ? t.statusKepegawaian.trim() : 'Lainnya';
+    const rawSt = (t.statusKepegawaian && t.statusKepegawaian.trim()) ? t.statusKepegawaian.trim() : 'Lainnya';
+    const lowerSt = rawSt.toLowerCase();
+    let stKey = rawSt;
+    if (lowerSt.includes('paruh')) stKey = 'PPPK Paruh Waktu';
+    else if (lowerSt === 'pppk' || lowerSt.includes('pppk')) stKey = 'PPPK';
+    else if (lowerSt === 'pns' || lowerSt.includes('pns')) stKey = 'PNS';
     ptkStatusCounts[stKey] = (ptkStatusCounts[stKey] || 0) + 1;
   });
   const ptkData = Object.keys(ptkStatusCounts).map(st => ({
@@ -474,7 +478,7 @@ export const LaporanModule: React.FC<LaporanModuleProps> = ({
       { Kategori: 'Total Siswa Usia 13 s.d. 15 Tahun', Jumlah: totalUsia13_15, Keterangan: `Rentang Usia Standar SMP (13-15 Tahun)` },
       { Kategori: 'Siswa Usia < 13 Tahun', Jumlah: (usiaUnder13_Palu_L + usiaUnder13_Palu_P + usiaUnder13_NonPalu_L + usiaUnder13_NonPalu_P), Keterangan: 'Di Bawah Usia Standar SMP' },
       { Kategori: 'Siswa Usia > 15 Tahun', Jumlah: (usiaOver15_Palu_L + usiaOver15_Palu_P + usiaOver15_NonPalu_L + usiaOver15_NonPalu_P), Keterangan: 'Di Atas Usia Standar SMP' },
-      { Kategori: 'Total Pendidik & Tendik (PTK)', Jumlah: teachers.length, Keterangan: `${teachers.filter(t => t.statusSertifikasi === 'Sudah').length} Tersertifikasi` },
+      { Kategori: 'Total Pendidik & Tenaga Kependidikan (PTK)', Jumlah: teachers.length, Keterangan: `${teachers.filter(t => t.statusSertifikasi === 'Sudah').length} Tersertifikasi` },
       { Kategori: 'Total Sarana & Prasarana', Jumlah: sarpras.length, Keterangan: `${sarpras.filter(s => s.kondisi === 'Baik').length} Kondisi Baik` },
       { Kategori: 'Total Rapor Tervalidasi', Jumlah: reports.length, Keterangan: 'Semester Genap 2025/2026' }
     ];
@@ -614,10 +618,10 @@ export const LaporanModule: React.FC<LaporanModuleProps> = ({
             <div className="flex items-baseline gap-2">
               <span className="text-2xl font-black text-slate-900">{teachers.length}</span>
               <span className="text-[11px] font-bold text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200 shadow-2xs">
-                {totalPendidik} Guru &bull; {totalTendik} Tendik
+                {totalPendidik} Guru &bull; {totalTendik} Tenaga Kependidikan
               </span>
             </div>
-            <div className="text-xs text-slate-500 font-medium">Pendidik & Tendik (PTK)</div>
+            <div className="text-xs text-slate-500 font-medium">Pendidik & Tenaga Kependidikan (PTK)</div>
           </div>
         </div>
 
@@ -1357,7 +1361,7 @@ export const LaporanModule: React.FC<LaporanModuleProps> = ({
                       <Users className="w-5 h-5" />
                     </div>
                     <div>
-                      <h4 className="font-bold text-slate-900 text-sm">Tenaga Kependidikan (Tendik)</h4>
+                      <h4 className="font-bold text-slate-900 text-sm">Tenaga Kependidikan</h4>
                       <p className="text-[10px] text-slate-500">Tata Usaha, Laboran, Pustakawan & Staf Pendukung</p>
                     </div>
                   </div>

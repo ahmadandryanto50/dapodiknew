@@ -2,6 +2,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Student, TeacherStaff, SarprasItem, StudentReport, SchoolProfile, AppDisplayConfig } from '../types';
 import { formatDateIndonesian } from './dateUtils';
+import { getPtkBreakdown } from './ptkClassification';
 
 export interface ExportPdfOptions {
   students: Student[];
@@ -153,9 +154,10 @@ export function generateOfficialRekapPdf({
     });
 
     // PTK stats
-    const pendidikCount = allTeachers.filter(t => (t.jenisPtk || '').toLowerCase().includes('guru') || (t.jenisPtk || '').toLowerCase().includes('pendidik')).length;
-    const tendikCount = allTeachers.length - pendidikCount;
-    const certifiedCount = allTeachers.filter(t => (t.statusSertifikasi || t.sertifikasi || '').toLowerCase().includes('sudah')).length;
+    const ptkBreakdown = getPtkBreakdown(allTeachers);
+    const pendidikCount = ptkBreakdown.pendidikCount;
+    const tendikCount = ptkBreakdown.tendikCount;
+    const certifiedCount = ptkBreakdown.sertifikasiSudahCount;
 
     // Sarpras stats
     const sarprasBaik = allSarpras.filter(s => s.kondisi === 'Baik').length;
@@ -229,7 +231,7 @@ export function generateOfficialRekapPdf({
       ['Total Peserta Didik Aktif', `${totalStudents} Siswa (Laki-laki: ${maleStudents}, Perempuan: ${femaleStudents})`],
       ['Total Rombongan Belajar (Rombel)', `${Object.keys(classRekap).length} Rombel Terdaftar`],
       ['Siswa Usia 13-15 Tahun (SMP)', `${total13_15} Siswa (Kota Palu: ${total13_15_Palu}, Luar Palu: ${total13_15_NonPalu})`],
-      ['Pendidik & Tenaga Kependidikan', `${allTeachers.length} PTK (${pendidikCount} Guru, ${tendikCount} Tendik, ${certifiedCount} Tersertifikasi)`],
+      ['Pendidik & Tenaga Kependidikan', `${allTeachers.length} PTK (${pendidikCount} Guru, ${tendikCount} Tenaga Kependidikan, ${certifiedCount} Tersertifikasi)`],
       ['Sarana & Prasarana (Aset)', `${allSarpras.length} Unit Terdata (Baik: ${sarprasBaik}, Rusak: ${sarprasRusak})`],
       ['Alumni / Siswa Lulus', `${alumniList.length} Siswa Terdaftar`],
     ];
@@ -378,7 +380,7 @@ export function generateOfficialRekapPdf({
 
     const ptkSummaryRows = [
       ['1', 'Guru Mata Pelajaran / Pendidik', pendidikCount, 'PNS / PPPK / Honorer', 'Mengajar'],
-      ['2', 'Tenaga Kependidikan (Tendik / TU / Operator)', tendikCount, 'PNS / Non ASN', 'Administrasi & Teknis'],
+      ['2', 'Tenaga Kependidikan (TU / Operator / Laboran / Pustakawan / Staf)', tendikCount, 'PNS / PPPK / Honorer', 'Administrasi & Teknis'],
       ['3', 'Status Sertifikasi Pendidik', certifiedCount, 'Tersertifikasi Pendidik', 'Tunjangan Profesi'],
       ['', 'TOTAL PTK TERDAFTAR', allTeachers.length, 'Status Aktif di Dapodik', '100%'],
     ];

@@ -19,6 +19,7 @@ import { exportCompleteRekapToExcel } from '../utils/rekapExportHelper';
 import { formatImageUrl } from '../utils/imageUtils';
 import { printElement } from '../utils/printHelper';
 import { generateOfficialRekapPdf } from '../utils/pdfExportHelper';
+import { getPtkBreakdown } from '../utils/ptkClassification';
 
 interface OfficialRekapPrintModalProps {
   isOpen: boolean;
@@ -220,15 +221,14 @@ export const OfficialRekapPrintModal: React.FC<OfficialRekapPrintModalProps> = (
   const pctGrandPalu = grandTotal > 0 ? Math.round((totalAllPalu / grandTotal) * 100) : 0;
 
   // PTK stats
-  const pendidikList = allTeachers.filter(t => {
-    const jenis = (t.jenisPtk || '').toLowerCase();
-    return jenis.includes('guru') || jenis.includes('pendidik');
-  });
-  const tendikList = allTeachers.filter(t => !pendidikList.includes(t));
-  const ptkPns = allTeachers.filter(t => (t.statusKepegawaian || '').toUpperCase().includes('PNS')).length;
-  const ptkPppk = allTeachers.filter(t => (t.statusKepegawaian || '').toUpperCase().includes('PPPK')).length;
-  const ptkHonorer = allTeachers.filter(t => (t.statusKepegawaian || '').toLowerCase().includes('honor') || (t.statusKepegawaian || '').toLowerCase().includes('gtt')).length;
-  const ptkCertified = allTeachers.filter(t => (t.statusSertifikasi || '').toLowerCase().includes('sudah')).length;
+  const ptkBreakdown = getPtkBreakdown(allTeachers);
+  const pendidikList = ptkBreakdown.pendidikList;
+  const tendikList = ptkBreakdown.tendikList;
+  const ptkPns = ptkBreakdown.pnsCount;
+  const ptkPppk = ptkBreakdown.pppkPenuhCount;
+  const ptkPppkParuh = ptkBreakdown.pppkParuhCount;
+  const ptkHonorer = ptkBreakdown.honorerCount;
+  const ptkCertified = ptkBreakdown.sertifikasiSudahCount;
 
   // Sarpras stats
   const sarprasBaik = allSarpras.filter(s => s.kondisi === 'Baik').length;
@@ -450,9 +450,9 @@ export const OfficialRekapPrintModal: React.FC<OfficialRekapPrintModalProps> = (
                 </div>
 
                 <div className="p-2.5 rounded-xl border border-slate-200 bg-slate-50">
-                  <div className="text-[10px] font-bold text-slate-500 uppercase">Pendidik & Tendik</div>
+                  <div className="text-[10px] font-bold text-slate-500 uppercase">Pendidik & Tenaga Kependidikan</div>
                   <div className="text-lg font-black text-slate-900 font-mono mt-0.5">{allTeachers.length} <span className="text-[10px] font-normal text-slate-500">PTK</span></div>
-                  <div className="text-[10px] text-slate-600 mt-0.5">{pendidikList.length} Guru &bull; {tendikList.length} Tendik</div>
+                  <div className="text-[10px] text-slate-600 mt-0.5">{pendidikList.length} Guru &bull; {tendikList.length} Tenaga Kependidikan</div>
                 </div>
 
                 <div className="p-2.5 rounded-xl border border-slate-200 bg-slate-50">
@@ -707,12 +707,14 @@ export const OfficialRekapPrintModal: React.FC<OfficialRekapPrintModalProps> = (
                     <span className="font-mono font-bold text-slate-900">{pendidikList.length} Orang</span>
                   </div>
                   <div className="flex justify-between py-1 border-b border-slate-200">
-                    <span className="text-slate-600">Tenaga Kependidikan (Tendik):</span>
+                    <span className="text-slate-600">Tenaga Kependidikan:</span>
                     <span className="font-mono font-bold text-slate-900">{tendikList.length} Orang</span>
                   </div>
                   <div className="flex justify-between py-1 border-b border-slate-200">
-                    <span className="text-slate-600">Status Kepegawaian (PNS / PPPK / Honorer):</span>
-                    <span className="font-mono font-bold text-slate-900">{ptkPns} / {ptkPppk} / {ptkHonorer}</span>
+                    <span className="text-slate-600">Status Kepegawaian:</span>
+                    <span className="font-mono font-bold text-slate-900 text-right">
+                      {ptkPns} PNS / {ptkPppk} PPPK {ptkPppkParuh > 0 ? `/ ${ptkPppkParuh} PPPK-PW ` : ''}/ {ptkHonorer} Honorer
+                    </span>
                   </div>
                   <div className="flex justify-between py-1">
                     <span className="text-slate-600">Guru Tersertifikasi Pendidik:</span>
