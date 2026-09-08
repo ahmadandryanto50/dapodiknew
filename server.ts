@@ -184,6 +184,14 @@ async function startServer() {
       const incomingDeletedReqs: string[] = Array.isArray(incoming.deletedPermintaanAksesIds) ? incoming.deletedPermintaanAksesIds : [];
       const mergedDeletedReqs = Array.from(new Set([...currentDeletedReqs, ...incomingDeletedReqs]));
 
+      // Merge schoolFiles
+      let mergedFiles = currentData.schoolFiles || currentData.files || [];
+      if (Array.isArray(incoming.schoolFiles)) {
+        mergedFiles = incoming.schoolFiles;
+      } else if (Array.isArray(incoming.files)) {
+        mergedFiles = incoming.files;
+      }
+
       // Merge notifications carefully so no notification is ever lost by cross-device race conditions
       const currentNotifs: any[] = Array.isArray(currentData.notifications) ? currentData.notifications : [];
       const incomingNotifs: any[] = Array.isArray(incoming.notifications) ? incoming.notifications : [];
@@ -252,11 +260,12 @@ async function startServer() {
         deletedNotifIds: mergedDeleted,
         deletedPermintaanAksesIds: mergedDeletedReqs,
         notifications: mergedNotifs,
-        permintaanAkses: mergedRequests
+        permintaanAkses: mergedRequests,
+        schoolFiles: mergedFiles
       };
 
       fs.writeFileSync(DATA_FILE, JSON.stringify(finalData, null, 2), "utf-8");
-      return res.json({ success: true, notifications: mergedNotifs, permintaanAkses: mergedRequests });
+      return res.json({ success: true, notifications: mergedNotifs, permintaanAkses: mergedRequests, schoolFiles: mergedFiles });
     } catch (err) {
       console.error("Error writing app_data.json:", err);
       return res.status(500).json({ success: false, message: (err as Error).message });

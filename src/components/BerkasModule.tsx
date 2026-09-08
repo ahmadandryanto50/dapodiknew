@@ -118,11 +118,28 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
     } catch (e) {}
   }, [syncConfig]);
 
-  // Pull latest access requests from Spreadsheet / Server Cache
+  // Pull latest access requests & school files from Server Cache and Google Sheets
   const handlePullRequestsFromCloud = async (silent: boolean = false) => {
-    if (isSyncingRequests) return;
-    setIsSyncingRequests(true);
     try {
+      // 1. Immediately fetch from high-speed Server Cache (/api/app-data)
+      try {
+        const cacheRes = await fetch(`/api/app-data?t=${Date.now()}`);
+        if (cacheRes.ok) {
+          const cacheData = await cacheRes.json();
+          if (Array.isArray(cacheData.permintaanAkses) && cacheData.permintaanAkses.length > 0) {
+            setAccessRequests(cacheData.permintaanAkses);
+            localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(cacheData.permintaanAkses));
+          }
+          if (Array.isArray(cacheData.schoolFiles) && cacheData.schoolFiles.length > 0) {
+            setFiles(cacheData.schoolFiles);
+            localStorage.setItem('dapodik_school_files_v3', JSON.stringify(cacheData.schoolFiles));
+          }
+        }
+      } catch (cacheErr) {
+        console.warn('Cache pull error:', cacheErr);
+      }
+
+      // 2. Fetch from Google Sheets if configured
       let currentCfg = activeSyncConfig;
       if (!currentCfg?.webAppUrl) {
         try {
@@ -131,10 +148,9 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
         } catch (e) {}
       }
 
-      // 1. Try pulling from Google Sheets first if configured
       if (currentCfg?.webAppUrl) {
         const res = await loadFromGoogleSheets(currentCfg);
-        if (res.success && res.data && Array.isArray(res.data.permintaanAkses)) {
+        if (res.success && res.data && Array.isArray(res.data.permintaanAkses) && res.data.permintaanAkses.length > 0) {
           const remoteRequests = res.data.permintaanAkses;
           setAccessRequests(remoteRequests);
           localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(remoteRequests));
@@ -150,38 +166,40 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
             setSyncFeedback('Data izin akses berhasil ditarik & disinkronkan dari Database Spreadsheet!');
             setTimeout(() => setSyncFeedback(null), 4000);
           }
-          setIsSyncingRequests(false);
           return;
         }
       }
 
-      // 2. Fallback to /api/app-data cache
-      const cacheRes = await fetch('/api/app-data');
-      if (cacheRes.ok) {
-        const cacheData = await cacheRes.json();
-        if (Array.isArray(cacheData.permintaanAkses)) {
-          setAccessRequests(cacheData.permintaanAkses);
-          localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(cacheData.permintaanAkses));
-          if (!silent) {
-            setSyncFeedback('Data izin akses berhasil dimuat dari Cache Cloud!');
-            setTimeout(() => setSyncFeedback(null), 3000);
-          }
-        }
+      if (!silent) {
+        setSyncFeedback('Data izin akses berhasil disinkronkan!');
+        setTimeout(() => setSyncFeedback(null), 3000);
       }
     } catch (err: any) {
       console.warn('Pull access requests error:', err);
       if (!silent) {
-        setSyncFeedback('Gagal menyinkronkan data izin akses dari Spreadsheet.');
+        setSyncFeedback('Gagal menyinkronkan data izin akses.');
         setTimeout(() => setSyncFeedback(null), 4000);
       }
-    } finally {
-      setIsSyncingRequests(false);
     }
   };
 
-  // Pull on initial load
+  // Pull on initial load and recurring multi-device sync
   useEffect(() => {
     handlePullRequestsFromCloud(true);
+
+    const intervalId = setInterval(() => {
+      handlePullRequestsFromCloud(true);
+    }, 4000);
+
+    const onFocus = () => {
+      handlePullRequestsFromCloud(true);
+    };
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener('focus', onFocus);
+    };
   }, [activeSyncConfig?.webAppUrl]);
 
   // Synchronize helper for all operations (Create, Approve, Reject, Delete)
@@ -277,10 +295,17 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
     }
   };
 
-  // Save changes to localStorage
+  // Save changes to localStorage and server cache
   useEffect(() => {
     try {
       localStorage.setItem('dapodik_school_files_v3', JSON.stringify(files));
+      if (files && files.length > 0) {
+        fetch('/api/app-data', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ schoolFiles: files })
+        }).catch(() => {});
+      }
     } catch (e) {
       console.error('Failed to save school files', e);
     }

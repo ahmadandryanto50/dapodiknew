@@ -938,6 +938,12 @@ export default function App() {
             setAplikasiLinks(serverData.aplikasiLinks);
             localStorage.setItem('dapodik_aplikasi_links', JSON.stringify(serverData.aplikasiLinks));
           }
+          if (serverData.permintaanAkses && Array.isArray(serverData.permintaanAkses)) {
+            localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(serverData.permintaanAkses));
+          }
+          if (serverData.schoolFiles && Array.isArray(serverData.schoolFiles)) {
+            localStorage.setItem('dapodik_school_files_v3', JSON.stringify(serverData.schoolFiles));
+          }
         }
         
         // 3. If spreadsheet is configured, automatically perform a pull to make sure everything is absolutely in sync
@@ -947,7 +953,17 @@ export default function App() {
           setIsSyncing(false);
           
           if (res.success && res.data) {
-            const { siswa, ptk, sarpras: pulledSarpras, rapor, pengaturan, administrator, profilSekolah, aplikasi, notifikasi } = res.data;
+            const { siswa, ptk, sarpras: pulledSarpras, rapor, pengaturan, administrator, profilSekolah, aplikasi, notifikasi, permintaanAkses } = res.data;
+            
+            if (Array.isArray(permintaanAkses) && permintaanAkses.length > 0) {
+              localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(permintaanAkses));
+              // Also sync to server cache
+              fetch('/api/app-data', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ permintaanAkses })
+              }).catch(() => {});
+            }
             
             let finalStudents = serverData?.students || students;
             let finalTeachers = serverData?.teachers || teachers;

@@ -477,7 +477,7 @@ function parseSheetsResult(result: any) {
         const requestedAt = String(p.requestedAt || '');
         const reason = String(p.reason || '');
         const rawStatus = String(p.status || 'pending').toLowerCase();
-        const status = (rawStatus === 'approved' || rawStatus === 'rejected' ? rawStatus : 'pending') as 'pending' | 'approved' | 'rejected';
+        const status = (['approved', 'rejected', 'revoked', 'inactive'].includes(rawStatus) ? rawStatus : 'pending') as 'pending' | 'approved' | 'rejected' | 'revoked' | 'inactive';
         const reviewedBy = p.reviewedBy ? String(p.reviewedBy) : undefined;
         const reviewedAt = p.reviewedAt ? String(p.reviewedAt) : undefined;
         const reviewNotes = p.reviewNotes ? String(p.reviewNotes) : undefined;
