@@ -44,6 +44,51 @@ async function startServer() {
     });
   });
 
+  // Robust helper to follow recursive redirects of Google Apps Script (which redirects multiple times)
+  async function fetchWithRedirects(url: string, options: any, maxRedirects = 10): Promise<any> {
+    let currentUrl = url;
+    let currentOptions = { ...options };
+
+    for (let i = 0; i < maxRedirects; i++) {
+      // Force manual redirect handling to process 301/302/303/307/308 redirects manually
+      const response = await fetch(currentUrl, {
+        ...currentOptions,
+        redirect: "manual"
+      });
+
+      if (
+        response.status === 301 ||
+        response.status === 302 ||
+        response.status === 303 ||
+        response.status === 307 ||
+        response.status === 308
+      ) {
+        const redirectUrl = response.headers.get("location");
+        if (!redirectUrl) {
+          return response;
+        }
+
+        currentUrl = redirectUrl.startsWith("http")
+          ? redirectUrl
+          : new URL(redirectUrl, currentUrl).toString();
+
+        // Convert subsequent requests to GET, drop payload body and headers (especially Content-Type)
+        currentOptions = {
+          ...currentOptions,
+          method: "GET",
+          headers: {},
+          body: undefined
+        };
+
+        continue;
+      }
+
+      return response;
+    }
+
+    throw new Error("Batas maksimum pengalihan (redirect) terlampaui");
+  }
+
   // API Route: Proxy Sync to Google Sheets (bypasses browser CORS & mobile restrictions)
   app.post("/api/sync-sheets", async (req, res) => {
     try {
@@ -55,24 +100,12 @@ async function startServer() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 seconds timeout
       
-      let response = await fetch(webAppUrl, {
+      const response = await fetchWithRedirects(webAppUrl, {
         method: "POST",
         headers: { "Content-Type": "text/plain" },
         body: JSON.stringify(payload),
-        redirect: "manual",
         signal: controller.signal
       });
-
-      // Handle 301/302 redirects manually to prevent undici method-dropping bugs
-      if (response.status === 301 || response.status === 302 || response.status === 303 || response.status === 307 || response.status === 308) {
-        const redirectUrl = response.headers.get("location");
-        if (redirectUrl) {
-          response = await fetch(redirectUrl, {
-            method: "GET",
-            signal: controller.signal
-          });
-        }
-      }
       
       clearTimeout(timeoutId);
 
@@ -104,20 +137,10 @@ async function startServer() {
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 seconds timeout
-        let response = await fetch(webAppUrl, {
-          redirect: "manual",
+        const response = await fetchWithRedirects(webAppUrl, {
+          method: "GET",
           signal: controller.signal
         });
-
-        if (response.status === 301 || response.status === 302 || response.status === 303 || response.status === 307 || response.status === 308) {
-          const redirectUrl = response.headers.get("location");
-          if (redirectUrl) {
-            response = await fetch(redirectUrl, {
-              method: "GET",
-              signal: controller.signal
-            });
-          }
-        }
 
         clearTimeout(timeoutId);
 
@@ -134,23 +157,12 @@ async function startServer() {
         try {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 seconds timeout
-          let postRes = await fetch(webAppUrl, {
+          const postRes = await fetchWithRedirects(webAppUrl, {
             method: "POST",
             headers: { "Content-Type": "text/plain" },
             body: JSON.stringify({ type: "LOAD_ALL" }),
-            redirect: "manual",
             signal: controller.signal
           });
-
-          if (postRes.status === 301 || postRes.status === 302 || postRes.status === 303 || postRes.status === 307 || postRes.status === 308) {
-            const redirectUrl = postRes.headers.get("location");
-            if (redirectUrl) {
-              postRes = await fetch(redirectUrl, {
-                method: "GET",
-                signal: controller.signal
-              });
-            }
-          }
 
           clearTimeout(timeoutId);
           const postText = await postRes.text();
