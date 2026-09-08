@@ -430,29 +430,33 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
 
   // Check if current user has access to Google Drive Main Folder
   const hasDriveMainFolderAccess = (): boolean => {
-    // Educators and school staff (Guru, Kepsek, Operator, Admin) have direct access across all browsers and devices
-    if (isSchoolStaff) return true;
+    // Only Administrator has direct uninhibited access
+    if (isAdmin) return true;
 
-    // If student (Siswa) or other role, check if they have an approved access request
-    const currentUserName = (currentUser?.nama || currentUser?.username || '').toLowerCase();
-    const currentUserEmail = (currentUser?.email || '').toLowerCase();
+    // Anyone other than Administrator (Guru, Siswa, Kepsek, etc.) MUST have an approved access request from the Administrator
+    const currentUserName = (currentUser?.nama || currentUser?.username || '').toLowerCase().trim();
+    const currentUserEmail = (currentUser?.email || '').toLowerCase().trim();
+    if (!currentUserName && !currentUserEmail) return false;
+
     return accessRequests.some(
       req => req.fileId === 'gdrive-main-folder' &&
              req.status === 'approved' &&
-             ((currentUserName && req.requesterName.toLowerCase() === currentUserName) ||
-              (currentUserEmail && req.requesterEmail.toLowerCase() === currentUserEmail))
+             ((currentUserName && req.requesterName.toLowerCase().trim() === currentUserName) ||
+              (currentUserEmail && req.requesterEmail.toLowerCase().trim() === currentUserEmail))
     );
   };
 
   // Get request status specifically for Google Drive Main Folder
   const getDriveMainFolderRequestStatus = (): 'none' | 'pending' | 'approved' | 'rejected' | 'revoked' | 'inactive' | string => {
-    if (isSchoolStaff) return 'approved';
-    const currentUserName = (currentUser?.nama || currentUser?.username || '').toLowerCase();
-    const currentUserEmail = (currentUser?.email || '').toLowerCase();
+    if (isAdmin) return 'approved';
+    const currentUserName = (currentUser?.nama || currentUser?.username || '').toLowerCase().trim();
+    const currentUserEmail = (currentUser?.email || '').toLowerCase().trim();
+    if (!currentUserName && !currentUserEmail) return 'none';
+
     const matchingReq = accessRequests.find(
       req => req.fileId === 'gdrive-main-folder' &&
-             ((currentUserName && req.requesterName.toLowerCase() === currentUserName) ||
-              (currentUserEmail && req.requesterEmail.toLowerCase() === currentUserEmail))
+             ((currentUserName && req.requesterName.toLowerCase().trim() === currentUserName) ||
+              (currentUserEmail && req.requesterEmail.toLowerCase().trim() === currentUserEmail))
     );
     return matchingReq ? matchingReq.status : 'none';
   };

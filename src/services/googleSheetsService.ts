@@ -624,15 +624,54 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
       if (result && result.status === 'success') {
         return parseSheetsResult(result);
       }
-      if (result && result.message) {
-        return {
-          success: false,
-          message: result.message
-        };
-      }
     }
   } catch (proxyErr) {
     // Proxy request error
+  }
+
+  // 2. Fallback to direct client-side fetch (supports redirect follow in modern browsers)
+  try {
+    const directRes = await fetch(config.webAppUrl, {
+      method: 'GET',
+      redirect: 'follow'
+    });
+    if (directRes.ok) {
+      const text = await directRes.text();
+      const directData = JSON.parse(text);
+      if (directData && directData.status === 'success') {
+        return parseSheetsResult(directData);
+      }
+    }
+  } catch (directErr) {
+    // Direct fetch error
+  }
+
+  // 3. Fallback to server cache (/api/app-data) so users on any device/browser never lose data
+  try {
+    const cacheRes = await fetch(`/api/app-data?t=${Date.now()}`);
+    if (cacheRes.ok) {
+      const cache = await cacheRes.json();
+      if (cache && (cache.students?.length || cache.teachers?.length || cache.sarpras?.length)) {
+        return {
+          success: true,
+          message: 'Data dimuat dari sinkronisasi server cache.',
+          data: {
+            siswa: cache.students || [],
+            ptk: cache.teachers || [],
+            sarpras: cache.sarpras || [],
+            rapor: cache.reports || [],
+            pengaturan: [],
+            administrator: cache.administrators || [],
+            profilSekolah: [],
+            aplikasi: cache.aplikasiLinks || [],
+            notifikasi: cache.notifications || [],
+            permintaanAkses: cache.permintaanAkses || []
+          }
+        };
+      }
+    }
+  } catch (cacheErr) {
+    // Cache error
   }
 
   return {

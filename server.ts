@@ -35,7 +35,7 @@ async function startServer() {
     // Fallback to default
     return res.json({
       spreadsheetUrl: "1XmLmshCOhSktRfzW8uG_8RqxlxVCQt5eUVekEFLwj_M",
-      webAppUrl: "https://script.google.com/macros/s/AKfycbwCjNbFmpToPA9JATA4FlFJPESoWbqS9JzIhbF2TS7FNsTlK2ZIUMtfsPBE5ln3Q7eO/exec",
+      webAppUrl: "https://script.google.com/macros/s/AKfycbyhC26e6a4a0ORdBvnMCz7c1pDR0rQsGkcO_LfVKhxAZGYtBMGle4qbjZoNx6D_uT79/exec",
       sheetId: "",
       autoSync: true,
       lastSynced: null,
@@ -53,7 +53,7 @@ async function startServer() {
       }
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 12000);
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
       
       const response = await fetch(webAppUrl, {
         method: "POST",
@@ -88,10 +88,10 @@ async function startServer() {
 
       let data: any = null;
 
-      // 1. Try GET first with 8s timeout
+      // 1. Try GET first with 25s timeout
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        const timeoutId = setTimeout(() => controller.abort(), 25000);
         const response = await fetch(webAppUrl, {
           redirect: "follow",
           signal: controller.signal
@@ -110,7 +110,7 @@ async function startServer() {
       if (!data || data.status !== 'success') {
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 8000);
+          const timeoutId = setTimeout(() => controller.abort(), 25000);
           const postRes = await fetch(webAppUrl, {
             method: "POST",
             headers: { "Content-Type": "text/plain" },
@@ -127,6 +127,25 @@ async function startServer() {
       if (data && data.status === 'success') {
         return res.json(data);
       } else {
+        // Fallback to locally cached app_data.json so multi-device/browser sync never fails
+        if (fs.existsSync(DATA_FILE)) {
+          try {
+            const cached = JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
+            return res.json({
+              status: 'success',
+              source: 'cache',
+              siswa: cached.students || [],
+              ptk: cached.teachers || [],
+              sarpras: cached.sarpras || [],
+              rapor: cached.reports || [],
+              administrator: cached.administrators || [],
+              aplikasi: cached.aplikasiLinks || [],
+              notifikasi: cached.notifications || [],
+              permintaanAkses: cached.permintaanAkses || []
+            });
+          } catch (e) {}
+        }
+
         return res.json({
           status: 'error',
           message: data?.message || 'Tidak dapat memuat data dari Spreadsheet saat ini.'
@@ -134,6 +153,24 @@ async function startServer() {
       }
     } catch (err: any) {
       console.warn("Proxying from Google Sheets warning in /api/load-sheets:", err?.message || err);
+      // Fallback to locally cached app_data.json
+      if (fs.existsSync(DATA_FILE)) {
+        try {
+          const cached = JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
+          return res.json({
+            status: 'success',
+            source: 'cache',
+            siswa: cached.students || [],
+            ptk: cached.teachers || [],
+            sarpras: cached.sarpras || [],
+            rapor: cached.reports || [],
+            administrator: cached.administrators || [],
+            aplikasi: cached.aplikasiLinks || [],
+            notifikasi: cached.notifications || [],
+            permintaanAkses: cached.permintaanAkses || []
+          });
+        } catch (e) {}
+      }
       return res.json({ status: 'error', message: err?.message || 'Gagal memuat data dari Google Sheets' });
     }
   });
