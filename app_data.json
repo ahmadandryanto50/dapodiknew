@@ -19578,24 +19578,10 @@
     "notif-1788850309219-w7vr3",
     "notif-1788836191162-qn82l"
   ],
-  "permintaanAkses": [
-    {
-      "id": "req-1788872001007",
-      "fileId": "gdrive-main-folder",
-      "fileName": "Folder Google Drive Utama Sekolah (Repository Cloud)",
-      "requesterName": "Ahmad Andryanto",
-      "requesterRole": "oprator",
-      "requesterEmail": "ahmadandryanto24@gmail.com",
-      "requestedAt": "2026-09-08 12:53",
-      "reason": "oprator sekolah",
-      "status": "approved",
-      "reviewedBy": "@Ahmad_91",
-      "reviewedAt": "2026-09-08 12:54",
-      "reviewNotes": "Izin akses disetujui / diaktifkan oleh Administrator."
-    }
-  ],
+  "permintaanAkses": [],
   "deletedPermintaanAksesIds": [
-    "req-1788864575785"
+    "req-1788864575785",
+    "req-1788872001007"
   ],
   "schoolFiles": [
     {

@@ -66,11 +66,24 @@ interface BerkasModuleProps {
   onBackToHome?: () => void;
   autoOpenUpload?: boolean;
   syncConfig?: SyncConfig;
+  files?: SchoolFileItem[];
+  setFiles?: React.Dispatch<React.SetStateAction<SchoolFileItem[]>>;
+  accessRequests?: FileAccessRequest[];
+  setAccessRequests?: React.Dispatch<React.SetStateAction<FileAccessRequest[]>>;
 }
 
-export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackToHome, autoOpenUpload, syncConfig }) => {
+export const BerkasModule: React.FC<BerkasModuleProps> = ({ 
+  currentUser, 
+  onBackToHome, 
+  autoOpenUpload, 
+  syncConfig,
+  files: propFiles,
+  setFiles: propSetFiles,
+  accessRequests: propAccessRequests,
+  setAccessRequests: propSetAccessRequests
+}) => {
   // Persistence state - Clean empty initialization
-  const [files, setFiles] = useState<SchoolFileItem[]>(() => {
+  const [localFiles, setLocalFiles] = useState<SchoolFileItem[]>(() => {
     try {
       const saved = localStorage.getItem('dapodik_school_files_v3');
       if (saved) {
@@ -82,8 +95,10 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
     }
     return initialSchoolFiles;
   });
+  const files = propFiles !== undefined ? propFiles : localFiles;
+  const setFiles = propSetFiles !== undefined ? propSetFiles : setLocalFiles;
 
-  const [accessRequests, setAccessRequests] = useState<FileAccessRequest[]>(() => {
+  const [localAccessRequests, setLocalAccessRequests] = useState<FileAccessRequest[]>(() => {
     try {
       const saved = localStorage.getItem('dapodik_file_access_requests_v3');
       if (saved) {
@@ -95,6 +110,8 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
     }
     return initialAccessRequests;
   });
+  const accessRequests = propAccessRequests !== undefined ? propAccessRequests : localAccessRequests;
+  const setAccessRequests = propSetAccessRequests !== undefined ? propSetAccessRequests : setLocalAccessRequests;
 
   const [isSyncingRequests, setIsSyncingRequests] = useState<boolean>(false);
   const [activeSyncConfig, setActiveSyncConfig] = useState<SyncConfig | null>(syncConfig || null);
@@ -1025,6 +1042,14 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
 
   // Sync to Google Drive
   const handleSyncToDrive = async () => {
+    let currentCfg = activeSyncConfig;
+    if (!currentCfg?.webAppUrl) {
+      try {
+        const cfgSaved = localStorage.getItem('dapodik_sync_config');
+        if (cfgSaved) currentCfg = JSON.parse(cfgSaved);
+      } catch (e) {}
+    }
+
     setIsSyncing(true);
     setDriveConnectError(null);
     try {
