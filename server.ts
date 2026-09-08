@@ -44,51 +44,6 @@ async function startServer() {
     });
   });
 
-  // Robust helper to follow recursive redirects of Google Apps Script (which redirects multiple times)
-  async function fetchWithRedirects(url: string, options: any, maxRedirects = 10): Promise<any> {
-    let currentUrl = url;
-    let currentOptions = { ...options };
-
-    for (let i = 0; i < maxRedirects; i++) {
-      // Force manual redirect handling to process 301/302/303/307/308 redirects manually
-      const response = await fetch(currentUrl, {
-        ...currentOptions,
-        redirect: "manual"
-      });
-
-      if (
-        response.status === 301 ||
-        response.status === 302 ||
-        response.status === 303 ||
-        response.status === 307 ||
-        response.status === 308
-      ) {
-        const redirectUrl = response.headers.get("location");
-        if (!redirectUrl) {
-          return response;
-        }
-
-        currentUrl = redirectUrl.startsWith("http")
-          ? redirectUrl
-          : new URL(redirectUrl, currentUrl).toString();
-
-        // Convert subsequent requests to GET, drop payload body and headers (especially Content-Type)
-        currentOptions = {
-          ...currentOptions,
-          method: "GET",
-          headers: {},
-          body: undefined
-        };
-
-        continue;
-      }
-
-      return response;
-    }
-
-    throw new Error("Batas maksimum pengalihan (redirect) terlampaui");
-  }
-
   // API Route: Proxy Sync to Google Sheets (bypasses browser CORS & mobile restrictions)
   app.post("/api/sync-sheets", async (req, res) => {
     try {
@@ -100,10 +55,11 @@ async function startServer() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 seconds timeout
       
-      const response = await fetchWithRedirects(webAppUrl, {
+      const response = await fetch(webAppUrl, {
         method: "POST",
         headers: { "Content-Type": "text/plain" },
         body: JSON.stringify(payload),
+        redirect: "follow",
         signal: controller.signal
       });
       
@@ -137,8 +93,9 @@ async function startServer() {
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 seconds timeout
-        const response = await fetchWithRedirects(webAppUrl, {
+        const response = await fetch(webAppUrl, {
           method: "GET",
+          redirect: "follow",
           signal: controller.signal
         });
 
@@ -157,10 +114,11 @@ async function startServer() {
         try {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 seconds timeout
-          const postRes = await fetchWithRedirects(webAppUrl, {
+          const postRes = await fetch(webAppUrl, {
             method: "POST",
             headers: { "Content-Type": "text/plain" },
             body: JSON.stringify({ type: "LOAD_ALL" }),
+            redirect: "follow",
             signal: controller.signal
           });
 

@@ -61,7 +61,7 @@ import {
   uploadFileToDriveViaAppsScript
 } from '../services/googleSheetsService';
 
-const compressImageIfNeeded = (file: File, maxWidth = 1200, maxHeight = 1200, quality = 0.7): Promise<string> => {
+const compressImageIfNeeded = (file: File, maxWidth = 1000, maxHeight = 1000, quality = 0.5): Promise<string> => {
   return new Promise((resolve) => {
     if (!file.type.startsWith('image/')) {
       const reader = new FileReader();
