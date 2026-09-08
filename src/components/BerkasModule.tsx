@@ -657,47 +657,29 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
         } catch (e) {}
       }
 
-      // Priority 1: Upload via Google Apps Script (DriveApp) directly into Google Drive
+      // Menggunakan Google Apps Script murni tanpa OAuth
       if (currentCfg?.webAppUrl && file.dataUrl) {
         const base64Pure = file.dataUrl.includes(',') ? file.dataUrl.split(',')[1] : file.dataUrl;
         const uploadRes = await uploadFileToDriveViaAppsScript(currentCfg, {
           name: file.name,
           type: file.fileType || 'application/octet-stream',
           base64Data: base64Pure,
-          category: file.category,
-          folderName: file.category,
-          description: file.description || `Berkas ${file.name}`
+          description: file.description || `Berkas ${file.name}`,
+          parentFolderId: GOOGLE_DRIVE_FOLDER_ID,
+          folderName: file.category || 'Berkas Dapodik'
         });
+        
         if (uploadRes.success && uploadRes.id) {
           driveResult = uploadRes;
-        }
-      }
-
-      // Priority 2: If Apps Script was not available, and user is connected via Google Drive OAuth
-      if (!driveResult && isGoogleDriveConnected()) {
-        let fileBlob: Blob;
-        if (file.dataUrl && file.dataUrl.startsWith('data:')) {
-          const res = await fetch(file.dataUrl);
-          fileBlob = await res.blob();
         } else {
-          fileBlob = new Blob([`Dokumen ${file.name} - Dapodik Sekolah`], { type: file.fileType || 'text/plain' });
+          throw new Error('Gagal dari Apps Script: ' + (uploadRes.message || ''));
         }
-
-        const fileObj = new File([fileBlob], file.name, { type: file.fileType || 'application/octet-stream' });
-        driveResult = await uploadFileToGoogleDrive(fileObj, {
-          category: file.category,
-          customFolderName: file.category,
-          description: file.description || `Berkas ${file.name}`,
-          parentFolderId: GOOGLE_DRIVE_FOLDER_ID
-        });
+      } else {
+        throw new Error('URL Google Apps Script belum dikonfigurasi di Pengaturan.');
       }
 
       if (!driveResult) {
-        if (!currentCfg?.webAppUrl && !isGoogleDriveConnected()) {
-          throw new Error('Database Spreadsheet belum terhubung dan Akun Google Drive belum dihubungkan. Silakan hubungkan Database Spreadsheet di menu Pengaturan.');
-        } else {
-          throw new Error('Gagal mengunggah berkas ke Google Drive. Pastikan skrip Google Apps Script terbaru (v2.9) telah diterapkan di spreadsheet Anda.');
-        }
+        throw new Error('Gagal mengunggah berkas ke Google Drive via Apps Script. Silakan coba lagi.');
       }
 
       const updatedFiles = files.map(f => {
@@ -790,16 +772,16 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
 
       let appsScriptErrorMessage = '';
 
-      // Priority 1: Upload directly to Google Drive via Google Apps Script (tied to Google Spreadsheet)
+      // Menggunakan Google Apps Script murni tanpa OAuth
       if (currentCfg?.webAppUrl && base64Pure) {
         try {
           const appsScriptRes = await uploadFileToDriveViaAppsScript(currentCfg, {
             name: file.name,
             type: file.type || 'application/octet-stream',
             base64Data: base64Pure,
-            category: targetCategory,
-            folderName: targetCategory,
-            description: uploadDescription || `Berkas resmi ${targetCategory} diunggah via Dapodik.`
+            description: uploadDescription || `Berkas resmi ${targetCategory} diunggah via Dapodik.`,
+            parentFolderId: GOOGLE_DRIVE_FOLDER_ID,
+            folderName: targetCategory
           });
           if (appsScriptRes.success && appsScriptRes.id) {
             driveResult = appsScriptRes;
@@ -814,23 +796,8 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
         } catch (asErr: any) {
           appsScriptErrorMessage = asErr?.message || 'Error koneksi ke Apps Script';
         }
-      }
-
-      // Priority 2: Direct Google Drive API if user is already authenticated with Drive token
-      if (!driveResult && isDriveOAuthConnected) {
-        try {
-          driveResult = await uploadFileToGoogleDrive(file, {
-            category: targetCategory,
-            customFolderName: targetCategory,
-            description: uploadDescription || `Berkas resmi ${targetCategory} diunggah via Dapodik.`,
-            parentFolderId: GOOGLE_DRIVE_FOLDER_ID
-          });
-          if (driveResult && driveResult.id) {
-            successCount++;
-          }
-        } catch (uploadErr: any) {
-          appsScriptErrorMessage = appsScriptErrorMessage || uploadErr?.message || 'Gagal upload langsung ke Google Drive.';
-        }
+      } else {
+        appsScriptErrorMessage = 'URL Google Apps Script belum dikonfigurasi di Pengaturan.';
       }
 
       // STRICT CHECK: If both Drive uploads failed, DO NOT SAVE GHOST FILES. Abort this file!
@@ -1078,37 +1045,34 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
       let syncedCount = 0;
       for (const file of localFiles) {
         try {
-          let fileBlob: Blob;
-          if (file.dataUrl && file.dataUrl.startsWith('data:')) {
-            const res = await fetch(file.dataUrl);
-            fileBlob = await res.blob();
-          } else {
-            fileBlob = new Blob([`Dokumen ${file.name} - Dapodik Sekolah`], { type: file.fileType || 'text/plain' });
-          }
-          const fileObj = new File([fileBlob], file.name, { type: file.fileType || 'application/octet-stream' });
-          const driveResult = await uploadFileToGoogleDrive(fileObj, {
-            category: file.category,
-            customFolderName: file.category,
-            description: file.description || `Berkas ${file.name}`,
-            parentFolderId: GOOGLE_DRIVE_FOLDER_ID
-          });
-
-          if (driveResult && driveResult.id) {
-            syncedCount++;
-            setFiles(prev =>
-              prev.map(f => {
-                if (f.id === file.id) {
-                  return {
-                    ...f,
-                    id: driveResult.id,
-                    driveFileUrl: driveResult.webViewLink,
-                    driveFolderId: driveResult.folderId || GOOGLE_DRIVE_FOLDER_ID,
-                    tags: Array.from(new Set([...(f.tags || []).filter(t => t !== 'Lokal'), 'GoogleDrive']))
-                  };
-                }
-                return f;
-              })
-            );
+          if (currentCfg?.webAppUrl && file.dataUrl) {
+            const base64Pure = file.dataUrl.includes(',') ? file.dataUrl.split(',')[1] : file.dataUrl;
+            const uploadRes = await uploadFileToDriveViaAppsScript(currentCfg, {
+              name: file.name,
+              type: file.fileType || 'application/octet-stream',
+              base64Data: base64Pure,
+              description: file.description || `Berkas ${file.name}`,
+              parentFolderId: GOOGLE_DRIVE_FOLDER_ID,
+              folderName: file.category || 'Berkas Dapodik'
+            });
+            
+            if (uploadRes.success && uploadRes.id) {
+              syncedCount++;
+              setFiles(prev =>
+                prev.map(f => {
+                  if (f.id === file.id) {
+                    return {
+                      ...f,
+                      id: uploadRes.id,
+                      driveFileUrl: uploadRes.webViewLink,
+                      driveFolderId: uploadRes.folderId || GOOGLE_DRIVE_FOLDER_ID,
+                      tags: Array.from(new Set([...(f.tags || []).filter(t => t !== 'Lokal'), 'GoogleDrive']))
+                    };
+                  }
+                  return f;
+                })
+              );
+            }
           }
         } catch (syncErr) {
           console.error('Error syncing individual file:', file.name, syncErr);
@@ -1536,15 +1500,6 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
                               <Eye className="w-3.5 h-3.5" />
                               <span>Lihat</span>
                             </button>
-                            <a
-                              href={file.driveFileUrl || GOOGLE_DRIVE_MAIN_FOLDER_URL}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-600 transition-colors"
-                              title="Buka di Google Drive"
-                            >
-                              <ExternalLink className="w-3.5 h-3.5" />
-                            </a>
                             {isAdmin && (
                               <button
                                 onClick={(e) => {
@@ -1676,14 +1631,6 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
                                   <Eye className="w-3.5 h-3.5" />
                                   <span>Lihat</span>
                                 </button>
-                                <a
-                                  href={file.driveFileUrl || GOOGLE_DRIVE_MAIN_FOLDER_URL}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="p-1 rounded-lg hover:bg-slate-100 text-slate-500"
-                                >
-                                  <ExternalLink className="w-3.5 h-3.5" />
-                                </a>
                                 {isAdmin && (
                                   <button
                                     onClick={(e) => {

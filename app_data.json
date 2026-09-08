@@ -19374,7 +19374,16 @@
       "lastLogin": "-"
     }
   ],
-  "notifications": [],
+  "notifications": [
+    {
+      "id": "notif-1788887223378-xfh9r",
+      "title": "Sinkronisasi Database Cloud",
+      "message": "Seluruh data aplikasi telah berhasil disinkronkan ke Database Spreadsheet Google Sheets.",
+      "time": "01.07",
+      "type": "success",
+      "read": false
+    }
+  ],
   "aplikasiLinks": [
     {
       "id": "1",
@@ -19588,6 +19597,114 @@
   "deletedPermintaanAksesIds": [
     "req-1788864575785"
   ],
-  "schoolFiles": [],
-  "deletedFileIds": []
+  "schoolFiles": [
+    {
+      "id": "1uDYOLm40PUWZHlm0dgAhACaDklaCdS-I",
+      "name": "WhatsApp Image 2026-09-01 at 20.16.12.jpeg",
+      "category": "AHMAD",
+      "fileSize": 206813,
+      "fileType": "image/jpeg",
+      "fileExtension": "jpeg",
+      "uploadedAt": "2026-09-08 17:41",
+      "uploadedBy": "@Ahmad_91",
+      "uploadedByRole": "Administrator",
+      "driveFolderId": "1ioczX7yUFaqNk5jMH07VpF1N8B0MO1pF",
+      "driveFileUrl": "https://drive.google.com/file/d/1uDYOLm40PUWZHlm0dgAhACaDklaCdS-I/view?usp=drivesdk",
+      "privacy": "Restricted",
+      "description": "Berkas resmi diunggah ke repositori AHMAD.",
+      "tags": [
+        "JPEG",
+        "AHMAD",
+        "GoogleDrive"
+      ],
+      "allowedUserIds": [],
+      "allowedRoles": [
+        "Administrator"
+      ]
+    },
+    {
+      "id": "14NqFHsK8YaP_l6EqAvpWdX__3k4bVN5e",
+      "name": "WhatsApp Image 2026-09-01 at 20.20.17.jpeg",
+      "category": "AHMAD",
+      "fileSize": 449518,
+      "fileType": "image/jpeg",
+      "fileExtension": "jpeg",
+      "uploadedAt": "2026-09-08 17:41",
+      "uploadedBy": "@Ahmad_91",
+      "uploadedByRole": "Administrator",
+      "driveFolderId": "1ioczX7yUFaqNk5jMH07VpF1N8B0MO1pF",
+      "driveFileUrl": "https://drive.google.com/file/d/14NqFHsK8YaP_l6EqAvpWdX__3k4bVN5e/view?usp=drivesdk",
+      "privacy": "Restricted",
+      "description": "Berkas resmi diunggah ke repositori AHMAD.",
+      "tags": [
+        "JPEG",
+        "AHMAD",
+        "GoogleDrive"
+      ],
+      "allowedUserIds": [],
+      "allowedRoles": [
+        "Administrator"
+      ]
+    },
+    {
+      "id": "1mrz0vkz0SpMd_qkhieXXmnimKmFWs9Us",
+      "name": "WhatsApp Image 2026-09-04 at 19.38.09.jpeg",
+      "category": "AHMAD",
+      "fileSize": 262611,
+      "fileType": "image/jpeg",
+      "fileExtension": "jpeg",
+      "uploadedAt": "2026-09-08 17:40",
+      "uploadedBy": "@Ahmad_91",
+      "uploadedByRole": "Administrator",
+      "driveFolderId": "1ioczX7yUFaqNk5jMH07VpF1N8B0MO1pF",
+      "driveFileUrl": "https://drive.google.com/file/d/1mrz0vkz0SpMd_qkhieXXmnimKmFWs9Us/view?usp=drivesdk",
+      "privacy": "Restricted",
+      "description": "Berkas resmi diunggah ke repositori AHMAD.",
+      "tags": [
+        "JPEG",
+        "AHMAD",
+        "GoogleDrive"
+      ],
+      "allowedUserIds": [],
+      "allowedRoles": [
+        "Administrator"
+      ]
+    },
+    {
+      "id": "1vXWRVhVdW9iol3j4UQDJTd0wdYKV9r1k",
+      "name": "WhatsApp Image 2026-09-04 at 19.26.48.jpeg",
+      "category": "AHMAD",
+      "fileSize": 418781,
+      "fileType": "image/jpeg",
+      "fileExtension": "jpeg",
+      "uploadedAt": "2026-09-08 17:40",
+      "uploadedBy": "@Ahmad_91",
+      "uploadedByRole": "Administrator",
+      "driveFolderId": "1ioczX7yUFaqNk5jMH07VpF1N8B0MO1pF",
+      "driveFileUrl": "https://drive.google.com/file/d/1vXWRVhVdW9iol3j4UQDJTd0wdYKV9r1k/view?usp=drivesdk",
+      "privacy": "Restricted",
+      "description": "Berkas resmi diunggah ke repositori AHMAD.",
+      "tags": [
+        "JPEG",
+        "AHMAD",
+        "GoogleDrive"
+      ],
+      "allowedUserIds": [],
+      "allowedRoles": [
+        "Administrator"
+      ]
+    }
+  ],
+  "deletedFileIds": [
+    "file-up-nocors-1788881408897",
+    "file-up-nocors-1788882042152",
+    "file-up-nocors-1788882770501",
+    "file-up-nocors-1788883444797",
+    "file-up-nocors-1788883548377",
+    "file-up-nocors-1788884001602",
+    "file-up-nocors-1788884966425",
+    "1DF7AY3EkhjbLoJOjbm2oO699qZySJQho",
+    "1vKZyQEHWq1KsfSyahJwck0PDQT8bLcKG"
+  ],
+  "deletedFileId": "1vKZyQEHWq1KsfSyahJwck0PDQT8bLcKG"
 }

@@ -287,17 +287,6 @@ export const getOrCreateFolderInGoogleDrive = async (
     folderCache.set(cacheKey, createdFolder.id);
     return createdFolder;
   } catch (createErr: any) {
-    // If parentFolderId is not writable, fallback to creating folder in root My Drive
-    if (parentFolderId) {
-      console.warn(`Creating folder "${cleanName}" in parent failed, attempting in root Drive:`, createErr);
-      try {
-        const fallbackCreated = await createFolderInGoogleDrive(cleanName);
-        folderCache.set(cacheKey, fallbackCreated.id);
-        return fallbackCreated;
-      } catch (fallbackErr) {
-        console.error(`Fallback folder creation for "${cleanName}" failed:`, fallbackErr);
-      }
-    }
     throw createErr;
   }
 };
@@ -321,17 +310,9 @@ export const uploadFileToGoogleDrive = async (
   const targetFolderName = (options?.customFolderName || options?.category || '').trim();
   let effectiveFolderId = options?.parentFolderId;
 
-  if (targetFolderName) {
-    try {
-      const folderRes = await getOrCreateFolderInGoogleDrive(targetFolderName, options?.parentFolderId);
-      if (folderRes && folderRes.id) {
-        effectiveFolderId = folderRes.id;
-      }
-    } catch (folderErr) {
-      console.warn(`Could not prepare subfolder "${targetFolderName}", using parent folder directly:`, folderErr);
-    }
-  }
-
+  // We explicitly DISABLE subfolder creation to ensure files go exactly into the parent folder
+  // so the user can easily see them without digging into auto-generated category folders.
+  
   const uploadWithMetadata = async (targetParentId?: string): Promise<DriveUploadResult> => {
     const metadata: Record<string, any> = {
       name: file.name,
@@ -456,10 +437,6 @@ export const uploadFileToGoogleDrive = async (
     // Attempt upload directly inside the resolved target folder
     return await uploadWithMetadata(effectiveFolderId);
   } catch (primaryErr: any) {
-    if (primaryErr?.message?.startsWith('PARENT_FOLDER_INACCESSIBLE') && effectiveFolderId) {
-      console.warn('Target folder was not writable for this account, uploading to root My Drive instead:', primaryErr.message);
-      return await uploadWithMetadata(undefined);
-    }
     throw primaryErr;
   }
 };

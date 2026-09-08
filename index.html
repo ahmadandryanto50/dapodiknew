@@ -24,6 +24,21 @@
   </head>
   <body class="bg-[#0c4a6e] text-slate-100 font-['Plus_Jakarta_Sans',sans-serif] antialiased selection:bg-sky-200 selection:text-sky-950">
     <div id="root"></div>
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          let hasUnregistered = false;
+          for(let registration of registrations) {
+            registration.unregister();
+            hasUnregistered = true;
+          }
+          if (hasUnregistered && !sessionStorage.getItem('cache_cleared_once')) {
+            sessionStorage.setItem('cache_cleared_once', 'true');
+            window.location.reload(true);
+          }
+        });
+      }
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

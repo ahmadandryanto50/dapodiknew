@@ -28,6 +28,23 @@ const HEADERS_MAP = {
   'Data_Berkas': ['id', 'name', 'category', 'fileSize', 'fileType', 'fileExtension', 'uploadedAt', 'uploadedBy', 'uploadedByRole', 'driveFolderId', 'driveFileUrl', 'privacy', 'description', 'tags', 'allowedUserIds', 'allowedRoles']
 };
 
+// Menu Otorisasi Otomatis di Google Spreadsheet
+function onOpen() {
+  try {
+    SpreadsheetApp.getUi()
+      .createMenu('⚡ Otorisasi Dapodik')
+      .addItem('🔑 Berikan Izin Google Drive', 'triggerAuthorization')
+      .addToUi();
+  } catch(e) {}
+}
+
+function triggerAuthorization() {
+  // Memaksa Google meminta izin Tulis penuh (DriveApp.createFile)
+  var tempFile = DriveApp.createFile('Dapodik_Otorisasi_Test.txt', 'Tes Otorisasi Berhasil', MimeType.PLAIN_TEXT);
+  tempFile.setTrashed(true); // Hapus kembali agar bersih
+  SpreadsheetApp.getUi().alert('SUKSES LUAR BIASA! Akses Baca & Tulis Google Drive Anda telah berhasil diizinkan dan terhubung 100%! Sekarang coba upload berkas di aplikasi web.');
+}
+
 function doGet(e) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   // Pastikan seluruh sheet & tabel otomatis terbuat
@@ -118,24 +135,49 @@ function doPost(e) {
     } else if (data.type === 'SYNC_BERKAS') {
       saveSheetData(ss, 'Data_Berkas', data.payload, HEADERS_MAP['Data_Berkas']);
     } else if (data.type === 'UPLOAD_FILE_TO_DRIVE') {
-      var folder = null;
+      var parentFolder = null;
       var folderName = data.folderName || data.category || 'Berkas Dapodik';
+      
+      // 1. Dapatkan folder induk (parent folder)
       if (data.parentFolderId) {
         try {
-          folder = DriveApp.getFolderById(data.parentFolderId);
+          parentFolder = DriveApp.getFolderById(data.parentFolderId);
         } catch(err) {}
       }
-      if (!folder) {
-        var folders = DriveApp.getFoldersByName(folderName);
-        if (folders.hasNext()) {
-          folder = folders.next();
-        } else {
-          folder = DriveApp.createFolder(folderName);
-        }
+      if (!parentFolder) {
+        try {
+          parentFolder = DriveApp.getRootFolder();
+        } catch(err) {}
       }
+      
+      // 2. Cari atau buat subfolder (folder kategori) di dalam folder induk tersebut
+      var folder = null;
+      if (parentFolder) {
+        try {
+          var subFolders = parentFolder.getFoldersByName(folderName);
+          if (subFolders.hasNext()) {
+            folder = subFolders.next();
+          } else {
+            folder = parentFolder.createFolder(folderName);
+          }
+        } catch(err) {}
+      }
+      
+      // Fallback jika semua di atas gagal, buat di root
+      if (!folder) {
+        try {
+          var folders = DriveApp.getFoldersByName(folderName);
+          if (folders.hasNext()) {
+            folder = folders.next();
+          } else {
+            folder = DriveApp.createFolder(folderName);
+          }
+        } catch(err) {}
+      }
+      
       var decodedBytes = Utilities.base64Decode(data.base64Data);
       var blob = Utilities.newBlob(decodedBytes, data.mimeType || 'application/octet-stream', data.fileName);
-      var createdFile = folder.createFile(blob);
+      var createdFile = folder ? folder.createFile(blob) : DriveApp.createFile(blob);
       if (data.description) {
         try { createdFile.setDescription(data.description); } catch(e) {}
       }
@@ -286,6 +328,14 @@ function saveSheetData(ss, sheetName, items, fallbackHeaders) {
 }
 
 function checkAndInitializeSheets(ss) {
+  if (!ss) {
+    try {
+      ss = SpreadsheetApp.getActiveSpreadsheet();
+    } catch(err) {
+      // ignore
+    }
+  }
+  if (!ss) return;
   // Safe sheet creator to ensure sheets exist on doGet / doPost
   const defaultSheets = {
     'Data_Alumni': [
@@ -441,7 +491,17 @@ async function callProxyOrDirectPost(webAppUrl: string, payload: any): Promise<{
           message: 'Data berhasil dikirim & disinkronkan ke Database Spreadsheet!',
           data: json.data
         };
+      } else {
+        return {
+          success: false,
+          message: json.message || 'Gagal menghubungi Endpoint Google Sheets via Proxy'
+        };
       }
+    } else {
+       return {
+         success: false,
+         message: 'Proxy Error: ' + proxyRes.statusText
+       };
     }
   } catch (proxyErr) {
     // If backend proxy is not reachable (e.g. static hosting on Vercel/GitHub Pages), continue to direct browser fetch
@@ -927,9 +987,9 @@ export async function uploadFileToDriveViaAppsScript(
   };
 
   const res = await callProxyOrDirectPost(config.webAppUrl, payload);
-  if (res.success && res.data) {
-    const d = res.data;
-    if (d.status === 'success' && d.id) {
+  if (res.success) {
+    if (res.data && res.data.status === 'success' && res.data.id) {
+      const d = res.data;
       return {
         success: true,
         id: d.id,
@@ -940,10 +1000,20 @@ export async function uploadFileToDriveViaAppsScript(
         size: d.size,
         mimeType: d.mimeType
       };
+    } else {
+      // Jika res.data ada tapi tidak ada ID, ini tanda pasti Apps Script yang terpasang masih versi lama
+      const isOldVersion = res.data && !res.data.id && res.data.message && res.data.message.includes('berhasil disinkronkan');
+      const errMsg = isOldVersion 
+        ? 'Google Apps Script Anda masih versi lama (belum mendukung upload berkas). Silakan buka menu Pengaturan, salin semua Kode Apps Script v2.9 terbaru, lalu pasang kembali di Google Spreadsheet Anda.'
+        : (res.data?.message || res.data?.error || 'Apps Script tidak mengembalikan ID file. Pastikan Apps Script versi v2.9 terbaru telah diterapkan.');
+      return {
+        success: false,
+        message: errMsg
+      };
     }
   }
   return {
     success: false,
-    message: res.message || (res.data && res.data.message) || 'Gagal mengunggah berkas ke Google Drive via Spreadsheet.'
+    message: res.message || (res.data && res.data.message) || 'Request timeout. Berkas mungkin terlalu besar atau Apps Script gagal memproses.'
   };
 }
