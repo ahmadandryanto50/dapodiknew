@@ -788,6 +788,8 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
 
       let driveResult: any = null;
 
+      let appsScriptErrorMessage = '';
+
       // Priority 1: Upload directly to Google Drive via Google Apps Script (tied to Google Spreadsheet)
       if (currentCfg?.webAppUrl && base64Pure) {
         try {
@@ -802,9 +804,15 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
           if (appsScriptRes.success && appsScriptRes.id) {
             driveResult = appsScriptRes;
             successCount++;
+          } else {
+            if (appsScriptRes.message && appsScriptRes.message.includes('berhasil disinkronkan')) {
+              appsScriptErrorMessage = 'Google Apps Script Anda masih versi lama. Mohon HAPUS kode lama, PASTE kode terbaru (v2.9), lalu klik Deploy (Terapkan) -> Manage deployments -> Edit (Ikon Pensil) -> Version: New version -> Deploy!';
+            } else {
+              appsScriptErrorMessage = appsScriptRes.message || 'Gagal menyimpan berkas ke Google Drive via Spreadsheet.';
+            }
           }
         } catch (asErr: any) {
-          console.warn('Apps Script upload to Drive warning:', asErr);
+          appsScriptErrorMessage = asErr?.message || 'Error koneksi ke Apps Script';
         }
       }
 
@@ -821,15 +829,21 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
             successCount++;
           }
         } catch (uploadErr: any) {
-          failedCount++;
-          console.error('Google Drive direct upload error for file:', file.name, uploadErr);
+          appsScriptErrorMessage = appsScriptErrorMessage || uploadErr?.message || 'Gagal upload langsung ke Google Drive.';
         }
+      }
+
+      // STRICT CHECK: If both Drive uploads failed, DO NOT SAVE GHOST FILES. Abort this file!
+      if (!driveResult) {
+        failedCount++;
+        setDriveConnectError(`Gagal menyimpan "${file.name}": ${appsScriptErrorMessage || 'Tidak terhubung ke Database Spreadsheet atau Google Drive.'}`);
+        continue;
       }
 
       const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
 
       const fileItem: SchoolFileItem = {
-        id: driveResult?.id || `file-up-${Date.now()}-${i}`,
+        id: driveResult.id,
         name: file.name,
         category: targetCategory,
         fileSize: file.size,
@@ -838,17 +852,17 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
         uploadedAt: nowStr,
         uploadedBy: currentUser?.nama || driveUser?.displayName || driveUser?.email || 'Administrator Sekolah',
         uploadedByRole: currentUser?.role || 'Administrator',
-        driveFolderId: driveResult?.folderId || GOOGLE_DRIVE_FOLDER_ID,
-        driveFileUrl: driveResult?.webViewLink || (driveResult?.id ? `https://drive.google.com/file/d/${driveResult.id}/view` : GOOGLE_DRIVE_MAIN_FOLDER_URL),
-        dataUrl: dataUrl,
+        driveFolderId: driveResult.folderId || GOOGLE_DRIVE_FOLDER_ID,
+        driveFileUrl: driveResult.webViewLink || `https://drive.google.com/file/d/${driveResult.id}/view`,
         privacy: uploadPrivacy,
         description: uploadDescription || `Berkas resmi diunggah ke repositori ${targetCategory}.`,
-        tags: [ext.toUpperCase(), targetCategory.split(' ')[0], driveResult ? 'GoogleDrive' : 'Lokal'],
-        allowedUserIds: ['admin'],
+        tags: [ext.toUpperCase(), targetCategory.split(' ')[0], 'GoogleDrive'],
+        allowedUserIds: uploadPrivacy === 'restricted' && currentUser ? [currentUser.id] : undefined,
         allowedRoles: uploadPrivacy === 'Public' ? ['*'] : uploadPrivacy === 'Guru Only' ? ['Administrator', 'Guru', 'Operator'] : ['Administrator']
       };
 
       newItems.push(fileItem);
+
       setUploadProgress(Math.round(((i + 1) / total) * 100));
     }
 

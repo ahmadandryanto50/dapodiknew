@@ -19571,17 +19571,23 @@
   ],
   "permintaanAkses": [
     {
-      "id": "req-1788864575785",
+      "id": "req-1788872001007",
       "fileId": "gdrive-main-folder",
       "fileName": "Folder Google Drive Utama Sekolah (Repository Cloud)",
-      "requesterName": "AHMAD ANDRYANTO",
-      "requesterRole": "Operator",
-      "requesterEmail": "ahmad.andryanto50@admin.smp.belajar.id",
-      "requestedAt": "2026-09-08 10:49",
-      "reason": "Minta Izn Admin",
-      "status": "pending"
+      "requesterName": "Ahmad Andryanto",
+      "requesterRole": "oprator",
+      "requesterEmail": "ahmadandryanto24@gmail.com",
+      "requestedAt": "2026-09-08 12:53",
+      "reason": "oprator sekolah",
+      "status": "approved",
+      "reviewedBy": "@Ahmad_91",
+      "reviewedAt": "2026-09-08 12:54",
+      "reviewNotes": "Izin akses disetujui / diaktifkan oleh Administrator."
     }
   ],
-  "deletedPermintaanAksesIds": [],
-  "schoolFiles": []
+  "deletedPermintaanAksesIds": [
+    "req-1788864575785"
+  ],
+  "schoolFiles": [],
+  "deletedFileIds": []
 }
