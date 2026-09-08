@@ -463,6 +463,17 @@ export default function App() {
     return [];
   });
 
+  const [customFolders, setCustomFolders] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('dapodik_custom_folders');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  });
+
   // UI Modals
   const [isSheetsModalOpen, setIsSheetsModalOpen] = useState(false);
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
@@ -979,6 +990,10 @@ export default function App() {
             setAccessRequests(serverData.permintaanAkses);
             localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(serverData.permintaanAkses));
           }
+          if (serverData.customFolders && Array.isArray(serverData.customFolders)) {
+            setCustomFolders(serverData.customFolders);
+            localStorage.setItem('dapodik_custom_folders', JSON.stringify(serverData.customFolders));
+          }
           const serverFiles = serverData.schoolFiles || serverData.files;
           if (serverFiles && Array.isArray(serverFiles)) {
             setSchoolFiles(serverFiles);
@@ -1347,6 +1362,15 @@ export default function App() {
               if (JSON.stringify(prev) !== JSON.stringify(serverData.permintaanAkses)) {
                 localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(serverData.permintaanAkses));
                 return serverData.permintaanAkses;
+              }
+              return prev;
+            });
+          }
+          if (serverData.customFolders && Array.isArray(serverData.customFolders)) {
+            setCustomFolders(prev => {
+              if (JSON.stringify(prev) !== JSON.stringify(serverData.customFolders)) {
+                localStorage.setItem('dapodik_custom_folders', JSON.stringify(serverData.customFolders));
+                return serverData.customFolders;
               }
               return prev;
             });
@@ -2746,6 +2770,8 @@ export default function App() {
               setFiles={setSchoolFiles}
               accessRequests={accessRequests}
               setAccessRequests={setAccessRequests}
+              customFolders={customFolders}
+              setCustomFolders={setCustomFolders}
             />
           </div>
         )}

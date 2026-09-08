@@ -123,6 +123,8 @@ interface BerkasModuleProps {
   setFiles?: React.Dispatch<React.SetStateAction<SchoolFileItem[]>>;
   accessRequests?: FileAccessRequest[];
   setAccessRequests?: React.Dispatch<React.SetStateAction<FileAccessRequest[]>>;
+  customFolders?: string[];
+  setCustomFolders?: React.Dispatch<React.SetStateAction<string[]>>;
 }
 
 export const BerkasModule: React.FC<BerkasModuleProps> = ({ 
@@ -133,7 +135,9 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
   files: propFiles,
   setFiles: propSetFiles,
   accessRequests: propAccessRequests,
-  setAccessRequests: propSetAccessRequests
+  setAccessRequests: propSetAccessRequests,
+  customFolders: propCustomFolders,
+  setCustomFolders: propSetCustomFolders
 }) => {
   // Persistence state - Clean empty initialization
   const [localFiles, setLocalFiles] = useState<SchoolFileItem[]>(() => {
@@ -165,6 +169,19 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
   });
   const accessRequests = propAccessRequests !== undefined ? propAccessRequests : localAccessRequests;
   const setAccessRequests = propSetAccessRequests !== undefined ? propSetAccessRequests : setLocalAccessRequests;
+
+  const [localCustomFolders, setLocalCustomFolders] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('dapodik_custom_folders');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  });
+  const customFolders = propCustomFolders !== undefined ? propCustomFolders : localCustomFolders;
+  const setCustomFolders = propSetCustomFolders !== undefined ? propSetCustomFolders : setLocalCustomFolders;
 
   const [isSyncingRequests, setIsSyncingRequests] = useState<boolean>(false);
   const [activeSyncConfig, setActiveSyncConfig] = useState<SyncConfig | null>(syncConfig || null);
@@ -536,8 +553,11 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
     )
   );
 
-  // Extract all categories
-  const categories = Array.from(new Set(files.map(f => f.category))).filter(Boolean);
+  // Extract all categories including customFolders
+  const categories = Array.from(new Set([
+    ...files.map(f => f.category),
+    ...customFolders
+  ])).filter(Boolean);
 
   // Robust matching to check if a request belongs to current user / current browser session
   const isUserRequestMatch = (req: FileAccessRequest): boolean => {
@@ -798,6 +818,22 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
     const targetCategory = folderChoiceMode === 'custom'
       ? (customFolder.trim() || 'Folder Baru')
       : (customFolder.trim() && folderChoiceMode === 'custom' ? customFolder.trim() : uploadCategory);
+
+    // Save custom folder to customFolders state to persist it permanently across devices
+    if (folderChoiceMode === 'custom' && customFolder.trim()) {
+      const folderName = customFolder.trim();
+      if (!customFolders.includes(folderName)) {
+        const updatedCustomFolders = [...customFolders, folderName];
+        setCustomFolders(updatedCustomFolders);
+        localStorage.setItem('dapodik_custom_folders', JSON.stringify(updatedCustomFolders));
+        // Push customFolders to server
+        fetch('/api/app-data', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customFolders: updatedCustomFolders })
+        }).catch(() => {});
+      }
+    }
 
     const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 16);
     const newItems: SchoolFileItem[] = [];
@@ -1062,6 +1098,47 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
     persistAndSyncRequests(updated, undefined, 'Permintaan akses ditolak');
   };
 
+  const handleCreateFolderPrompt = () => {
+    if (!isSchoolStaff) {
+      alert('Maaf, Anda tidak memiliki akses untuk membuat folder baru.');
+      return;
+    }
+    const folderName = window.prompt('Masukkan nama folder baru yang ingin dibuat:');
+    if (!folderName || !folderName.trim()) return;
+    const cleanName = folderName.trim();
+    
+    // Check if it already exists (including default categories)
+    const allExisting = [
+      'Kurikulum & Pembelajaran',
+      'Kepegawaian & SK PTK',
+      'Kesiswaan & Ijazah',
+      'Sarpras & Inventaris',
+      'Keuangan & BOS',
+      'Akreditasi & SPM',
+      'Surat & Administrasi',
+      'Umum',
+      ...categories
+    ];
+    if (allExisting.some(cat => cat.toLowerCase() === cleanName.toLowerCase())) {
+      alert(`Folder atau Kategori "${cleanName}" sudah ada.`);
+      return;
+    }
+
+    const updatedCustomFolders = [...customFolders, cleanName];
+    setCustomFolders(updatedCustomFolders);
+    localStorage.setItem('dapodik_custom_folders', JSON.stringify(updatedCustomFolders));
+    
+    // Push customFolders to server
+    fetch('/api/app-data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customFolders: updatedCustomFolders })
+    }).catch(() => {});
+    
+    setSyncFeedback(`Folder "${cleanName}" berhasil dibuat secara permanen! Jika folder "${cleanName}" sudah ada di Google Drive Anda, sistem akan mendeteksi & menggunakannya secara otomatis tanpa menghapus berkas yang sudah ada.`);
+    setTimeout(() => setSyncFeedback(null), 8000);
+  };
+
   const handleDeleteFile = (fileOrId: SchoolFileItem | string) => {
     if (!isAdmin) return;
     const target = typeof fileOrId === 'string' ? files.find(f => f.id === fileOrId) : fileOrId;
@@ -1298,6 +1375,15 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
 
           {/* Action Buttons */}
           <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto shrink-0">
+            {activeTab === 'folders' && isSchoolStaff && (
+              <button
+                onClick={handleCreateFolderPrompt}
+                className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-sky-400 to-sky-500 hover:from-sky-300 hover:to-sky-400 text-slate-900 font-extrabold text-xs transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-sky-500/25 hover:scale-[1.02]"
+              >
+                <FolderPlus className="w-4 h-4 text-slate-900" />
+                <span>Buat Folder Baru</span>
+              </button>
+            )}
             <button
               onClick={() => setIsUploadModalOpen(true)}
               className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-900 font-extrabold text-xs transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-amber-500/25 hover:scale-[1.02]"
@@ -1792,6 +1878,22 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {isSchoolStaff && (
+                <div
+                  onClick={handleCreateFolderPrompt}
+                  className="bg-slate-50/50 p-5 rounded-2xl border-2 border-dashed border-slate-300 hover:border-sky-500 hover:bg-sky-50/20 hover:shadow-md transition-all cursor-pointer flex flex-col items-center justify-center text-center group min-h-[160px]"
+                >
+                  <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 group-hover:scale-110 group-hover:bg-sky-500 group-hover:text-white group-hover:border-sky-500 transition-all mb-3 shadow-xs">
+                    <FolderPlus className="w-6 h-6" />
+                  </div>
+                  <h3 className="font-bold text-slate-800 text-xs sm:text-sm group-hover:text-sky-600 transition-colors">
+                    + Buat Folder Baru
+                  </h3>
+                  <p className="text-[10px] sm:text-[11px] text-slate-500 mt-1 max-w-[200px]">
+                    Tambah folder kustom kosong yang akan disimpan permanen
+                  </p>
+                </div>
+              )}
               {categories.map(cat => {
                 const catFiles = files.filter(f => f.category === cat);
                 const accessibleCount = catFiles.filter(f => hasAccessToFile(f)).length;
@@ -2374,13 +2476,20 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
                     className="w-full p-2.5 bg-white border border-amber-300 focus:border-amber-500 rounded-xl text-slate-900 font-medium focus:outline-none shadow-xs"
                     autoFocus
                   />
-                  <div className="text-[11px] text-amber-950 bg-amber-50 px-2.5 py-1.5 rounded-lg border border-amber-200 flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                    <span>
-                      {customFolder.trim()
-                        ? `Folder baru "${customFolder.trim()}" akan otomatis dibuat di Google Drive & tampil di menu Kategori Folder.`
-                        : 'Ketik nama folder baru. Berkas akan masuk ke folder baru ini di Google Drive & menu kategori.'}
-                    </span>
+                  <div className="text-[11px] text-amber-950 bg-amber-50 px-2.5 py-1.5 rounded-lg border border-amber-200 flex flex-col gap-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      <span>
+                        {customFolder.trim()
+                          ? `Folder baru "${customFolder.trim()}" akan otomatis dibuat di Google Drive & tampil di menu Kategori Folder.`
+                          : 'Ketik nama folder baru. Berkas akan masuk ke folder baru ini di Google Drive & menu kategori.'}
+                      </span>
+                    </div>
+                    {customFolder.trim() && (
+                      <span className="text-[10px] text-amber-800 font-semibold pl-5 block leading-relaxed border-t border-amber-200/50 pt-1">
+                        ℹ️ <strong>Sistem Otomatis:</strong> Jika folder bernama <strong>"{customFolder.trim()}"</strong> sudah ada di Google Drive Anda, sistem akan otomatis mendeteksi dan langsung menggunakan folder tersebut. Seluruh file lama di Google Drive Anda <strong>dijamin 100% AMAN & TIDAK AKAN TERHAPUS/TERTIMPA</strong>.
+                      </span>
+                    )}
                   </div>
                 </div>
               )}

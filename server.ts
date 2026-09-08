@@ -53,7 +53,7 @@ async function startServer() {
       }
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 seconds timeout
       
       const response = await fetch(webAppUrl, {
         method: "POST",
@@ -88,10 +88,10 @@ async function startServer() {
 
       let data: any = null;
 
-      // 1. Try GET first with 25s timeout
+      // 1. Try GET first with 60s timeout
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 25000);
+        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 seconds timeout
         const response = await fetch(webAppUrl, {
           redirect: "follow",
           signal: controller.signal
@@ -110,7 +110,7 @@ async function startServer() {
       if (!data || data.status !== 'success') {
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 25000);
+          const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 seconds timeout
           const postRes = await fetch(webAppUrl, {
             method: "POST",
             headers: { "Content-Type": "text/plain" },
