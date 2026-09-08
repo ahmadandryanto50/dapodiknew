@@ -61,6 +61,59 @@ import {
   uploadFileToDriveViaAppsScript
 } from '../services/googleSheetsService';
 
+const compressImageIfNeeded = (file: File, maxWidth = 1200, maxHeight = 1200, quality = 0.7): Promise<string> => {
+  return new Promise((resolve) => {
+    if (!file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxHeight) {
+          if (width > height) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(event.target?.result as string || '');
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const outputType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+        const dataUrl = canvas.toDataURL(outputType, quality);
+        resolve(dataUrl);
+      };
+      img.onerror = () => {
+        resolve(event.target?.result as string || '');
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.onerror = () => resolve('');
+    reader.readAsDataURL(file);
+  });
+};
+
 interface BerkasModuleProps {
   currentUser: AdminUser | null;
   onBackToHome?: () => void;
@@ -768,21 +821,21 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       setCurrentUploadingFileName(file.name);
       setUploadProgress(Math.round(((i + 0.3) / total) * 90));
 
-      // Read local base64 for upload and in-app preview
+      // Read local base64 for upload and in-app preview with auto image compression
       let dataUrl: string | undefined = undefined;
       let base64Pure = '';
       try {
-        dataUrl = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = () => resolve('');
-          reader.readAsDataURL(file);
-        });
+        dataUrl = await compressImageIfNeeded(file);
         if (dataUrl && dataUrl.includes(',')) {
           base64Pure = dataUrl.split(',')[1];
         }
       } catch (e) {
         // ignore
+      }
+
+      let finalSize = file.size;
+      if (base64Pure) {
+        finalSize = Math.round(base64Pure.length * 0.75);
       }
 
       let driveResult: any = null;
@@ -830,7 +883,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
         id: driveResult.id,
         name: file.name,
         category: targetCategory,
-        fileSize: file.size,
+        fileSize: finalSize,
         fileType: file.type || 'application/octet-stream',
         fileExtension: ext,
         uploadedAt: nowStr,
