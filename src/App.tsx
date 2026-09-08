@@ -2816,7 +2816,25 @@ export default function App() {
         syncConfig={syncConfig}
         onSaveConfig={(cfg) => {
           setSyncConfig(cfg);
-          showToast('Pengaturan Database tersimpan.');
+          localStorage.setItem('dapodik_sync_config', JSON.stringify(cfg));
+          
+          // Post to server sync-config so ALL devices, browsers, and mobile phones get it instantly!
+          fetch('/api/sync-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(cfg)
+          })
+          .then((res) => {
+            if (res.ok) {
+              showToast('Pengaturan Database tersimpan dan disinkronkan secara global!');
+            } else {
+              showToast('Pengaturan Database tersimpan secara lokal.');
+            }
+          })
+          .catch(err => {
+            console.error('Failed to save config to server:', err);
+            showToast('Pengaturan Database tersimpan secara lokal.');
+          });
         }}
         students={students}
         teachers={teachers}

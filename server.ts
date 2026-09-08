@@ -55,13 +55,25 @@ async function startServer() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 seconds timeout
       
-      const response = await fetch(webAppUrl, {
+      let response = await fetch(webAppUrl, {
         method: "POST",
         headers: { "Content-Type": "text/plain" },
         body: JSON.stringify(payload),
-        redirect: "follow",
+        redirect: "manual",
         signal: controller.signal
       });
+
+      // Handle 301/302 redirects manually to prevent undici method-dropping bugs
+      if (response.status === 301 || response.status === 302 || response.status === 303 || response.status === 307 || response.status === 308) {
+        const redirectUrl = response.headers.get("location");
+        if (redirectUrl) {
+          response = await fetch(redirectUrl, {
+            method: "GET",
+            signal: controller.signal
+          });
+        }
+      }
+      
       clearTimeout(timeoutId);
 
       const text = await response.text();
@@ -92,10 +104,21 @@ async function startServer() {
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 seconds timeout
-        const response = await fetch(webAppUrl, {
-          redirect: "follow",
+        let response = await fetch(webAppUrl, {
+          redirect: "manual",
           signal: controller.signal
         });
+
+        if (response.status === 301 || response.status === 302 || response.status === 303 || response.status === 307 || response.status === 308) {
+          const redirectUrl = response.headers.get("location");
+          if (redirectUrl) {
+            response = await fetch(redirectUrl, {
+              method: "GET",
+              signal: controller.signal
+            });
+          }
+        }
+
         clearTimeout(timeoutId);
 
         const text = await response.text();
@@ -111,13 +134,24 @@ async function startServer() {
         try {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 seconds timeout
-          const postRes = await fetch(webAppUrl, {
+          let postRes = await fetch(webAppUrl, {
             method: "POST",
             headers: { "Content-Type": "text/plain" },
             body: JSON.stringify({ type: "LOAD_ALL" }),
-            redirect: "follow",
+            redirect: "manual",
             signal: controller.signal
           });
+
+          if (postRes.status === 301 || postRes.status === 302 || postRes.status === 303 || postRes.status === 307 || postRes.status === 308) {
+            const redirectUrl = postRes.headers.get("location");
+            if (redirectUrl) {
+              postRes = await fetch(redirectUrl, {
+                method: "GET",
+                signal: controller.signal
+              });
+            }
+          }
+
           clearTimeout(timeoutId);
           const postText = await postRes.text();
           data = JSON.parse(postText);
