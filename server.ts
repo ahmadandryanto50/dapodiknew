@@ -141,7 +141,8 @@ async function startServer() {
               administrator: cached.administrators || [],
               aplikasi: cached.aplikasiLinks || [],
               notifikasi: cached.notifications || [],
-              permintaanAkses: cached.permintaanAkses || []
+              permintaanAkses: cached.permintaanAkses || [],
+              berkas: cached.schoolFiles || cached.files || []
             });
           } catch (e) {}
         }
@@ -167,7 +168,8 @@ async function startServer() {
             administrator: cached.administrators || [],
             aplikasi: cached.aplikasiLinks || [],
             notifikasi: cached.notifications || [],
-            permintaanAkses: cached.permintaanAkses || []
+            permintaanAkses: cached.permintaanAkses || [],
+            berkas: cached.schoolFiles || cached.files || []
           });
         } catch (e) {}
       }
@@ -221,12 +223,24 @@ async function startServer() {
       const incomingDeletedReqs: string[] = Array.isArray(incoming.deletedPermintaanAksesIds) ? incoming.deletedPermintaanAksesIds : [];
       const mergedDeletedReqs = Array.from(new Set([...currentDeletedReqs, ...incomingDeletedReqs]));
 
+      // Merge deletedFileIds
+      const currentDeletedFiles: string[] = Array.isArray(currentData.deletedFileIds) ? currentData.deletedFileIds : [];
+      const incomingDeletedFiles: string[] = Array.isArray(incoming.deletedFileIds)
+        ? incoming.deletedFileIds
+        : (incoming.deletedFileId ? [incoming.deletedFileId] : []);
+      const mergedDeletedFiles = Array.from(new Set([...currentDeletedFiles, ...incomingDeletedFiles]));
+
       // Merge schoolFiles
       let mergedFiles = currentData.schoolFiles || currentData.files || [];
       if (Array.isArray(incoming.schoolFiles)) {
         mergedFiles = incoming.schoolFiles;
       } else if (Array.isArray(incoming.files)) {
         mergedFiles = incoming.files;
+      }
+
+      if (mergedDeletedFiles.length > 0) {
+        const delFileSet = new Set(mergedDeletedFiles);
+        mergedFiles = mergedFiles.filter((f: any) => f && f.id && !delFileSet.has(String(f.id)));
       }
 
       // Merge notifications carefully so no notification is ever lost by cross-device race conditions
@@ -296,6 +310,7 @@ async function startServer() {
         ...incoming,
         deletedNotifIds: mergedDeleted,
         deletedPermintaanAksesIds: mergedDeletedReqs,
+        deletedFileIds: mergedDeletedFiles,
         notifications: mergedNotifs,
         permintaanAkses: mergedRequests,
         schoolFiles: mergedFiles

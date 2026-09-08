@@ -685,7 +685,7 @@ export default function App() {
     setIsSyncing(false);
     
     if (res.success && res.data) {
-      const { siswa, ptk, sarpras: pulledSarpras, rapor, pengaturan, administrator, profilSekolah, aplikasi, notifikasi, permintaanAkses } = res.data;
+      const { siswa, ptk, sarpras: pulledSarpras, rapor, pengaturan, administrator, profilSekolah, aplikasi, notifikasi, permintaanAkses, berkas } = res.data;
       
       let newStudents = students;
       let newTeachers = teachers;
@@ -699,6 +699,10 @@ export default function App() {
 
       if (Array.isArray(permintaanAkses)) {
         localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(permintaanAkses));
+      }
+
+      if (Array.isArray(berkas)) {
+        localStorage.setItem('dapodik_school_files_v3', JSON.stringify(berkas));
       }
 
       if (Array.isArray(notifikasi)) {
@@ -948,8 +952,9 @@ export default function App() {
           if (serverData.permintaanAkses && Array.isArray(serverData.permintaanAkses)) {
             localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(serverData.permintaanAkses));
           }
-          if (serverData.schoolFiles && Array.isArray(serverData.schoolFiles)) {
-            localStorage.setItem('dapodik_school_files_v3', JSON.stringify(serverData.schoolFiles));
+          const serverFiles = serverData.schoolFiles || serverData.files;
+          if (serverFiles && Array.isArray(serverFiles)) {
+            localStorage.setItem('dapodik_school_files_v3', JSON.stringify(serverFiles));
           }
         }
         
@@ -960,7 +965,7 @@ export default function App() {
           setIsSyncing(false);
           
           if (res.success && res.data) {
-            const { siswa, ptk, sarpras: pulledSarpras, rapor, pengaturan, administrator, profilSekolah, aplikasi, notifikasi, permintaanAkses } = res.data;
+            const { siswa, ptk, sarpras: pulledSarpras, rapor, pengaturan, administrator, profilSekolah, aplikasi, notifikasi, permintaanAkses, berkas } = res.data;
             
             if (Array.isArray(permintaanAkses) && permintaanAkses.length > 0) {
               localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(permintaanAkses));
@@ -969,6 +974,16 @@ export default function App() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ permintaanAkses })
+              }).catch(() => {});
+            }
+
+            if (Array.isArray(berkas) && berkas.length > 0) {
+              localStorage.setItem('dapodik_school_files_v3', JSON.stringify(berkas));
+              // Also sync to server cache
+              fetch('/api/app-data', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ schoolFiles: berkas })
               }).catch(() => {});
             }
             

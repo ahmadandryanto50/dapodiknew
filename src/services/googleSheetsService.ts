@@ -1,8 +1,8 @@
-import { Student, TeacherStaff, SarprasItem, StudentReport, SyncConfig, AppDisplayConfig, SchoolProfile, AdminUser, NotificationItem, FileAccessRequest } from '../types';
+import { Student, TeacherStaff, SarprasItem, StudentReport, SyncConfig, AppDisplayConfig, SchoolProfile, AdminUser, NotificationItem, FileAccessRequest, SchoolFileItem } from '../types';
 
 export const APPS_SCRIPT_TEMPLATE = `/**
  * Google Apps Script untuk Dapodik Terintegrasi 2026
- * Versi Script: v2.8 (Mendukung Data_Alumni, Data_Siswa, Data_Siswa_Keluar, PTK, Sarpras, Notifikasi, Permintaan_Akses_Berkas, Administrator, Profil & Pengaturan)
+ * Versi Script: v2.9 (Mendukung Data_Alumni, Data_Siswa, Data_Siswa_Keluar, PTK, Sarpras, Notifikasi, Permintaan_Akses_Berkas, Data_Berkas, Administrator, Profil & Pengaturan)
  * 
  * Cara pasang / update:
  * 1. Buka Google Spreadsheet Anda di https://sheets.new (atau spreadsheet yang sudah ada)
@@ -24,7 +24,8 @@ const HEADERS_MAP = {
   'Data_Sarpras': ['id', 'kodeBarang', 'namaBarang', 'kategori', 'kondisi', 'jumlah', 'satuan', 'letakRuang', 'tahunPengadaan', 'layakPakai'],
   'Data_Rapor': ['id', 'studentId', 'nisn', 'studentName', 'rombel', 'semester', 'tahunAjaran', 'scores', 'kehadiran', 'catatanWaliKelas', 'statusKenaikan'],
   'Notifikasi': ['id', 'title', 'message', 'time', 'type', 'read'],
-  'Permintaan_Akses_Berkas': ['id', 'fileId', 'fileName', 'requesterName', 'requesterRole', 'requesterEmail', 'requestedAt', 'reason', 'status', 'reviewedBy', 'reviewedAt', 'reviewNotes']
+  'Permintaan_Akses_Berkas': ['id', 'fileId', 'fileName', 'requesterName', 'requesterRole', 'requesterEmail', 'requestedAt', 'reason', 'status', 'reviewedBy', 'reviewedAt', 'reviewNotes'],
+  'Data_Berkas': ['id', 'name', 'category', 'fileSize', 'fileType', 'fileExtension', 'uploadedAt', 'uploadedBy', 'uploadedByRole', 'driveFolderId', 'driveFileUrl', 'privacy', 'description', 'tags', 'allowedUserIds', 'allowedRoles']
 };
 
 function doGet(e) {
@@ -45,8 +46,9 @@ function doGet(e) {
     aplikasi: getSheetData(ss, 'Data_Aplikasi'),
     notifikasi: getSheetData(ss, 'Notifikasi'),
     permintaanAkses: getSheetData(ss, 'Permintaan_Akses_Berkas'),
+    berkas: getSheetData(ss, 'Data_Berkas'),
     status: 'success',
-    version: '2026.2.9',
+    version: '2026.2.10',
     timestamp: new Date().toLocaleString('id-ID')
   };
   
@@ -76,6 +78,7 @@ function doPost(e) {
         aplikasi: getSheetData(ss, 'Data_Aplikasi'),
         notifikasi: getSheetData(ss, 'Notifikasi'),
         permintaanAkses: getSheetData(ss, 'Permintaan_Akses_Berkas'),
+        berkas: getSheetData(ss, 'Data_Berkas'),
         status: 'success'
       };
       return ContentService.createTextOutput(JSON.stringify(result))
@@ -95,6 +98,7 @@ function doPost(e) {
       if (data.aplikasi !== undefined) saveSheetData(ss, 'Data_Aplikasi', data.aplikasi);
       if (data.notifikasi !== undefined) saveSheetData(ss, 'Notifikasi', data.notifikasi, HEADERS_MAP['Notifikasi']);
       if (data.permintaanAkses !== undefined) saveSheetData(ss, 'Permintaan_Akses_Berkas', data.permintaanAkses, HEADERS_MAP['Permintaan_Akses_Berkas']);
+      if (data.berkas !== undefined) saveSheetData(ss, 'Data_Berkas', data.berkas, HEADERS_MAP['Data_Berkas']);
     } else if (data.type === 'SYNC_SISWA') {
       saveSheetData(ss, 'Data_Siswa', data.payload, HEADERS_MAP['Data_Siswa']);
     } else if (data.type === 'SYNC_SISWA_KELUAR') {
@@ -111,6 +115,8 @@ function doPost(e) {
       saveSheetData(ss, 'Notifikasi', data.payload, HEADERS_MAP['Notifikasi']);
     } else if (data.type === 'SYNC_PERMINTAAN_AKSES') {
       saveSheetData(ss, 'Permintaan_Akses_Berkas', data.payload, HEADERS_MAP['Permintaan_Akses_Berkas']);
+    } else if (data.type === 'SYNC_BERKAS') {
+      saveSheetData(ss, 'Data_Berkas', data.payload, HEADERS_MAP['Data_Berkas']);
     } else if (data.type === 'SYNC_PENGATURAN') {
       saveSheetData(ss, 'Data_Pengaturan', data.payload);
     } else if (data.type === 'SYNC_ADMINISTRATOR' || data.type === 'SYNC_ADMIN') {
@@ -123,7 +129,7 @@ function doPost(e) {
     
     return ContentService.createTextOutput(JSON.stringify({ 
       status: 'success', 
-      message: 'Data Dapodik (Siswa, Alumni, PTK, Sarpras, Notifikasi, Permintaan Akses Berkas & Pengaturan) berhasil disinkronkan ke Google Sheet!' 
+      message: 'Data Dapodik (Siswa, Alumni, PTK, Sarpras, Notifikasi, Permintaan Akses Berkas, Berkas & Pengaturan) berhasil disinkronkan ke Google Sheet!' 
     })).setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({ 
@@ -270,6 +276,9 @@ function checkAndInitializeSheets(ss) {
     ],
     'Permintaan_Akses_Berkas': [
       HEADERS_MAP['Permintaan_Akses_Berkas']
+    ],
+    'Data_Berkas': [
+      HEADERS_MAP['Data_Berkas']
     ],
     'Administrator': [
       ['id', 'username', 'password', 'nama', 'role', 'email', 'noHp', 'status', 'lastLogin'],
@@ -506,7 +515,72 @@ function parseSheetsResult(result: any) {
         const rawRead = n.read !== undefined ? n.read : (n.readStatus !== undefined ? n.readStatus : n.dibaca);
         const read = Boolean(rawRead === true || rawRead === 'true' || rawRead === 'TRUE' || rawRead === 1 || rawRead === '1');
         return { id, title, message, time, type, read };
-      }).filter((n: NotificationItem) => n.title || n.message)
+      }).filter((n: NotificationItem) => n.title || n.message),
+      berkas: (result.berkas || result.files || result.schoolFiles || []).map((b: any, idx: number) => {
+        const id = String(b.id || `file-${Date.now()}-${idx}`);
+        const name = String(b.name || 'Berkas Tanpa Nama');
+        const category = String(b.category || 'Dokumen Lainnya');
+        const fileSize = typeof b.fileSize === 'number' ? b.fileSize : Number(b.fileSize || 0);
+        const fileType = String(b.fileType || 'application/octet-stream');
+        const fileExtension = String(b.fileExtension || (name.includes('.') ? name.split('.').pop() : 'bin')).toLowerCase();
+        const uploadedAt = String(b.uploadedAt || '');
+        const uploadedBy = String(b.uploadedBy || 'Administrator');
+        const uploadedByRole = String(b.uploadedByRole || 'Administrator');
+        const driveFolderId = b.driveFolderId ? String(b.driveFolderId) : undefined;
+        const driveFileUrl = b.driveFileUrl ? String(b.driveFileUrl) : undefined;
+        const privacy = (['Restricted', 'Guru Only', 'Public'].includes(b.privacy) ? b.privacy : 'Restricted') as 'Restricted' | 'Guru Only' | 'Public';
+        const description = b.description ? String(b.description) : undefined;
+        let tags: string[] = [];
+        if (Array.isArray(b.tags)) {
+          tags = b.tags.map(String);
+        } else if (typeof b.tags === 'string' && b.tags.trim()) {
+          try {
+            if (b.tags.startsWith('[')) {
+              tags = JSON.parse(b.tags);
+            } else {
+              tags = b.tags.split(',').map((t: string) => t.trim()).filter(Boolean);
+            }
+          } catch (e) {
+            tags = [b.tags.trim()];
+          }
+        }
+        let allowedUserIds: string[] | undefined = undefined;
+        if (Array.isArray(b.allowedUserIds)) {
+          allowedUserIds = b.allowedUserIds.map(String);
+        } else if (typeof b.allowedUserIds === 'string' && b.allowedUserIds.trim()) {
+          try {
+            if (b.allowedUserIds.startsWith('[')) allowedUserIds = JSON.parse(b.allowedUserIds);
+            else allowedUserIds = b.allowedUserIds.split(',').map((u: string) => u.trim());
+          } catch (e) {}
+        }
+        let allowedRoles: string[] | undefined = undefined;
+        if (Array.isArray(b.allowedRoles)) {
+          allowedRoles = b.allowedRoles.map(String);
+        } else if (typeof b.allowedRoles === 'string' && b.allowedRoles.trim()) {
+          try {
+            if (b.allowedRoles.startsWith('[')) allowedRoles = JSON.parse(b.allowedRoles);
+            else allowedRoles = b.allowedRoles.split(',').map((r: string) => r.trim());
+          } catch (e) {}
+        }
+        return {
+          id,
+          name,
+          category,
+          fileSize,
+          fileType,
+          fileExtension,
+          uploadedAt,
+          uploadedBy,
+          uploadedByRole,
+          driveFolderId,
+          driveFileUrl,
+          privacy,
+          description,
+          tags,
+          allowedUserIds,
+          allowedRoles
+        };
+      }).filter((b: SchoolFileItem) => b.id && b.name)
     }
   };
 }
@@ -524,6 +598,7 @@ export async function syncToGoogleSheets(
     aplikasi?: any[];
     notifikasi?: NotificationItem[];
     permintaanAkses?: FileAccessRequest[];
+    berkas?: SchoolFileItem[];
   }
 ): Promise<{ success: boolean; message: string }> {
   if (!config.webAppUrl) {
@@ -534,6 +609,16 @@ export async function syncToGoogleSheets(
   }
 
   try {
+    const sanitizedBerkas = (data.berkas || []).map(f => {
+      const { dataUrl, ...rest } = f;
+      return {
+        ...rest,
+        tags: JSON.stringify(f.tags || []),
+        allowedUserIds: JSON.stringify(f.allowedUserIds || []),
+        allowedRoles: JSON.stringify(f.allowedRoles || [])
+      };
+    });
+
     const payload = {
       type: 'SYNC_ALL',
       siswa: data.siswa
@@ -576,6 +661,7 @@ export async function syncToGoogleSheets(
       aplikasi: data.aplikasi || [],
       notifikasi: data.notifikasi || [],
       permintaanAkses: data.permintaanAkses || [],
+      berkas: sanitizedBerkas,
       timestamp: new Date().toLocaleString('id-ID')
     };
 
@@ -603,6 +689,7 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
     aplikasi?: any[];
     notifikasi?: NotificationItem[];
     permintaanAkses?: FileAccessRequest[];
+    berkas?: SchoolFileItem[];
   };
 }> {
   if (!config.webAppUrl) {
@@ -651,7 +738,7 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
     const cacheRes = await fetch(`/api/app-data?t=${Date.now()}`);
     if (cacheRes.ok) {
       const cache = await cacheRes.json();
-      if (cache && (cache.students?.length || cache.teachers?.length || cache.sarpras?.length)) {
+      if (cache && (cache.students?.length || cache.teachers?.length || cache.sarpras?.length || cache.schoolFiles?.length || cache.files?.length)) {
         return {
           success: true,
           message: 'Data dimuat dari sinkronisasi server cache.',
@@ -665,7 +752,8 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
             profilSekolah: [],
             aplikasi: cache.aplikasiLinks || [],
             notifikasi: cache.notifications || [],
-            permintaanAkses: cache.permintaanAkses || []
+            permintaanAkses: cache.permintaanAkses || [],
+            berkas: cache.schoolFiles || cache.files || []
           }
         };
       }
@@ -736,6 +824,30 @@ export async function syncPermintaanAksesToGoogleSheets(
   const payload = {
     type: 'SYNC_PERMINTAAN_AKSES',
     payload: requests
+  };
+  return await callProxyOrDirectPost(config.webAppUrl, payload);
+}
+
+export async function syncBerkasToGoogleSheets(
+  config: SyncConfig,
+  files: SchoolFileItem[]
+): Promise<{ success: boolean; message: string }> {
+  if (!config.webAppUrl) {
+    return { success: false, message: 'URL Google Apps Script belum dikonfigurasi.' };
+  }
+  // Strip large dataUrl to ensure Google Sheets cell limits (50k chars) are not exceeded
+  const sanitized = files.map(f => {
+    const { dataUrl, ...rest } = f;
+    return {
+      ...rest,
+      tags: JSON.stringify(f.tags || []),
+      allowedUserIds: JSON.stringify(f.allowedUserIds || []),
+      allowedRoles: JSON.stringify(f.allowedRoles || [])
+    };
+  });
+  const payload = {
+    type: 'SYNC_BERKAS',
+    payload: sanitized
   };
   return await callProxyOrDirectPost(config.webAppUrl, payload);
 }

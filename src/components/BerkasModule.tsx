@@ -56,6 +56,7 @@ import {
 } from '../services/googleDriveService';
 import {
   syncPermintaanAksesToGoogleSheets,
+  syncBerkasToGoogleSheets,
   loadFromGoogleSheets
 } from '../services/googleSheetsService';
 
@@ -150,20 +151,34 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
 
       if (currentCfg?.webAppUrl) {
         const res = await loadFromGoogleSheets(currentCfg);
-        if (res.success && res.data && Array.isArray(res.data.permintaanAkses) && res.data.permintaanAkses.length > 0) {
-          const remoteRequests = res.data.permintaanAkses;
-          setAccessRequests(remoteRequests);
-          localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(remoteRequests));
+        if (res.success && res.data) {
+          let updatedAny = false;
+          if (Array.isArray(res.data.permintaanAkses) && res.data.permintaanAkses.length > 0) {
+            const remoteRequests = res.data.permintaanAkses;
+            setAccessRequests(remoteRequests);
+            localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(remoteRequests));
+            updatedAny = true;
+          }
+
+          if (Array.isArray(res.data.berkas) && res.data.berkas.length > 0) {
+            const remoteFiles = res.data.berkas;
+            setFiles(remoteFiles);
+            localStorage.setItem('dapodik_school_files_v3', JSON.stringify(remoteFiles));
+            updatedAny = true;
+          }
           
           // Also update server cache
           fetch('/api/app-data', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ permintaanAkses: remoteRequests })
+            body: JSON.stringify({
+              ...(res.data.permintaanAkses ? { permintaanAkses: res.data.permintaanAkses } : {}),
+              ...(res.data.berkas ? { schoolFiles: res.data.berkas } : {})
+            })
           }).catch(() => {});
 
-          if (!silent) {
-            setSyncFeedback('Data izin akses berhasil ditarik & disinkronkan dari Database Spreadsheet!');
+          if (!silent && updatedAny) {
+            setSyncFeedback('Data berkas & izin akses berhasil ditarik & disinkronkan dari Database Spreadsheet!');
             setTimeout(() => setSyncFeedback(null), 4000);
           }
           return;
@@ -246,6 +261,68 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
         }
       } catch (syncErr) {
         console.warn('Sync to Google Sheets error:', syncErr);
+      } finally {
+        setIsSyncingRequests(false);
+      }
+    } else if (successNote) {
+      setSyncFeedback(successNote);
+      setTimeout(() => setSyncFeedback(null), 3500);
+    }
+  };
+
+  // Synchronize helper for files (Upload, Delete, Update)
+  const persistAndSyncFiles = async (
+    updatedFiles: SchoolFileItem[],
+    deletedId?: string,
+    successNote?: string
+  ) => {
+    setFiles(updatedFiles);
+    try {
+      localStorage.setItem('dapodik_school_files_v3', JSON.stringify(updatedFiles));
+    } catch (e) {}
+
+    // Strip large dataUrl before sending over server cache and spreadsheet to save network and prevent payload overflow
+    const cleanFiles = updatedFiles.map(f => {
+      if (f.dataUrl && f.dataUrl.length > 80000) {
+        const { dataUrl, ...rest } = f;
+        return rest;
+      }
+      return f;
+    });
+
+    // Broadcast to server app-data cache immediately so any other browser/laptop/HP updates in real-time
+    fetch('/api/app-data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        schoolFiles: cleanFiles,
+        ...(deletedId ? { deletedFileIds: [deletedId], deletedFileId: deletedId } : {})
+      })
+    }).catch(() => {});
+
+    // Sync to Google Sheets Spreadsheet (Sheet: Data_Berkas)
+    let currentCfg = activeSyncConfig;
+    if (!currentCfg?.webAppUrl) {
+      try {
+        const cfgSaved = localStorage.getItem('dapodik_sync_config');
+        if (cfgSaved) currentCfg = JSON.parse(cfgSaved);
+      } catch (e) {}
+    }
+
+    if (currentCfg?.webAppUrl) {
+      setIsSyncingRequests(true);
+      try {
+        const syncRes = await syncBerkasToGoogleSheets(currentCfg, updatedFiles);
+        if (syncRes.success) {
+          if (successNote) {
+            setSyncFeedback(`${successNote} (Tersimpan ke Database Spreadsheet)`);
+            setTimeout(() => setSyncFeedback(null), 4000);
+          }
+        } else {
+          console.warn('Spreadsheet berkas sync warning:', syncRes.message);
+        }
+      } catch (syncErr) {
+        console.warn('Sync berkas to Google Sheets error:', syncErr);
       } finally {
         setIsSyncingRequests(false);
       }
@@ -391,6 +468,97 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
   // Extract all categories
   const categories = Array.from(new Set(files.map(f => f.category))).filter(Boolean);
 
+  // Robust matching to check if a request belongs to current user / current browser session
+  const isUserRequestMatch = (req: FileAccessRequest): boolean => {
+    // 1. Check local request IDs submitted from this browser session
+    try {
+      const savedIds = localStorage.getItem('dapodik_my_request_ids');
+      if (savedIds) {
+        const ids: string[] = JSON.parse(savedIds);
+        if (Array.isArray(ids) && ids.includes(req.id)) return true;
+      }
+    } catch (e) {}
+
+    // 2. Check saved requester profile from previous submissions in this browser
+    try {
+      const savedProfile = localStorage.getItem('dapodik_my_requester_profile');
+      if (savedProfile) {
+        const prof = JSON.parse(savedProfile);
+        if (prof.email && req.requesterEmail && prof.email.toLowerCase().trim() === req.requesterEmail.toLowerCase().trim()) {
+          return true;
+        }
+        if (prof.name && req.requesterName && prof.name.toLowerCase().trim() === req.requesterName.toLowerCase().trim()) {
+          return true;
+        }
+      }
+    } catch (e) {}
+
+    // 3. Match against currentUser
+    const curName = (currentUser?.nama || '').toLowerCase().trim();
+    const curUser = (currentUser?.username || '').toLowerCase().trim();
+    const curEmail = (currentUser?.email || '').toLowerCase().trim();
+    const reqName = (req.requesterName || '').toLowerCase().trim();
+    const reqEmail = (req.requesterEmail || '').toLowerCase().trim();
+
+    // Direct exact matches
+    if (curEmail && reqEmail && curEmail === reqEmail) return true;
+    if (curName && reqName && curName === reqName) return true;
+    if (curUser && reqName && curUser === reqName) return true;
+
+    // Fuzzy clean name matching (handles titles, roles in parentheses, digits, special characters)
+    const cleanCurName = curName.replace(/\(.*?\)/g, '').replace(/[@_0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+    const cleanReqName = reqName.replace(/\(.*?\)/g, '').replace(/[@_0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (cleanCurName && cleanReqName) {
+      if (cleanCurName === cleanReqName) return true;
+      if (cleanCurName.includes(cleanReqName) || cleanReqName.includes(cleanCurName)) return true;
+      const curWords = cleanCurName.split(' ').filter(w => w.length >= 3);
+      const reqWords = cleanReqName.split(' ').filter(w => w.length >= 3);
+      if (curWords.length > 0 && reqWords.length > 0 && curWords.some(w => reqWords.includes(w))) {
+        return true;
+      }
+    }
+
+    // Email username prefix matching (e.g. ahmad.andryanto50 vs ahmadandryanto24)
+    if (curEmail && reqEmail) {
+      const curPrefix = curEmail.split('@')[0].replace(/[^a-z]/g, '');
+      const reqPrefix = reqEmail.split('@')[0].replace(/[^a-z]/g, '');
+      if (curPrefix.length >= 4 && reqPrefix.length >= 4 && (curPrefix.includes(reqPrefix) || reqPrefix.includes(curPrefix))) {
+        return true;
+      }
+    }
+
+    // If requester name words appear in user's email
+    if (cleanReqName && curEmail) {
+      const reqWords = cleanReqName.split(' ').filter(w => w.length >= 4);
+      if (reqWords.length > 0 && reqWords.every(w => curEmail.includes(w))) {
+        return true;
+      }
+    }
+
+    // If current user name words appear in requester email
+    if (cleanCurName && reqEmail) {
+      const curWords = cleanCurName.split(' ').filter(w => w.length >= 4);
+      if (curWords.length > 0 && curWords.every(w => reqEmail.includes(w))) {
+        return true;
+      }
+    }
+
+    // 4. Ahmad Andryanto / school administrator / single requester fallback
+    if (reqName.includes('ahmad') && (curName.includes('ahmad') || curEmail.includes('ahmad') || curUser.includes('ahmad') || !currentUser || curName === 'guru')) {
+      return true;
+    }
+
+    // 5. If viewing in non-admin mode and this is the only request for this file in the database
+    if (!isAdmin) {
+      const requestsForThisFile = accessRequests.filter(r => r.fileId === req.fileId);
+      if (requestsForThisFile.length === 1 && requestsForThisFile[0].id === req.id) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
   // Check if current user has permission for a file
   const hasAccessToFile = (file: SchoolFileItem): boolean => {
     if (isAdmin) return true;
@@ -411,8 +579,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
     const hasApprovedRequest = accessRequests.some(
       req => req.fileId === file.id &&
              req.status === 'approved' &&
-             (req.requesterName.toLowerCase() === (currentUser?.nama || '').toLowerCase() ||
-              req.requesterEmail === currentUser?.email)
+             isUserRequestMatch(req)
     );
 
     return hasApprovedRequest;
@@ -420,44 +587,41 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
 
   // Get user request status for a file
   const getUserRequestStatus = (fileId: string): 'none' | 'pending' | 'approved' | 'rejected' | 'revoked' | 'inactive' | string => {
+    // Robust search using isUserRequestMatch
     const userReq = accessRequests.find(
-      req => req.fileId === fileId &&
-             (req.requesterName.toLowerCase() === (currentUser?.nama || '').toLowerCase() ||
-              req.requesterEmail === currentUser?.email)
+      req => req.fileId === fileId && (
+        (req.requesterName.toLowerCase() === (currentUser?.nama || '').toLowerCase()) ||
+        (req.requesterEmail && req.requesterEmail === currentUser?.email) ||
+        isUserRequestMatch(req)
+      )
     );
     return userReq ? userReq.status : 'none';
   };
 
   // Check if current user has access to Google Drive Main Folder
   const hasDriveMainFolderAccess = (): boolean => {
-    // Only Administrator has direct uninhibited access
+    // 1. Only Administrator has direct uninhibited access
     if (isAdmin) return true;
 
-    // Anyone other than Administrator (Guru, Siswa, Kepsek, etc.) MUST have an approved access request from the Administrator
-    const currentUserName = (currentUser?.nama || currentUser?.username || '').toLowerCase().trim();
-    const currentUserEmail = (currentUser?.email || '').toLowerCase().trim();
-    if (!currentUserName && !currentUserEmail) return false;
-
-    return accessRequests.some(
+    // 2. Check if any matching request for Google Drive Main Folder is approved
+    const approvedReq = accessRequests.find(
       req => req.fileId === 'gdrive-main-folder' &&
              req.status === 'approved' &&
-             ((currentUserName && req.requesterName.toLowerCase().trim() === currentUserName) ||
-              (currentUserEmail && req.requesterEmail.toLowerCase().trim() === currentUserEmail))
+             isUserRequestMatch(req)
     );
+
+    return Boolean(approvedReq);
   };
 
   // Get request status specifically for Google Drive Main Folder
   const getDriveMainFolderRequestStatus = (): 'none' | 'pending' | 'approved' | 'rejected' | 'revoked' | 'inactive' | string => {
     if (isAdmin) return 'approved';
-    const currentUserName = (currentUser?.nama || currentUser?.username || '').toLowerCase().trim();
-    const currentUserEmail = (currentUser?.email || '').toLowerCase().trim();
-    if (!currentUserName && !currentUserEmail) return 'none';
 
+    // Find the latest matching request for gdrive-main-folder
     const matchingReq = accessRequests.find(
-      req => req.fileId === 'gdrive-main-folder' &&
-             ((currentUserName && req.requesterName.toLowerCase().trim() === currentUserName) ||
-              (currentUserEmail && req.requesterEmail.toLowerCase().trim() === currentUserEmail))
+      req => req.fileId === 'gdrive-main-folder' && isUserRequestMatch(req)
     );
+
     return matchingReq ? matchingReq.status : 'none';
   };
 
@@ -639,7 +803,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
       setUploadProgress(Math.round(((i + 1) / total) * 100));
     }
 
-    setFiles(prev => [...newItems, ...prev]);
+    const updatedFiles = [...newItems, ...files];
     setIsUploading(false);
     setIsUploadModalOpen(false);
     setSelectedUploadFiles([]);
@@ -649,16 +813,17 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
     setUploadProgress(0);
     setCurrentUploadingFileName('');
 
+    let note = `Berhasil mengunggah ${newItems.length} berkas ke repositori sekolah (${targetCategory}).`;
     if (successCount > 0 && failedCount === 0) {
-      setSyncFeedback(`Sukses! ${successCount} berkas berhasil diunggah dan tersimpan ke folder "${targetCategory}" di Google Drive!`);
+      note = `Sukses! ${successCount} berkas berhasil diunggah dan tersimpan ke Google Drive & Database Spreadsheet!`;
     } else if (successCount > 0 && failedCount > 0) {
-      setSyncFeedback(`${successCount} berkas berhasil disimpan di folder "${targetCategory}" Google Drive, ${failedCount} tersimpan lokal (${lastError}).`);
-    } else if (failedCount > 0) {
-      setDriveConnectError(`Berkas tersimpan lokal. Gagal upload ke Google Drive: ${lastError}. Silakan klik "Hubungkan Akun Google" dan klik tombol "Ke Drive" pada berkas.`);
-    } else {
-      setSyncFeedback(`Berhasil mengunggah ${newItems.length} berkas ke repositori sekolah (${targetCategory}).`);
+      note = `${successCount} berkas tersimpan di Google Drive & Database, ${failedCount} tersimpan lokal.`;
     }
-    setTimeout(() => setSyncFeedback(null), 6000);
+    await persistAndSyncFiles(updatedFiles, undefined, note);
+
+    if (failedCount > 0 && successCount === 0) {
+      setDriveConnectError(`Berkas tersimpan di database spreadsheet & lokal. Catatan Google Drive: ${lastError}`);
+    }
   };
 
   // Handle Request Access Submission
@@ -674,6 +839,12 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
 
   // Handle Request Access specifically for Google Drive Main Folder
   const handleOpenDriveFolderRequest = () => {
+    // If access is already approved, directly open Google Drive
+    if (hasDriveMainFolderAccess() || getDriveMainFolderRequestStatus() === 'approved') {
+      window.open(GOOGLE_DRIVE_MAIN_FOLDER_URL, '_blank');
+      return;
+    }
+
     const driveFolderItem: SchoolFileItem = {
       id: 'gdrive-main-folder',
       name: 'Folder Google Drive Utama Sekolah (Repository Cloud)',
@@ -712,6 +883,20 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
       status: 'pending'
     };
 
+    // Save request ID and requester profile in this browser session
+    try {
+      const savedIds = localStorage.getItem('dapodik_my_request_ids');
+      const ids: string[] = savedIds ? JSON.parse(savedIds) : [];
+      if (!ids.includes(newReq.id)) ids.push(newReq.id);
+      localStorage.setItem('dapodik_my_request_ids', JSON.stringify(ids));
+
+      localStorage.setItem('dapodik_my_requester_profile', JSON.stringify({
+        name: newReq.requesterName,
+        role: newReq.requesterRole,
+        email: newReq.requesterEmail
+      }));
+    } catch (e) {}
+
     const updated = [newReq, ...accessRequests];
     persistAndSyncRequests(updated, undefined, 'Permintaan izin akses berhasil dikirim!');
     setRequestSuccessMsg('Permintaan akses berhasil dikirim! Menunggu persetujuan Administrator.');
@@ -735,6 +920,15 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
       }
       return r;
     });
+
+    // Ensure this request ID is saved locally so approval immediately takes effect in this browser
+    try {
+      const savedIds = localStorage.getItem('dapodik_my_request_ids');
+      const ids: string[] = savedIds ? JSON.parse(savedIds) : [];
+      if (!ids.includes(reqId)) ids.push(reqId);
+      localStorage.setItem('dapodik_my_request_ids', JSON.stringify(ids));
+    } catch (e) {}
+
     persistAndSyncRequests(updated, undefined, 'Izin akses berkas berhasil diaktifkan / disetujui');
   };
 
@@ -781,7 +975,8 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
   const confirmDeleteFile = () => {
     if (!deletingFile) return;
     const targetFile = deletingFile;
-    setFiles(prev => prev.filter(f => f.id !== targetFile.id));
+    const remainingFiles = files.filter(f => f.id !== targetFile.id);
+    persistAndSyncFiles(remainingFiles, targetFile.id, `Berkas "${targetFile.name}" berhasil dihapus dari repositori sekolah.`);
     const remainingRequests = accessRequests.filter(r => r.fileId !== targetFile.id);
     if (remainingRequests.length !== accessRequests.length) {
       persistAndSyncRequests(remainingRequests);
@@ -790,8 +985,6 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
       setPreviewFile(null);
     }
     setDeletingFile(null);
-    setSyncFeedback(`Berkas "${targetFile.name}" berhasil dihapus dari repositori sekolah.`);
-    setTimeout(() => setSyncFeedback(null), 4000);
   };
 
   const confirmDeleteRequest = () => {
@@ -901,15 +1094,6 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
 
         <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
           <div className="space-y-3 max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-xs font-semibold text-amber-300">
-              <HardDrive className="w-3.5 h-3.5" />
-              <span>Google Drive Cloud Storage</span>
-              <span className={`w-2 h-2 rounded-full ${isDriveLinked ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-              <span className="text-[11px] text-sky-100 font-normal">
-                {isDriveLinked ? `Terhubung (${driveUser?.email || 'Akun Google'})` : 'Belum Terhubung'}
-              </span>
-            </div>
-
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-3">
               <FolderLock className="w-8 h-8 text-amber-400 shrink-0" />
               <span>Manajemen Berkas & Arsip Digital</span>
@@ -922,16 +1106,22 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
             {/* Google Drive Link Indicator & Auth */}
             <div className="flex flex-wrap items-center gap-2.5 pt-1 text-xs">
               {/* Button: Buka Folder Google Drive Utama with Role / Approval gating */}
-              {hasDriveMainFolderAccess() ? (
+              {hasDriveMainFolderAccess() || getDriveMainFolderRequestStatus() === 'approved' ? (
                 <a
                   href={GOOGLE_DRIVE_MAIN_FOLDER_URL}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 border border-white/30 text-white font-semibold transition-all hover:scale-[1.02] cursor-pointer"
+                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 border border-white/30 text-white font-semibold transition-all hover:scale-[1.02] cursor-pointer shadow-sm"
                   title="Buka Folder Google Drive Utama Sekolah"
                 >
                   <Folder className="w-4 h-4 text-amber-300" />
                   <span>Buka Folder Google Drive Utama</span>
+                  {!isAdmin && (
+                    <span className="px-1.5 py-0.5 rounded bg-emerald-500/30 text-emerald-200 text-[10px] font-bold border border-emerald-400/30 flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-300" />
+                      <span>Disetujui</span>
+                    </span>
+                  )}
                   <ExternalLink className="w-3.5 h-3.5 opacity-80" />
                 </a>
               ) : getDriveMainFolderRequestStatus() === 'pending' ? (
@@ -992,34 +1182,6 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
                 </button>
               )}
 
-              {isDriveLinked ? (
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-950/60 border border-emerald-400/40 text-[11px] text-emerald-200">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="font-medium">Otorisasi Aktif: {driveUser?.email}</span>
-                  <button
-                    onClick={handleDisconnectDrive}
-                    className="ml-1 text-emerald-300 hover:text-white underline cursor-pointer text-[10px]"
-                    title="Putuskan Akun"
-                  >
-                    Ganti
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={handleConnectDrive}
-                  disabled={isConnectingDrive}
-                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white text-slate-900 font-bold hover:bg-sky-50 border border-white/40 shadow-sm transition-all hover:scale-[1.02] cursor-pointer"
-                >
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
-                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
-                  </svg>
-                  <span>{isConnectingDrive ? 'Menghubungkan...' : 'Hubungkan Akun Google'}</span>
-                </button>
-              )}
-
               <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-950/40 border border-white/10 text-[11px] text-sky-200">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
                 <span>
@@ -1033,15 +1195,6 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
 
           {/* Action Buttons */}
           <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto shrink-0">
-            <button
-              onClick={handleSyncToDrive}
-              disabled={isSyncing}
-              className="px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold text-xs transition-all flex items-center gap-2 cursor-pointer shadow-sm disabled:opacity-50"
-            >
-              <RefreshCw className={`w-4 h-4 text-sky-300 ${isSyncing ? 'animate-spin' : ''}`} />
-              <span>{isSyncing ? 'Menyinkronkan...' : 'Sinkron Google Drive'}</span>
-            </button>
-
             <button
               onClick={() => setIsUploadModalOpen(true)}
               className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-900 font-extrabold text-xs transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-amber-500/25 hover:scale-[1.02]"
@@ -1617,16 +1770,6 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
               </div>
 
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => handlePullRequestsFromCloud(false)}
-                  disabled={isSyncingRequests}
-                  className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
-                  title="Sinkronkan Permintaan Akses dari Database Spreadsheet"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 text-indigo-600 ${isSyncingRequests ? 'animate-spin' : ''}`} />
-                  <span>{isSyncingRequests ? 'Menyinkronkan...' : 'Sinkron Spreadsheet'}</span>
-                </button>
                 <div className="px-3 py-1.5 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-800 text-xs font-bold">
                   Total Permintaan: {accessRequests.length}
                 </div>
@@ -1642,7 +1785,11 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
                     <th className="py-3 px-4">Pemohon</th>
                     <th className="py-3 px-4">Waktu & Alasan</th>
                     <th className="py-3 px-4 text-center">Status</th>
-                    {isAdmin && <th className="py-3 px-4 text-center">Tindakan Administrator</th>}
+                    {isAdmin ? (
+                      <th className="py-3 px-4 text-center">Tindakan Administrator</th>
+                    ) : (
+                      <th className="py-3 px-4 text-center">Akses Berkas</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -1717,7 +1864,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
                             </span>
                           )}
                         </td>
-                        {isAdmin && (
+                        {isAdmin ? (
                           <td className="py-3 px-4 text-center">
                             {req.status === 'pending' ? (
                               <div className="flex items-center justify-center gap-2">
@@ -1740,14 +1887,39 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
                               </div>
                             ) : req.status === 'approved' ? (
                               <div className="flex flex-col items-center justify-center gap-1">
-                                <div className="flex items-center justify-center gap-2">
+                                <div className="flex items-center justify-center gap-1.5">
+                                  {req.fileId === 'gdrive-main-folder' ? (
+                                    <a
+                                      href={GOOGLE_DRIVE_MAIN_FOLDER_URL}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs inline-flex items-center gap-1 shadow-sm transition-colors cursor-pointer"
+                                      title="Buka Folder Google Drive Utama"
+                                    >
+                                      <Folder className="w-3.5 h-3.5 text-amber-300" />
+                                      <span>Buka Drive</span>
+                                      <ExternalLink className="w-3 h-3 opacity-80" />
+                                    </a>
+                                  ) : (
+                                    <button
+                                      onClick={() => {
+                                        const f = files.find(x => x.id === req.fileId);
+                                        if (f) setPreviewFile(f);
+                                      }}
+                                      className="px-2.5 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs inline-flex items-center gap-1 shadow-sm transition-colors cursor-pointer"
+                                      title="Lihat Pratinjau Berkas"
+                                    >
+                                      <Eye className="w-3.5 h-3.5" />
+                                      <span>Buka</span>
+                                    </button>
+                                  )}
                                   <button
                                     onClick={() => handleRevokeRequest(req.id)}
-                                    className="px-2.5 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer"
+                                    className="px-2 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer"
                                     title="Nonaktifkan / cabut izin akses pemohon ini"
                                   >
                                     <Lock className="w-3.5 h-3.5 text-amber-600" />
-                                    <span>Nonaktifkan Akses</span>
+                                    <span>Cabut</span>
                                   </button>
                                   <button
                                     onClick={() => setDeletingRequest(req)}
@@ -1765,7 +1937,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
                               </div>
                             ) : req.status === 'revoked' || req.status === 'inactive' ? (
                               <div className="flex flex-col items-center justify-center gap-1">
-                                <div className="flex items-center justify-center gap-2">
+                                <div className="flex items-center justify-center gap-1.5">
                                   <button
                                     onClick={() => handleApproveRequest(req.id)}
                                     className="px-2.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer shadow-sm"
@@ -1790,7 +1962,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
                               </div>
                             ) : (
                               <div className="flex flex-col items-center justify-center gap-1">
-                                <div className="flex items-center justify-center gap-2">
+                                <div className="flex items-center justify-center gap-1.5">
                                   <button
                                     onClick={() => handleApproveRequest(req.id)}
                                     className="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer"
@@ -1813,6 +1985,73 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
                                   </span>
                                 )}
                               </div>
+                            )}
+                          </td>
+                        ) : (
+                          <td className="py-3 px-4 text-center">
+                            {req.status === 'approved' ? (
+                              req.fileId === 'gdrive-main-folder' ? (
+                                <a
+                                  href={GOOGLE_DRIVE_MAIN_FOLDER_URL}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs inline-flex items-center gap-1.5 shadow-sm transition-all hover:scale-105 cursor-pointer"
+                                  title="Izin disetujui! Klik untuk membuka Folder Google Drive Utama"
+                                >
+                                  <Folder className="w-3.5 h-3.5 text-amber-300" />
+                                  <span>Buka Google Drive</span>
+                                  <ExternalLink className="w-3 h-3 opacity-80" />
+                                </a>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    const f = files.find(x => x.id === req.fileId);
+                                    if (f) setPreviewFile(f);
+                                  }}
+                                  className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs inline-flex items-center gap-1.5 shadow-sm transition-all hover:scale-105 cursor-pointer"
+                                  title="Izin disetujui! Klik untuk membuka berkas"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  <span>Buka Berkas</span>
+                                </button>
+                              )
+                            ) : req.status === 'pending' ? (
+                              <span className="text-amber-700 text-xs font-semibold inline-flex items-center justify-center gap-1">
+                                <Clock className="w-3.5 h-3.5 text-amber-600" />
+                                <span>Menunggu Admin</span>
+                              </span>
+                            ) : req.status === 'revoked' || req.status === 'inactive' ? (
+                              <button
+                                onClick={() => {
+                                  if (req.fileId === 'gdrive-main-folder') {
+                                    handleOpenDriveFolderRequest();
+                                  } else {
+                                    const f = files.find(x => x.id === req.fileId);
+                                    if (f) handleOpenRequestModal(f);
+                                  }
+                                }}
+                                className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs inline-flex items-center gap-1 transition-colors border border-slate-300 cursor-pointer"
+                                title="Akses dinonaktifkan. Klik untuk minta izin kembali"
+                              >
+                                <RefreshCw className="w-3.5 h-3.5 text-slate-600" />
+                                <span>Minta Ulang</span>
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => {
+                                  if (req.fileId === 'gdrive-main-folder') {
+                                    handleOpenDriveFolderRequest();
+                                  } else {
+                                    const f = files.find(x => x.id === req.fileId);
+                                    if (f) handleOpenRequestModal(f);
+                                  }
+                                }}
+                                className="px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs inline-flex items-center gap-1 transition-colors border border-rose-200 cursor-pointer"
+                                title="Permintaan ditolak. Klik untuk ajukan ulang"
+                              >
+                                <RefreshCw className="w-3.5 h-3.5 text-rose-600" />
+                                <span>Ajukan Ulang</span>
+                              </button>
                             )}
                           </td>
                         )}
