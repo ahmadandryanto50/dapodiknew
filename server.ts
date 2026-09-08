@@ -179,6 +179,11 @@ async function startServer() {
       const incomingDeleted: string[] = Array.isArray(incoming.deletedNotifIds) ? incoming.deletedNotifIds : [];
       const mergedDeleted = Array.from(new Set([...currentDeleted, ...incomingDeleted]));
 
+      // Merge deletedPermintaanAksesIds
+      const currentDeletedReqs: string[] = Array.isArray(currentData.deletedPermintaanAksesIds) ? currentData.deletedPermintaanAksesIds : [];
+      const incomingDeletedReqs: string[] = Array.isArray(incoming.deletedPermintaanAksesIds) ? incoming.deletedPermintaanAksesIds : [];
+      const mergedDeletedReqs = Array.from(new Set([...currentDeletedReqs, ...incomingDeletedReqs]));
+
       // Merge notifications carefully so no notification is ever lost by cross-device race conditions
       const currentNotifs: any[] = Array.isArray(currentData.notifications) ? currentData.notifications : [];
       const incomingNotifs: any[] = Array.isArray(incoming.notifications) ? incoming.notifications : [];
@@ -211,15 +216,47 @@ async function startServer() {
         return timeB - timeA;
       });
 
+      // Merge permintaanAkses
+      const currentRequests: any[] = Array.isArray(currentData.permintaanAkses) ? currentData.permintaanAkses : [];
+      const incomingRequests: any[] = Array.isArray(incoming.permintaanAkses) ? incoming.permintaanAkses : [];
+      
+      const reqMap = new Map<string, any>();
+      const deletedReqSet = new Set<string>(mergedDeletedReqs);
+
+      currentRequests.forEach((r: any) => {
+        if (r && r.id && !deletedReqSet.has(String(r.id))) {
+          reqMap.set(String(r.id), r);
+        }
+      });
+      incomingRequests.forEach((r: any) => {
+        if (r && r.id && !deletedReqSet.has(String(r.id))) {
+          if (reqMap.has(String(r.id))) {
+            const exist = reqMap.get(String(r.id));
+            reqMap.set(String(r.id), { ...exist, ...r });
+          } else {
+            reqMap.set(String(r.id), r);
+          }
+        }
+      });
+
+      const mergedRequests = Array.from(reqMap.values());
+      mergedRequests.sort((a: any, b: any) => {
+        const timeA = a.requestedAt ? new Date(a.requestedAt).getTime() : 0;
+        const timeB = b.requestedAt ? new Date(b.requestedAt).getTime() : 0;
+        return timeB - timeA;
+      });
+
       const finalData = {
         ...currentData,
         ...incoming,
         deletedNotifIds: mergedDeleted,
-        notifications: mergedNotifs
+        deletedPermintaanAksesIds: mergedDeletedReqs,
+        notifications: mergedNotifs,
+        permintaanAkses: mergedRequests
       };
 
       fs.writeFileSync(DATA_FILE, JSON.stringify(finalData, null, 2), "utf-8");
-      return res.json({ success: true, notifications: mergedNotifs });
+      return res.json({ success: true, notifications: mergedNotifs, permintaanAkses: mergedRequests });
     } catch (err) {
       console.error("Error writing app_data.json:", err);
       return res.status(500).json({ success: false, message: (err as Error).message });

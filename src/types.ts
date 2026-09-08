@@ -301,7 +301,7 @@ export interface FileAccessRequest {
   requesterEmail?: string;
   requestedAt: string;
   reason: string;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected' | 'revoked' | 'inactive' | string;
   reviewedBy?: string;
   reviewedAt?: string;
   reviewNotes?: string;

@@ -39,9 +39,13 @@ import {
   Tag,
   LogIn,
   LogOut,
-  AlertCircle
+  AlertCircle,
+  Ban,
+  ShieldAlert,
+  ShieldX,
+  Power
 } from 'lucide-react';
-import { SchoolFileItem, FileAccessRequest, AdminUser } from '../types';
+import { SchoolFileItem, FileAccessRequest, AdminUser, SyncConfig } from '../types';
 import { GOOGLE_DRIVE_MAIN_FOLDER_URL, GOOGLE_DRIVE_FOLDER_ID, initialSchoolFiles, initialAccessRequests } from '../data/mockFiles';
 import {
   subscribeGoogleDriveAuth,
@@ -50,14 +54,19 @@ import {
   uploadFileToGoogleDrive,
   isGoogleDriveConnected
 } from '../services/googleDriveService';
+import {
+  syncPermintaanAksesToGoogleSheets,
+  loadFromGoogleSheets
+} from '../services/googleSheetsService';
 
 interface BerkasModuleProps {
   currentUser: AdminUser | null;
   onBackToHome?: () => void;
   autoOpenUpload?: boolean;
+  syncConfig?: SyncConfig;
 }
 
-export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackToHome, autoOpenUpload }) => {
+export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackToHome, autoOpenUpload, syncConfig }) => {
   // Persistence state - Clean empty initialization
   const [files, setFiles] = useState<SchoolFileItem[]>(() => {
     try {
@@ -84,6 +93,149 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
     }
     return initialAccessRequests;
   });
+
+  const [isSyncingRequests, setIsSyncingRequests] = useState<boolean>(false);
+  const [activeSyncConfig, setActiveSyncConfig] = useState<SyncConfig | null>(syncConfig || null);
+
+  // Load effective sync configuration if not passed directly
+  useEffect(() => {
+    if (syncConfig) {
+      setActiveSyncConfig(syncConfig);
+      return;
+    }
+    try {
+      const saved = localStorage.getItem('dapodik_sync_config');
+      if (saved) {
+        setActiveSyncConfig(JSON.parse(saved));
+      } else {
+        fetch('/api/sync-config')
+          .then(res => res.json())
+          .then(cfg => {
+            if (cfg && cfg.webAppUrl) setActiveSyncConfig(cfg);
+          })
+          .catch(() => {});
+      }
+    } catch (e) {}
+  }, [syncConfig]);
+
+  // Pull latest access requests from Spreadsheet / Server Cache
+  const handlePullRequestsFromCloud = async (silent: boolean = false) => {
+    if (isSyncingRequests) return;
+    setIsSyncingRequests(true);
+    try {
+      let currentCfg = activeSyncConfig;
+      if (!currentCfg?.webAppUrl) {
+        try {
+          const cfgRes = await fetch('/api/sync-config');
+          if (cfgRes.ok) currentCfg = await cfgRes.json();
+        } catch (e) {}
+      }
+
+      // 1. Try pulling from Google Sheets first if configured
+      if (currentCfg?.webAppUrl) {
+        const res = await loadFromGoogleSheets(currentCfg);
+        if (res.success && res.data && Array.isArray(res.data.permintaanAkses)) {
+          const remoteRequests = res.data.permintaanAkses;
+          setAccessRequests(remoteRequests);
+          localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(remoteRequests));
+          
+          // Also update server cache
+          fetch('/api/app-data', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ permintaanAkses: remoteRequests })
+          }).catch(() => {});
+
+          if (!silent) {
+            setSyncFeedback('Data izin akses berhasil ditarik & disinkronkan dari Database Spreadsheet!');
+            setTimeout(() => setSyncFeedback(null), 4000);
+          }
+          setIsSyncingRequests(false);
+          return;
+        }
+      }
+
+      // 2. Fallback to /api/app-data cache
+      const cacheRes = await fetch('/api/app-data');
+      if (cacheRes.ok) {
+        const cacheData = await cacheRes.json();
+        if (Array.isArray(cacheData.permintaanAkses)) {
+          setAccessRequests(cacheData.permintaanAkses);
+          localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(cacheData.permintaanAkses));
+          if (!silent) {
+            setSyncFeedback('Data izin akses berhasil dimuat dari Cache Cloud!');
+            setTimeout(() => setSyncFeedback(null), 3000);
+          }
+        }
+      }
+    } catch (err: any) {
+      console.warn('Pull access requests error:', err);
+      if (!silent) {
+        setSyncFeedback('Gagal menyinkronkan data izin akses dari Spreadsheet.');
+        setTimeout(() => setSyncFeedback(null), 4000);
+      }
+    } finally {
+      setIsSyncingRequests(false);
+    }
+  };
+
+  // Pull on initial load
+  useEffect(() => {
+    handlePullRequestsFromCloud(true);
+  }, [activeSyncConfig?.webAppUrl]);
+
+  // Synchronize helper for all operations (Create, Approve, Reject, Delete)
+  const persistAndSyncRequests = async (
+    updatedRequests: FileAccessRequest[],
+    deletedId?: string,
+    successNote?: string
+  ) => {
+    setAccessRequests(updatedRequests);
+    try {
+      localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(updatedRequests));
+    } catch (e) {}
+
+    // Broadcast to server app-data cache immediately
+    fetch('/api/app-data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        permintaanAkses: updatedRequests,
+        ...(deletedId ? { deletedPermintaanAksesIds: [deletedId] } : {})
+      })
+    }).catch(() => {});
+
+    // Sync to Google Sheets Spreadsheet (Sheet: Permintaan_Akses_Berkas)
+    let currentCfg = activeSyncConfig;
+    if (!currentCfg?.webAppUrl) {
+      try {
+        const cfgSaved = localStorage.getItem('dapodik_sync_config');
+        if (cfgSaved) currentCfg = JSON.parse(cfgSaved);
+      } catch (e) {}
+    }
+
+    if (currentCfg?.webAppUrl) {
+      setIsSyncingRequests(true);
+      try {
+        const syncRes = await syncPermintaanAksesToGoogleSheets(currentCfg, updatedRequests);
+        if (syncRes.success) {
+          if (successNote) {
+            setSyncFeedback(`${successNote} (Tersimpan ke Database Spreadsheet)`);
+            setTimeout(() => setSyncFeedback(null), 4000);
+          }
+        } else {
+          console.warn('Spreadsheet sync warning:', syncRes.message);
+        }
+      } catch (syncErr) {
+        console.warn('Sync to Google Sheets error:', syncErr);
+      } finally {
+        setIsSyncingRequests(false);
+      }
+    } else if (successNote) {
+      setSyncFeedback(successNote);
+      setTimeout(() => setSyncFeedback(null), 3500);
+    }
+  };
 
   // Google Drive Real Auth State
   const [driveUser, setDriveUser] = useState<any>(null);
@@ -224,7 +376,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
   };
 
   // Get user request status for a file
-  const getUserRequestStatus = (fileId: string): 'none' | 'pending' | 'approved' | 'rejected' => {
+  const getUserRequestStatus = (fileId: string): 'none' | 'pending' | 'approved' | 'rejected' | 'revoked' | 'inactive' | string => {
     const userReq = accessRequests.find(
       req => req.fileId === fileId &&
              (req.requesterName.toLowerCase() === (currentUser?.nama || '').toLowerCase() ||
@@ -247,7 +399,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
   };
 
   // Get request status specifically for Google Drive Main Folder
-  const getDriveMainFolderRequestStatus = (): 'none' | 'pending' | 'approved' | 'rejected' => {
+  const getDriveMainFolderRequestStatus = (): 'none' | 'pending' | 'approved' | 'rejected' | 'revoked' | 'inactive' | string => {
     if (isAdmin) return 'approved';
     const currentUserName = (currentUser?.nama || currentUser?.username || '').toLowerCase();
     const currentUserEmail = (currentUser?.email || '').toLowerCase();
@@ -510,7 +662,8 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
       status: 'pending'
     };
 
-    setAccessRequests(prev => [newReq, ...prev]);
+    const updated = [newReq, ...accessRequests];
+    persistAndSyncRequests(updated, undefined, 'Permintaan izin akses berhasil dikirim!');
     setRequestSuccessMsg('Permintaan akses berhasil dikirim! Menunggu persetujuan Administrator.');
     setTimeout(() => {
       setIsRequestModalOpen(false);
@@ -518,39 +671,53 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
     }, 1800);
   };
 
-  // Handle Admin Approval / Rejection
+  // Handle Admin Approval / Rejection / Revocation
   const handleApproveRequest = (reqId: string) => {
-    setAccessRequests(prev =>
-      prev.map(r => {
-        if (r.id === reqId) {
-          return {
-            ...r,
-            status: 'approved',
-            reviewedBy: currentUser?.nama || 'Administrator',
-            reviewedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
-            reviewNotes: 'Izin akses disetujui oleh Administrator.'
-          };
-        }
-        return r;
-      })
-    );
+    const updated = accessRequests.map(r => {
+      if (r.id === reqId) {
+        return {
+          ...r,
+          status: 'approved' as const,
+          reviewedBy: currentUser?.nama || 'Administrator',
+          reviewedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
+          reviewNotes: 'Izin akses disetujui / diaktifkan oleh Administrator.'
+        };
+      }
+      return r;
+    });
+    persistAndSyncRequests(updated, undefined, 'Izin akses berkas berhasil diaktifkan / disetujui');
+  };
+
+  const handleRevokeRequest = (reqId: string) => {
+    const updated = accessRequests.map(r => {
+      if (r.id === reqId) {
+        return {
+          ...r,
+          status: 'revoked' as const,
+          reviewedBy: currentUser?.nama || 'Administrator',
+          reviewedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
+          reviewNotes: 'Izin akses dinonaktifkan oleh Administrator.'
+        };
+      }
+      return r;
+    });
+    persistAndSyncRequests(updated, undefined, 'Izin akses berkas berhasil dinonaktifkan');
   };
 
   const handleRejectRequest = (reqId: string) => {
-    setAccessRequests(prev =>
-      prev.map(r => {
-        if (r.id === reqId) {
-          return {
-            ...r,
-            status: 'rejected',
-            reviewedBy: currentUser?.nama || 'Administrator',
-            reviewedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
-            reviewNotes: 'Permintaan akses ditolak oleh Administrator.'
-          };
-        }
-        return r;
-      })
-    );
+    const updated = accessRequests.map(r => {
+      if (r.id === reqId) {
+        return {
+          ...r,
+          status: 'rejected' as const,
+          reviewedBy: currentUser?.nama || 'Administrator',
+          reviewedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
+          reviewNotes: 'Permintaan akses ditolak oleh Administrator.'
+        };
+      }
+      return r;
+    });
+    persistAndSyncRequests(updated, undefined, 'Permintaan akses ditolak');
   };
 
   const handleDeleteFile = (fileOrId: SchoolFileItem | string) => {
@@ -565,7 +732,10 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
     if (!deletingFile) return;
     const targetFile = deletingFile;
     setFiles(prev => prev.filter(f => f.id !== targetFile.id));
-    setAccessRequests(prev => prev.filter(r => r.fileId !== targetFile.id));
+    const remainingRequests = accessRequests.filter(r => r.fileId !== targetFile.id);
+    if (remainingRequests.length !== accessRequests.length) {
+      persistAndSyncRequests(remainingRequests);
+    }
     if (previewFile?.id === targetFile.id) {
       setPreviewFile(null);
     }
@@ -577,10 +747,9 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
   const confirmDeleteRequest = () => {
     if (!deletingRequest) return;
     const targetReq = deletingRequest;
-    setAccessRequests(prev => prev.filter(r => r.id !== targetReq.id));
+    const updated = accessRequests.filter(r => r.id !== targetReq.id);
+    persistAndSyncRequests(updated, targetReq.id, `Riwayat permintaan "${targetReq.fileName}" dihapus`);
     setDeletingRequest(null);
-    setSyncFeedback(`Riwayat permintaan izin akses berkas "${targetReq.fileName}" berhasil dihapus.`);
-    setTimeout(() => setSyncFeedback(null), 4000);
   };
 
   // Sync to Google Drive
@@ -727,6 +896,20 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
                   <span className="px-2 py-0.5 rounded-md bg-amber-500/30 text-amber-200 text-[10px] font-bold border border-amber-400/30 flex items-center gap-1">
                     <Clock className="w-3 h-3 text-amber-300" />
                     <span>Menunggu Izin Admin</span>
+                  </span>
+                </button>
+              ) : getDriveMainFolderRequestStatus() === 'revoked' || getDriveMainFolderRequestStatus() === 'inactive' ? (
+                <button
+                  type="button"
+                  onClick={handleOpenDriveFolderRequest}
+                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-800/40 hover:bg-slate-800/60 border border-slate-400/40 text-slate-200 font-semibold transition-all hover:scale-[1.02] cursor-pointer"
+                  title="Izin akses dinonaktifkan oleh Administrator. Klik untuk meminta izin akses kembali"
+                >
+                  <FolderLock className="w-4 h-4 text-slate-300" />
+                  <span>Buka Folder Google Drive Utama</span>
+                  <span className="px-2 py-0.5 rounded-md bg-slate-700/60 text-slate-200 text-[10px] font-bold border border-slate-500/40 flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-slate-300" />
+                    <span>Akses Dinonaktifkan (Minta Ulang)</span>
                   </span>
                 </button>
               ) : getDriveMainFolderRequestStatus() === 'rejected' ? (
@@ -1118,6 +1301,15 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
                                 <Clock className="w-3 h-3 text-amber-700" />
                                 <span>Menunggu Izin Admin</span>
                               </span>
+                            ) : reqStatus === 'revoked' || reqStatus === 'inactive' ? (
+                              <button
+                                onClick={() => handleOpenRequestModal(file)}
+                                className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] flex items-center gap-1 cursor-pointer transition-colors border border-slate-300"
+                                title="Akses dinonaktifkan oleh Admin. Klik untuk minta izin kembali"
+                              >
+                                <Lock className="w-3 h-3 text-slate-500" />
+                                <span>Dinonaktifkan (Minta Ulang)</span>
+                              </button>
                             ) : reqStatus === 'rejected' ? (
                               <button
                                 onClick={() => handleOpenRequestModal(file)}
@@ -1245,6 +1437,23 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
                               <div>
                                 {reqStatus === 'pending' ? (
                                   <span className="text-[10px] font-bold text-amber-700">Menunggu Izin</span>
+                                ) : reqStatus === 'revoked' || reqStatus === 'inactive' ? (
+                                  <button
+                                    onClick={() => handleOpenRequestModal(file)}
+                                    className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] flex items-center gap-1 mx-auto cursor-pointer border border-slate-300"
+                                    title="Akses dinonaktifkan oleh Admin. Klik untuk minta izin kembali"
+                                  >
+                                    <Lock className="w-3 h-3 text-slate-500" />
+                                    <span>Dinonaktifkan (Minta Ulang)</span>
+                                  </button>
+                                ) : reqStatus === 'rejected' ? (
+                                  <button
+                                    onClick={() => handleOpenRequestModal(file)}
+                                    className="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-[10px] flex items-center gap-1 mx-auto cursor-pointer"
+                                  >
+                                    <RefreshCw className="w-3 h-3 text-rose-600" />
+                                    <span>Minta Ulang</span>
+                                  </button>
                                 ) : (
                                   <button
                                     onClick={() => handleOpenRequestModal(file)}
@@ -1357,8 +1566,20 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
                 </p>
               </div>
 
-              <div className="px-3 py-1.5 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-800 text-xs font-bold">
-                Total Permintaan: {accessRequests.length}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handlePullRequestsFromCloud(false)}
+                  disabled={isSyncingRequests}
+                  className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                  title="Sinkronkan Permintaan Akses dari Database Spreadsheet"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 text-indigo-600 ${isSyncingRequests ? 'animate-spin' : ''}`} />
+                  <span>{isSyncingRequests ? 'Menyinkronkan...' : 'Sinkron Spreadsheet'}</span>
+                </button>
+                <div className="px-3 py-1.5 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-800 text-xs font-bold">
+                  Total Permintaan: {accessRequests.length}
+                </div>
               </div>
             </div>
 
@@ -1430,7 +1651,13 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
                           {req.status === 'approved' && (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 text-[11px] font-bold border border-emerald-200">
                               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>Disetujui</span>
+                              <span>Disetujui (Aktif)</span>
+                            </span>
+                          )}
+                          {(req.status === 'revoked' || req.status === 'inactive') && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-[11px] font-bold border border-slate-300">
+                              <Lock className="w-3.5 h-3.5 text-slate-500" />
+                              <span>Dinonaktifkan</span>
                             </span>
                           )}
                           {req.status === 'rejected' && (
@@ -1447,6 +1674,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
                                 <button
                                   onClick={() => handleApproveRequest(req.id)}
                                   className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer shadow-sm"
+                                  title="Setujui dan beri izin akses berkas"
                                 >
                                   <Check className="w-3.5 h-3.5" />
                                   <span>Izinkan</span>
@@ -1454,21 +1682,86 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
                                 <button
                                   onClick={() => handleRejectRequest(req.id)}
                                   className="px-3 py-1.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer shadow-sm"
+                                  title="Tolak permintaan akses berkas"
                                 >
                                   <X className="w-3.5 h-3.5" />
                                   <span>Tolak</span>
                                 </button>
                               </div>
+                            ) : req.status === 'approved' ? (
+                              <div className="flex flex-col items-center justify-center gap-1">
+                                <div className="flex items-center justify-center gap-2">
+                                  <button
+                                    onClick={() => handleRevokeRequest(req.id)}
+                                    className="px-2.5 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer"
+                                    title="Nonaktifkan / cabut izin akses pemohon ini"
+                                  >
+                                    <Lock className="w-3.5 h-3.5 text-amber-600" />
+                                    <span>Nonaktifkan Akses</span>
+                                  </button>
+                                  <button
+                                    onClick={() => setDeletingRequest(req)}
+                                    className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                                    title="Hapus Riwayat Permintaan Ini"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                                {req.reviewedBy && (
+                                  <span className="text-[10px] text-slate-400">
+                                    Disetujui: {req.reviewedBy} ({req.reviewedAt || '-'})
+                                  </span>
+                                )}
+                              </div>
+                            ) : req.status === 'revoked' || req.status === 'inactive' ? (
+                              <div className="flex flex-col items-center justify-center gap-1">
+                                <div className="flex items-center justify-center gap-2">
+                                  <button
+                                    onClick={() => handleApproveRequest(req.id)}
+                                    className="px-2.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer shadow-sm"
+                                    title="Aktifkan kembali izin akses berkas ini"
+                                  >
+                                    <Unlock className="w-3.5 h-3.5" />
+                                    <span>Aktifkan Kembali</span>
+                                  </button>
+                                  <button
+                                    onClick={() => setDeletingRequest(req)}
+                                    className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                                    title="Hapus Riwayat Permintaan Ini"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                                {req.reviewedBy && (
+                                  <span className="text-[10px] text-slate-400">
+                                    Dinonaktifkan: {req.reviewedBy} ({req.reviewedAt || '-'})
+                                  </span>
+                                )}
+                              </div>
                             ) : (
-                              <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-500">
-                                <span>Ditinjau: {req.reviewedBy || 'Admin'} ({req.reviewedAt})</span>
-                                <button
-                                  onClick={() => setDeletingRequest(req)}
-                                  className="p-1 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
-                                  title="Hapus Riwayat Permintaan Ini"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                              <div className="flex flex-col items-center justify-center gap-1">
+                                <div className="flex items-center justify-center gap-2">
+                                  <button
+                                    onClick={() => handleApproveRequest(req.id)}
+                                    className="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer"
+                                    title="Beri izin akses kembali"
+                                  >
+                                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                    <span>Beri Izin</span>
+                                  </button>
+                                  <button
+                                    onClick={() => setDeletingRequest(req)}
+                                    className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                                    title="Hapus Riwayat Permintaan Ini"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                                {req.reviewedBy && (
+                                  <span className="text-[10px] text-slate-400">
+                                    Ditinjau: {req.reviewedBy} ({req.reviewedAt || '-'})
+                                  </span>
+                                )}
                               </div>
                             )}
                           </td>

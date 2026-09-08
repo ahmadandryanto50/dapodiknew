@@ -684,7 +684,7 @@ export default function App() {
     setIsSyncing(false);
     
     if (res.success && res.data) {
-      const { siswa, ptk, sarpras: pulledSarpras, rapor, pengaturan, administrator, profilSekolah, aplikasi, notifikasi } = res.data;
+      const { siswa, ptk, sarpras: pulledSarpras, rapor, pengaturan, administrator, profilSekolah, aplikasi, notifikasi, permintaanAkses } = res.data;
       
       let newStudents = students;
       let newTeachers = teachers;
@@ -695,6 +695,10 @@ export default function App() {
       let newDisplay = displayConfig;
       let newLinks = aplikasiLinks;
       let newNotifs = notifications;
+
+      if (Array.isArray(permintaanAkses)) {
+        localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(permintaanAkses));
+      }
 
       if (Array.isArray(notifikasi)) {
         newNotifs = mergeNotifications(notificationsRef.current, notifikasi);
@@ -2650,6 +2654,7 @@ export default function App() {
                 setActiveTab('home');
               }}
               autoOpenUpload={berkasAutoOpenUpload}
+              syncConfig={syncConfig}
             />
           </div>
         )}

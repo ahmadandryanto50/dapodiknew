@@ -1,8 +1,8 @@
-import { Student, TeacherStaff, SarprasItem, StudentReport, SyncConfig, AppDisplayConfig, SchoolProfile, AdminUser, NotificationItem } from '../types';
+import { Student, TeacherStaff, SarprasItem, StudentReport, SyncConfig, AppDisplayConfig, SchoolProfile, AdminUser, NotificationItem, FileAccessRequest } from '../types';
 
 export const APPS_SCRIPT_TEMPLATE = `/**
  * Google Apps Script untuk Dapodik Terintegrasi 2026
- * Versi Script: v2.7 (Mendukung Data_Alumni, Data_Siswa, Data_Siswa_Keluar, PTK, Sarpras, Notifikasi, Administrator, Profil & Pengaturan)
+ * Versi Script: v2.8 (Mendukung Data_Alumni, Data_Siswa, Data_Siswa_Keluar, PTK, Sarpras, Notifikasi, Permintaan_Akses_Berkas, Administrator, Profil & Pengaturan)
  * 
  * Cara pasang / update:
  * 1. Buka Google Spreadsheet Anda di https://sheets.new (atau spreadsheet yang sudah ada)
@@ -23,7 +23,8 @@ const HEADERS_MAP = {
   'Data_PTK': ['id', 'nuptk', 'nip', 'nama', 'jenisKelamin', 'statusKepegawaian', 'jenisPtk', 'mapel', 'pendidikanTerakhir', 'noHp', 'email', 'statusSertifikasi', 'tempatLahir', 'tanggalLahir', 'agama', 'alamatJalan', 'rt', 'rw', 'namaDusun', 'desaKelurahan', 'kecamatan', 'kodePos', 'tugasTambahan', 'skCpns', 'tanggalCpns', 'skPengangkatan', 'tmtPengangkatan', 'pangkatGolongan', 'nik', 'noKk'],
   'Data_Sarpras': ['id', 'kodeBarang', 'namaBarang', 'kategori', 'kondisi', 'jumlah', 'satuan', 'letakRuang', 'tahunPengadaan', 'layakPakai'],
   'Data_Rapor': ['id', 'studentId', 'nisn', 'studentName', 'rombel', 'semester', 'tahunAjaran', 'scores', 'kehadiran', 'catatanWaliKelas', 'statusKenaikan'],
-  'Notifikasi': ['id', 'title', 'message', 'time', 'type', 'read']
+  'Notifikasi': ['id', 'title', 'message', 'time', 'type', 'read'],
+  'Permintaan_Akses_Berkas': ['id', 'fileId', 'fileName', 'requesterName', 'requesterRole', 'requesterEmail', 'requestedAt', 'reason', 'status', 'reviewedBy', 'reviewedAt', 'reviewNotes']
 };
 
 function doGet(e) {
@@ -43,6 +44,7 @@ function doGet(e) {
     profilSekolah: getSheetData(ss, 'Profil_Sekolah'),
     aplikasi: getSheetData(ss, 'Data_Aplikasi'),
     notifikasi: getSheetData(ss, 'Notifikasi'),
+    permintaanAkses: getSheetData(ss, 'Permintaan_Akses_Berkas'),
     status: 'success',
     version: '2026.2.9',
     timestamp: new Date().toLocaleString('id-ID')
@@ -73,6 +75,7 @@ function doPost(e) {
         profilSekolah: getSheetData(ss, 'Profil_Sekolah'),
         aplikasi: getSheetData(ss, 'Data_Aplikasi'),
         notifikasi: getSheetData(ss, 'Notifikasi'),
+        permintaanAkses: getSheetData(ss, 'Permintaan_Akses_Berkas'),
         status: 'success'
       };
       return ContentService.createTextOutput(JSON.stringify(result))
@@ -91,6 +94,7 @@ function doPost(e) {
       if (data.profilSekolah !== undefined) saveSheetData(ss, 'Profil_Sekolah', data.profilSekolah);
       if (data.aplikasi !== undefined) saveSheetData(ss, 'Data_Aplikasi', data.aplikasi);
       if (data.notifikasi !== undefined) saveSheetData(ss, 'Notifikasi', data.notifikasi, HEADERS_MAP['Notifikasi']);
+      if (data.permintaanAkses !== undefined) saveSheetData(ss, 'Permintaan_Akses_Berkas', data.permintaanAkses, HEADERS_MAP['Permintaan_Akses_Berkas']);
     } else if (data.type === 'SYNC_SISWA') {
       saveSheetData(ss, 'Data_Siswa', data.payload, HEADERS_MAP['Data_Siswa']);
     } else if (data.type === 'SYNC_SISWA_KELUAR') {
@@ -105,6 +109,8 @@ function doPost(e) {
       saveSheetData(ss, 'Data_Rapor', data.payload, HEADERS_MAP['Data_Rapor']);
     } else if (data.type === 'SYNC_NOTIFIKASI') {
       saveSheetData(ss, 'Notifikasi', data.payload, HEADERS_MAP['Notifikasi']);
+    } else if (data.type === 'SYNC_PERMINTAAN_AKSES') {
+      saveSheetData(ss, 'Permintaan_Akses_Berkas', data.payload, HEADERS_MAP['Permintaan_Akses_Berkas']);
     } else if (data.type === 'SYNC_PENGATURAN') {
       saveSheetData(ss, 'Data_Pengaturan', data.payload);
     } else if (data.type === 'SYNC_ADMINISTRATOR' || data.type === 'SYNC_ADMIN') {
@@ -117,7 +123,7 @@ function doPost(e) {
     
     return ContentService.createTextOutput(JSON.stringify({ 
       status: 'success', 
-      message: 'Data Dapodik (Siswa, Alumni, PTK, Sarpras, Notifikasi & Pengaturan) berhasil disinkronkan ke Google Sheet!' 
+      message: 'Data Dapodik (Siswa, Alumni, PTK, Sarpras, Notifikasi, Permintaan Akses Berkas & Pengaturan) berhasil disinkronkan ke Google Sheet!' 
     })).setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({ 
@@ -225,7 +231,7 @@ function saveSheetData(ss, sheetName, items, fallbackHeaders) {
   // Format Header
   const headerRange = sheet.getRange(1, 1, 1, headers.length);
   headerRange.setFontWeight('bold');
-  headerRange.setBackground(sheetName === 'Data_Alumni' ? '#059669' : '#0284C7');
+  headerRange.setBackground(sheetName === 'Data_Alumni' ? '#059669' : sheetName === 'Permintaan_Akses_Berkas' ? '#D97706' : '#0284C7');
   headerRange.setFontColor('#FFFFFF');
   headerRange.setHorizontalAlignment('center');
   
@@ -261,6 +267,9 @@ function checkAndInitializeSheets(ss) {
     ],
     'Notifikasi': [
       HEADERS_MAP['Notifikasi']
+    ],
+    'Permintaan_Akses_Berkas': [
+      HEADERS_MAP['Permintaan_Akses_Berkas']
     ],
     'Administrator': [
       ['id', 'username', 'password', 'nama', 'role', 'email', 'noHp', 'status', 'lastLogin'],
@@ -358,7 +367,7 @@ function checkAndInitializeSheets(ss) {
       
       const headerRange = sheet.getRange(1, 1, 1, rows[0].length);
       headerRange.setFontWeight('bold');
-      headerRange.setBackground(name === 'Data_Alumni' ? '#059669' : '#0284C7');
+      headerRange.setBackground(name === 'Data_Alumni' ? '#059669' : name === 'Permintaan_Akses_Berkas' ? '#D97706' : '#0284C7');
       headerRange.setFontColor('#FFFFFF');
       headerRange.setHorizontalAlignment('center');
       try {
@@ -458,6 +467,35 @@ function parseSheetsResult(result: any) {
       administrator: result.administrator || [],
       profilSekolah: result.profilSekolah || [],
       aplikasi: result.aplikasi || [],
+      permintaanAkses: (result.permintaanAkses || []).map((p: any, idx: number) => {
+        const id = String(p.id || `req-pulled-${Date.now()}-${idx}`);
+        const fileId = String(p.fileId || '');
+        const fileName = String(p.fileName || '');
+        const requesterName = String(p.requesterName || '');
+        const requesterRole = String(p.requesterRole || 'Guru');
+        const requesterEmail = p.requesterEmail ? String(p.requesterEmail) : undefined;
+        const requestedAt = String(p.requestedAt || '');
+        const reason = String(p.reason || '');
+        const rawStatus = String(p.status || 'pending').toLowerCase();
+        const status = (rawStatus === 'approved' || rawStatus === 'rejected' ? rawStatus : 'pending') as 'pending' | 'approved' | 'rejected';
+        const reviewedBy = p.reviewedBy ? String(p.reviewedBy) : undefined;
+        const reviewedAt = p.reviewedAt ? String(p.reviewedAt) : undefined;
+        const reviewNotes = p.reviewNotes ? String(p.reviewNotes) : undefined;
+        return {
+          id,
+          fileId,
+          fileName,
+          requesterName,
+          requesterRole,
+          requesterEmail,
+          requestedAt,
+          reason,
+          status,
+          reviewedBy,
+          reviewedAt,
+          reviewNotes
+        };
+      }).filter((p: FileAccessRequest) => p.id && (p.fileId || p.fileName)),
       notifikasi: (result.notifikasi || []).map((n: any, idx: number) => {
         const id = String(n.id || n.ID || `notif-${Date.now()}-${idx}`);
         const title = String(n.title || n.Judul || n.judul || n.Title || '');
@@ -485,6 +523,7 @@ export async function syncToGoogleSheets(
     profilSekolah?: Array<{ key: string; value: string }>;
     aplikasi?: any[];
     notifikasi?: NotificationItem[];
+    permintaanAkses?: FileAccessRequest[];
   }
 ): Promise<{ success: boolean; message: string }> {
   if (!config.webAppUrl) {
@@ -536,6 +575,7 @@ export async function syncToGoogleSheets(
       profilSekolah: data.profilSekolah || [],
       aplikasi: data.aplikasi || [],
       notifikasi: data.notifikasi || [],
+      permintaanAkses: data.permintaanAkses || [],
       timestamp: new Date().toLocaleString('id-ID')
     };
 
@@ -562,7 +602,8 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
     profilSekolah: Array<{ key: string; value: string }>;
     aplikasi?: any[];
     notifikasi?: NotificationItem[];
-  }
+    permintaanAkses?: FileAccessRequest[];
+  };
 }> {
   if (!config.webAppUrl) {
     return {
@@ -642,6 +683,20 @@ export async function syncNotifikasiToGoogleSheets(
   const payload = {
     type: 'SYNC_NOTIFIKASI',
     payload: notifications
+  };
+  return await callProxyOrDirectPost(config.webAppUrl, payload);
+}
+
+export async function syncPermintaanAksesToGoogleSheets(
+  config: SyncConfig,
+  requests: FileAccessRequest[]
+): Promise<{ success: boolean; message: string }> {
+  if (!config.webAppUrl) {
+    return { success: false, message: 'URL Google Apps Script belum dikonfigurasi.' };
+  }
+  const payload = {
+    type: 'SYNC_PERMINTAAN_AKSES',
+    payload: requests
   };
   return await callProxyOrDirectPost(config.webAppUrl, payload);
 }
