@@ -362,13 +362,31 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
   const [deletingFile, setDeletingFile] = useState<SchoolFileItem | null>(null);
   const [deletingRequest, setDeletingRequest] = useState<FileAccessRequest | null>(null);
 
-  const isAdmin =
-    !currentUser ||
-    currentUser?.role === 'Administrator' ||
-    currentUser?.role === 'Operator' ||
-    currentUser?.username === 'admin' ||
-    (typeof currentUser?.role === 'string' && currentUser.role.toLowerCase().includes('admin'));
+  const isAdmin = Boolean(
+    currentUser && (
+      currentUser.role === 'Administrator' ||
+      currentUser.role === 'Operator' ||
+      currentUser.username === 'admin' ||
+      (typeof currentUser.role === 'string' && currentUser.role.toLowerCase().includes('admin'))
+    )
+  );
   const isOperator = currentUser?.role === 'Operator';
+
+  // Check if current user is an educator / school staff (Guru, Kepsek, Operator, Admin)
+  const isSchoolStaff = Boolean(
+    currentUser && (
+      isAdmin ||
+      currentUser.role === 'Guru' ||
+      currentUser.role === 'Kepala Sekolah' ||
+      currentUser.role === 'Operator' ||
+      (typeof currentUser.role === 'string' && (
+        currentUser.role.toLowerCase().includes('guru') ||
+        currentUser.role.toLowerCase().includes('ptk') ||
+        currentUser.role.toLowerCase().includes('kepsek') ||
+        currentUser.role.toLowerCase().includes('pendidik')
+      ))
+    )
+  );
 
   // Extract all categories
   const categories = Array.from(new Set(files.map(f => f.category))).filter(Boolean);
@@ -378,8 +396,8 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
     if (isAdmin) return true;
     if (file.privacy === 'Public') return true;
 
-    // Check if role is Guru and file is Guru Only
-    if (file.privacy === 'Guru Only' && (currentUser?.role === 'Guru' || currentUser?.role === 'Kepala Sekolah' || isOperator)) {
+    // Check if role is Guru, Kepala Sekolah, or Staff for Guru Only files
+    if (file.privacy === 'Guru Only' && isSchoolStaff) {
       return true;
     }
 
@@ -412,7 +430,10 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
 
   // Check if current user has access to Google Drive Main Folder
   const hasDriveMainFolderAccess = (): boolean => {
-    if (isAdmin) return true;
+    // Educators and school staff (Guru, Kepsek, Operator, Admin) have direct access across all browsers and devices
+    if (isSchoolStaff) return true;
+
+    // If student (Siswa) or other role, check if they have an approved access request
     const currentUserName = (currentUser?.nama || currentUser?.username || '').toLowerCase();
     const currentUserEmail = (currentUser?.email || '').toLowerCase();
     return accessRequests.some(
@@ -425,7 +446,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({ currentUser, onBackT
 
   // Get request status specifically for Google Drive Main Folder
   const getDriveMainFolderRequestStatus = (): 'none' | 'pending' | 'approved' | 'rejected' | 'revoked' | 'inactive' | string => {
-    if (isAdmin) return 'approved';
+    if (isSchoolStaff) return 'approved';
     const currentUserName = (currentUser?.nama || currentUser?.username || '').toLowerCase();
     const currentUserEmail = (currentUser?.email || '').toLowerCase();
     const matchingReq = accessRequests.find(
