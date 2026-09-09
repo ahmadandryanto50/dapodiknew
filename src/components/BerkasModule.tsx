@@ -683,11 +683,11 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
     if (isUploading) {
       timer = setInterval(() => {
         setUploadProgress(prev => {
-          if (prev >= 98) return 98;
-          const step = prev < 30 ? 5 : prev < 70 ? 3 : 1;
+          if (prev >= 99) return 99;
+          const step = prev < 50 ? 10 : prev < 85 ? 6 : 3;
           return prev + step;
         });
-      }, 90);
+      }, 40);
     } else {
       setUploadProgress(0);
     }
@@ -2705,7 +2705,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
             </div>
 
             {/* Google Drive Status inside Modal */}
-            {isDriveLinked ? (
+            {isDriveLinked && (
               <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-200 text-emerald-900 text-xs flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 overflow-hidden">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -2717,42 +2717,12 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
                   Otomatis Sinkron
                 </span>
               </div>
-            ) : (
-              <div className="p-3.5 bg-amber-50 rounded-2xl border border-amber-200 text-slate-800 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div className="space-y-0.5">
-                  <div className="font-bold text-amber-900 flex items-center gap-1.5">
-                    <HardDrive className="w-4 h-4 text-amber-600" />
-                    <span>Koneksikan Google Drive</span>
-                  </div>
-                  <p className="text-[11px] text-slate-600">
-                    Berkas diunggah langsung ke Google Drive via Google Apps Script Web App atau Login Google Drive.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setIsDriveGuideModalOpen(true)}
-                    className="px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs flex items-center gap-1 transition-all cursor-pointer shadow-xs"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5 text-slate-950" />
-                    <span>Setup & Tes Drive</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleConnectDrive}
-                    disabled={isConnectingDrive}
-                    className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-900 font-bold border border-slate-300 shadow-xs text-xs flex items-center gap-1.5 transition-all cursor-pointer"
-                  >
-                    <span>{isConnectingDrive ? '...' : '🔑 Login Google'}</span>
-                  </button>
-                </div>
-              </div>
             )}
 
             {/* Drag & Drop Box */}
             <div
               onClick={() => multiFileInputRef.current?.click()}
-              className="border-2 border-dashed border-sky-300 hover:border-sky-500 bg-sky-50/40 hover:bg-sky-50/80 rounded-2xl p-6 text-center transition-all cursor-pointer group"
+              className="border-2 border-dashed border-sky-300 hover:border-sky-500 bg-sky-50/40 hover:bg-sky-50/80 rounded-2xl p-3.5 text-center transition-all cursor-pointer group"
             >
               <input
                 type="file"
@@ -2761,11 +2731,11 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
                 onChange={handleFileSelection}
                 className="hidden"
               />
-              <Upload className="w-10 h-10 text-sky-500 mx-auto mb-2 group-hover:scale-110 transition-transform" />
-              <div className="font-bold text-slate-900 text-sm">
+              <Upload className="w-8 h-8 text-sky-500 mx-auto mb-1 group-hover:scale-110 transition-transform" />
+              <div className="font-bold text-slate-900 text-xs">
                 Klik atau Seret Berkas ke Area Ini
               </div>
-              <p className="text-slate-500 text-xs mt-1">
+              <p className="text-slate-500 text-[11px] mt-0.5">
                 Format PDF, DOCX, XLSX, PPTX, JPG, PNG, ZIP (Bisa pilih banyak berkas)
               </p>
             </div>
