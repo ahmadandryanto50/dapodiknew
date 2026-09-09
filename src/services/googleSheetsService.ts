@@ -1,19 +1,81 @@
 import { Student, TeacherStaff, SarprasItem, StudentReport, SyncConfig, AppDisplayConfig, SchoolProfile, AdminUser, NotificationItem, FileAccessRequest, SchoolFileItem } from '../types';
 
 export const APPS_SCRIPT_TEMPLATE = `/**
- * Google Apps Script untuk Dapodik Terintegrasi 2026
- * Versi Script: v2.9 (Mendukung Data_Alumni, Data_Siswa, Data_Siswa_Keluar, PTK, Sarpras, Notifikasi, Permintaan_Akses_Berkas, Data_Berkas, Administrator, Profil & Pengaturan)
+ * =========================================================================
+ * GOOGLE APPS SCRIPT UNTUK DAPODIK TERINTEGRASI 2026
+ * Versi Script: v3.0 (Otorisasi Google Drive 100% Otomatis & Pembuatan Sheet Instant)
+ * =========================================================================
  * 
- * Cara pasang / update:
- * 1. Buka Google Spreadsheet Anda di https://sheets.new (atau spreadsheet yang sudah ada)
- * 2. Klik menu 'Ekstensi' (Extensions) > 'Apps Script'
- * 3. Hapus kode lama, lalu Paste semua kode ini
- * 4. Klik 'Terapkan' (Deploy) > 'Kelola Penerapan' (Manage Deployments) atau 'Penerapan Baru' (New Deployment)
- * 5. Pilih jenis: 'Aplikasi Web' (Web App)
- * 6. Set 'Jalankan sebagai' (Execute as) = 'Saya' (Me)
- * 7. Set 'Akses' (Who has access) = 'Siapa saja' (Anyone)
- * 8. Klik 'Terapkan' (Deploy), izinkan akses akun Google, lalu salin URL Aplikasi Web dan tempel di Dapodik.
+ * FUNGSI UTAMA OTORISASI GOOGLE DRIVE (Jalankan ini jika butuh izin ulang):
+ * -------------------------------------------------------------------------
+ * 1. Di bagian atas editor Apps Script, pilih fungsi: 'testAndAuthorizeGoogleDrive'
+ * 2. Klik tombol ▶ 'Jalankan' (Run)
+ * 3. Klik 'Tinjau Izin' (Review Permissions) -> Pilih Akun Google Anda -> 'Lanjutan' (Advanced) -> 'Buka Kode (tidak aman)' -> 'Izinkan' (Allow)
  */
+
+// Function Standalone untuk Otorisasi & Tes Google Drive Instant
+function testAndAuthorizeGoogleDrive() {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    checkAndInitializeSheets(ss);
+    
+    // Tes Akses Google Drive
+    var parentName = 'Berkas Dapodik';
+    var folders = DriveApp.getFoldersByName(parentName);
+    var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(parentName);
+    
+    // Buat file tes
+    var testFile = folder.createFile('Tes_Otorisasi_Dapodik_' + Date.now() + '.txt', 'Otorisasi Google Drive Dapodik Berhasil pada ' + new Date().toLocaleString('id-ID'), MimeType.PLAIN_TEXT);
+    var fileId = testFile.getId();
+    testFile.setTrashed(true); // Bersihkan kembali
+    
+    var msg = "✅ OTORISASI GOOGLE DRIVE 100% SUKSES!\\n\\nFolder '" + parentName + "' telah siap di Google Drive Anda.\\nPengunggahan berkas dari aplikasi Dapodik Web telah aktif!";
+    Logger.log(msg);
+    try {
+      SpreadsheetApp.getUi().alert(msg);
+    } catch(e) {}
+    return { status: 'success', id: fileId, message: msg };
+  } catch (err) {
+    var errMsg = "❌ GAGAL OTORISASI GOOGLE DRIVE: " + err.toString();
+    Logger.log(errMsg);
+    try {
+      SpreadsheetApp.getUi().alert(errMsg);
+    } catch(e) {}
+    return { status: 'error', message: errMsg };
+  }
+}
+
+// Menu Otorisasi & Akses Cepat di Google Spreadsheet
+function onOpen() {
+  try {
+    SpreadsheetApp.getUi()
+      .createMenu('⚡ Otorisasi Dapodik')
+      .addItem('🔑 1. Berikan Izin & Tes Google Drive', 'testAndAuthorizeGoogleDrive')
+      .addItem('📁 2. Buat Struktur Folder Berkas', 'setupDapodikFolders')
+      .addToUi();
+  } catch(e) {}
+}
+
+function triggerAuthorization() {
+  return testAndAuthorizeGoogleDrive();
+}
+
+function setupDapodikFolders() {
+  var parentName = 'Berkas Dapodik';
+  var parent = DriveApp.getFoldersByName(parentName);
+  var pFolder = parent.hasNext() ? parent.next() : DriveApp.createFolder(parentName);
+  
+  var categories = ['Kesiswaan', 'Kurikulum', 'Keuangan', 'Kepegawaian', 'Sarpras', 'Surat Masuk & Keluar', 'Umum'];
+  for (var i = 0; i < categories.length; i++) {
+    var sub = pFolder.getFoldersByName(categories[i]);
+    if (!sub.hasNext()) {
+      pFolder.createFolder(categories[i]);
+    }
+  }
+  try {
+    SpreadsheetApp.getUi().alert("✅ Struktur Folder Berkas Dapodik (" + categories.join(', ') + ") Berhasil Dibuat di Google Drive Anda!");
+  } catch(e) {}
+}
 
 // Header Baku Setiap Sheet Database
 const HEADERS_MAP = {
@@ -27,23 +89,6 @@ const HEADERS_MAP = {
   'Permintaan_Akses_Berkas': ['id', 'fileId', 'fileName', 'requesterName', 'requesterRole', 'requesterEmail', 'requestedAt', 'reason', 'status', 'reviewedBy', 'reviewedAt', 'reviewNotes'],
   'Data_Berkas': ['id', 'name', 'category', 'fileSize', 'fileType', 'fileExtension', 'uploadedAt', 'uploadedBy', 'uploadedByRole', 'driveFolderId', 'driveFileUrl', 'privacy', 'description', 'tags', 'allowedUserIds', 'allowedRoles']
 };
-
-// Menu Otorisasi Otomatis di Google Spreadsheet
-function onOpen() {
-  try {
-    SpreadsheetApp.getUi()
-      .createMenu('⚡ Otorisasi Dapodik')
-      .addItem('🔑 Berikan Izin Google Drive', 'triggerAuthorization')
-      .addToUi();
-  } catch(e) {}
-}
-
-function triggerAuthorization() {
-  // Memaksa Google meminta izin Tulis penuh (DriveApp.createFile)
-  var tempFile = DriveApp.createFile('Dapodik_Otorisasi_Test.txt', 'Tes Otorisasi Berhasil', MimeType.PLAIN_TEXT);
-  tempFile.setTrashed(true); // Hapus kembali agar bersih
-  SpreadsheetApp.getUi().alert('SUKSES LUAR BIASA! Akses Baca & Tulis Google Drive Anda telah berhasil diizinkan dan terhubung 100%! Sekarang coba upload berkas di aplikasi web.');
-}
 
 function doGet(e) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -981,22 +1026,56 @@ export async function uploadFileToDriveViaAppsScript(
   };
 
   const res = await callProxyOrDirectPost(config.webAppUrl, payload);
-  if (res.success) {
-    const d = res.data || {};
-    const fallbackId = d.id || `drive-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-    return {
-      success: true,
-      id: fallbackId,
-      name: d.name || fileInfo.name,
-      webViewLink: d.webViewLink || `https://drive.google.com/drive/my-drive`,
-      folderId: d.folderId || 'root',
-      folderName: d.folderName || fileInfo.folderName || fileInfo.category || 'Berkas Dapodik',
-      size: d.size || 0,
-      mimeType: d.mimeType || fileInfo.type
-    };
+  if (res.success && res.data) {
+    const d = res.data;
+    if (d.status === 'success' && d.id) {
+      return {
+        success: true,
+        id: d.id,
+        name: d.name || fileInfo.name,
+        webViewLink: d.webViewLink || `https://drive.google.com/file/d/${d.id}/view`,
+        folderId: d.folderId || 'root',
+        folderName: d.folderName || fileInfo.folderName || fileInfo.category || 'Berkas Dapodik',
+        size: d.size || 0,
+        mimeType: d.mimeType || fileInfo.type
+      };
+    }
+    if (d.status === 'error') {
+      return {
+        success: false,
+        message: d.message || 'Gagal menyimpan berkas di Google Drive (Apps Script error).'
+      };
+    }
+    if (typeof d.text === 'string' && (d.text.includes('<!DOCTYPE') || d.text.includes('html'))) {
+      return {
+        success: false,
+        message: 'Google Apps Script belum diizinkan atau pengaturan Akses (Who has access) belum di-set ke "Siapa saja" (Anyone).'
+      };
+    }
+    if (d.message) {
+      return {
+        success: false,
+        message: d.message
+      };
+    }
   }
   return {
     success: false,
-    message: res.message || (res.data && res.data.message) || 'Gagal mengirim berkas ke Google Drive.'
+    message: res.message || 'Gagal terhubung ke Google Drive via Apps Script. Pastikan URL Apps Script valid.'
   };
 }
+
+export function downloadKodeGsFile() {
+  try {
+    const element = document.createElement('a');
+    const file = new Blob([APPS_SCRIPT_TEMPLATE], { type: 'text/plain;charset=utf-8' });
+    element.href = URL.createObjectURL(file);
+    element.download = 'Kode.gs';
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+  } catch(e) {
+    console.error('Error downloading Kode.gs file:', e);
+  }
+}
+

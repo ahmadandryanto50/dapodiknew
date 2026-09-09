@@ -11,10 +11,11 @@ import {
   FileSpreadsheet, 
   Code,
   Sparkles,
+  Download,
   Link as LinkIcon
 } from 'lucide-react';
 import { SyncConfig, Student, TeacherStaff, SarprasItem, StudentReport, AdminUser, NotificationItem } from '../types';
-import { APPS_SCRIPT_TEMPLATE, syncToGoogleSheets } from '../services/googleSheetsService';
+import { APPS_SCRIPT_TEMPLATE, syncToGoogleSheets, downloadKodeGsFile } from '../services/googleSheetsService';
 import confetti from 'canvas-confetti';
 
 interface GoogleSheetModalProps {
@@ -268,15 +269,27 @@ export const GoogleSheetModal: React.FC<GoogleSheetModalProps> = ({
           {/* Tab 2: Script Code */}
           {activeTab === 'code' && (
             <div className="space-y-3 py-4">
-              <div className="flex items-center justify-between">
-                <span className="text-slate-700 font-bold">Kode Google Apps Script (Code.gs):</span>
-                <button
-                  onClick={handleCopyCode}
-                  className="px-3.5 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold transition-all flex items-center gap-1.5 shadow-md shadow-sky-600/20 cursor-pointer"
-                >
-                  {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{isCopied ? 'Tersalin!' : 'Salin Semua Kode'}</span>
-                </button>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-slate-700 font-bold">Kode Google Apps Script (Kode.gs v3.0):</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={downloadKodeGsFile}
+                    className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold transition-all flex items-center gap-1.5 shadow-md shadow-amber-500/20 cursor-pointer"
+                    title="Unduh file Kode.gs untuk langsung dimasukkan ke Apps Script"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Unduh File Kode.gs</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCopyCode}
+                    className="px-3.5 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold transition-all flex items-center gap-1.5 shadow-md shadow-sky-600/20 cursor-pointer"
+                  >
+                    {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{isCopied ? 'Tersalin!' : 'Salin Semua Kode'}</span>
+                  </button>
+                </div>
               </div>
 
               <div className="relative rounded-2xl bg-slate-900 border border-slate-800 p-4 font-mono text-[11px] text-sky-200 max-h-72 overflow-y-auto leading-relaxed shadow-inner">
