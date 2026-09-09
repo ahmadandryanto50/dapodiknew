@@ -90,11 +90,25 @@ async function startServer() {
 
       const text = await response.text();
       let data: any = {};
+      let isJson = false;
       try {
         data = JSON.parse(text);
+        isJson = true;
       } catch (e) {
         data = { text };
       }
+
+      if (!isJson || (typeof text === 'string' && (text.includes('<!DOCTYPE') || text.includes('<html>') || text.includes('Google Accounts')))) {
+        return res.json({ 
+          success: false, 
+          message: "Google Apps Script mengembalikan halaman HTML/Login. Pastikan Web App sudah di-deploy sebagai 'New Version' dengan akses 'Anyone' (Siapa saja)." 
+        });
+      }
+
+      if (data.status === 'error') {
+        return res.json({ success: false, message: data.message || "Gagal dari Google Apps Script", data });
+      }
+
       return res.json({ success: true, data });
     } catch (err: any) {
       console.warn("Proxying to Google Sheets warning in /api/sync-sheets:", err?.message || err);

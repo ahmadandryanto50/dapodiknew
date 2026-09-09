@@ -62,7 +62,25 @@ app.post("/api/sync-sheets", async (req, res) => {
     });
     const text = await response.text();
     let data: any = {};
-    try { data = JSON.parse(text); } catch (e) { data = { text }; }
+    let isJson = false;
+    try { 
+      data = JSON.parse(text); 
+      isJson = true;
+    } catch (e) { 
+      data = { text }; 
+    }
+
+    if (!isJson || (typeof text === 'string' && (text.includes('<!DOCTYPE') || text.includes('<html>') || text.includes('Google Accounts')))) {
+      return res.json({ 
+        success: false, 
+        message: "Google Apps Script mengembalikan halaman HTML/Login. Pastikan Web App sudah di-deploy sebagai 'New Version' dengan akses 'Anyone' (Siapa saja)." 
+      });
+    }
+
+    if (data.status === 'error') {
+      return res.json({ success: false, message: data.message || "Gagal dari Google Apps Script", data });
+    }
+
     return res.json({ success: true, data });
   } catch (err: any) {
     return res.json({ success: false, message: err?.message || "Gagal menghubungi endpoint Google Sheets" });
