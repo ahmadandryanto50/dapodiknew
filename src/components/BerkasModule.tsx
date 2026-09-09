@@ -919,8 +919,18 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       } catch (e) {}
     }
 
+    const hasAppsScriptUrl = Boolean(currentCfg?.webAppUrl && currentCfg.webAppUrl.trim().startsWith('http'));
+    const hasDriveOAuth = isGoogleDriveConnected();
+
+    if (!hasAppsScriptUrl && !hasDriveOAuth) {
+      setDriveConnectError('⚠️ Pengunggahan ke Google Drive belum terhubung! Silakan klik tombol "Hubungkan Akun Google" di atas atau atur URL Google Apps Script pada menu Pengaturan Integrasi agar berkas tersimpan langsung di Google Drive Anda.');
+      setIsUploading(false);
+      setUploadProgress(0);
+      return;
+    }
+
     const total = selectedUploadFiles.length;
-    let successCount = 0;
+    const uploadErrors: string[] = [];
 
     for (let i = 0; i < total; i++) {
       if (uploadCancelledRef.current) break;
@@ -949,10 +959,12 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       setUploadProgress(Math.min(99, baseStartProgress + Math.round((1 / total) * 50)));
 
       let driveResult: any = null;
+      let lastErrMsg = '';
 
-      if (currentCfg?.webAppUrl && base64Pure) {
+      // 1. Try Apps Script Upload if URL exists
+      if (hasAppsScriptUrl && base64Pure) {
         try {
-          const appsScriptRes = await uploadFileToDriveViaAppsScript(currentCfg, {
+          const appsScriptRes = await uploadFileToDriveViaAppsScript(currentCfg!, {
             name: file.name,
             type: file.type || 'application/octet-stream',
             base64Data: base64Pure,
@@ -962,21 +974,50 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
           });
           if (appsScriptRes.success && appsScriptRes.id) {
             driveResult = appsScriptRes;
-            successCount++;
+          } else {
+            lastErrMsg = appsScriptRes.message || 'Gagal dari Google Apps Script.';
           }
         } catch (asErr: any) {
-          // fallback
+          lastErrMsg = asErr?.message || String(asErr);
+        }
+      }
+
+      // 2. Try Google Drive OAuth API if connected
+      if (!driveResult && hasDriveOAuth) {
+        try {
+          const oAuthRes = await uploadFileToGoogleDrive(file, {
+            category: targetCategory,
+            customFolderName: folderChoiceMode === 'custom' ? customFolder.trim() : undefined,
+            description: uploadDescription,
+            parentFolderId: GOOGLE_DRIVE_FOLDER_ID
+          });
+          if (oAuthRes && oAuthRes.id) {
+            driveResult = {
+              id: oAuthRes.id,
+              name: oAuthRes.name,
+              webViewLink: oAuthRes.webViewLink,
+              folderId: oAuthRes.folderId || GOOGLE_DRIVE_FOLDER_ID,
+              folderName: oAuthRes.folderName || targetCategory
+            };
+          }
+        } catch (oErr: any) {
+          lastErrMsg = oErr?.message || String(oErr);
         }
       }
 
       if (uploadCancelledRef.current) break;
+
+      // STRICT VALIDATION: If file failed to upload to Google Drive, DO NOT create dummy item!
+      if (!driveResult || !driveResult.id) {
+        uploadErrors.push(`"${file.name}": ${lastErrMsg || 'Gagal terhubung atau URL Apps Script belum valid'}`);
+        continue;
+      }
 
       // Phase 3: 75% -> 95% Verifying Google Drive storage
       setUploadProgress(Math.min(99, baseStartProgress + Math.round((1 / total) * 85)));
 
       const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
       const isImg = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext);
-      const fallbackFileId = `gdrive-file-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
 
       let finalSize = file.size;
       if (base64Pure) {
@@ -984,7 +1025,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       }
 
       const fileItem: SchoolFileItem = {
-        id: driveResult?.id || fallbackFileId,
+        id: driveResult.id,
         name: file.name,
         category: targetCategory,
         fileSize: finalSize,
@@ -993,19 +1034,17 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
         uploadedAt: nowStr,
         uploadedBy: currentUser?.nama || driveUser?.displayName || driveUser?.email || 'Administrator Sekolah',
         uploadedByRole: currentUser?.role || 'Administrator',
-        driveFolderId: driveResult?.folderId || GOOGLE_DRIVE_FOLDER_ID,
-        driveFileUrl: driveResult?.webViewLink || `https://drive.google.com/drive/u/0/folders/${GOOGLE_DRIVE_FOLDER_ID}`,
+        driveFolderId: driveResult.folderId || GOOGLE_DRIVE_FOLDER_ID,
+        driveFileUrl: driveResult.webViewLink || `https://drive.google.com/file/d/${driveResult.id}/view`,
         privacy: uploadPrivacy,
-        dataUrl: isImg ? dataUrl : undefined, // ONLY set dataUrl for images, clear for PDF/Docs to avoid broken thumbnail icons
-        description: uploadDescription || `Berkas resmi tersimpan aman di Google Drive (${targetCategory}).`,
+        dataUrl: isImg ? dataUrl : undefined,
+        description: uploadDescription || `Berkas resmi tersimpan di Google Drive (${targetCategory}).`,
         tags: [ext.toUpperCase(), 'GoogleDrive'],
         allowedUserIds: uploadPrivacy === 'restricted' && currentUser ? [currentUser.id] : undefined,
         allowedRoles: uploadPrivacy === 'Public' ? ['*'] : uploadPrivacy === 'Guru Only' ? ['Administrator', 'Guru', 'Operator'] : ['Administrator']
       };
 
       newItems.push(fileItem);
-
-      // Phase 4: 100% File complete
       setUploadProgress(Math.round(((i + 1) / total) * 100));
     }
 
@@ -1015,6 +1054,14 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       setCurrentUploadingFileName('');
       setSyncFeedback('Pengunggahan berkas dibatalkan.');
       setTimeout(() => setSyncFeedback(null), 3000);
+      return;
+    }
+
+    if (newItems.length === 0) {
+      setIsUploading(false);
+      setUploadProgress(0);
+      setCurrentUploadingFileName('');
+      setDriveConnectError(`❌ Gagal Upload ke Google Drive:\n${uploadErrors.join('; ') || 'Berkas tidak terunggah. Pastikan URL Google Apps Script atau koneksi Google Drive sudah diatur.'}`);
       return;
     }
 
@@ -1028,26 +1075,51 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
     setUploadProgress(0);
     setCurrentUploadingFileName('');
 
-    let note = `Sukses! ${newItems.length} berkas berhasil diunggah langsung ke Google Drive (Folder: ${targetCategory})!`;
+    let note = `Sukses! ${newItems.length} berkas berhasil tersimpan di Google Drive (Folder: ${targetCategory})!`;
+    if (uploadErrors.length > 0) {
+      note += ` (${uploadErrors.length} berkas gagal)`;
+    }
 
-    if (newItems.length > 0) {
-      try {
-        const notifItem = {
-          id: `notif-upload-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-          title: 'Pengunggahan ke Google Drive Sukses',
-          message: `${note} Silakan cek menu Notifikasi untuk riwayat berkas.`,
-          timestamp: new Date().toLocaleString('id-ID'),
-          type: 'success',
-          read: false
-        };
-        const existingNotifs = JSON.parse(localStorage.getItem('dapodik_notifications') || '[]');
-        localStorage.setItem('dapodik_notifications', JSON.stringify([notifItem, ...existingNotifs]));
-      } catch (e) {
-        console.warn('Gagal menyimpan notifikasi lokal:', e);
-      }
+    try {
+      const notifItem = {
+        id: `notif-upload-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        title: 'Pengunggahan ke Google Drive Sukses',
+        message: `${note} Silakan cek menu Notifikasi untuk riwayat berkas.`,
+        timestamp: new Date().toLocaleString('id-ID'),
+        type: 'success',
+        read: false
+      };
+      const existingNotifs = JSON.parse(localStorage.getItem('dapodik_notifications') || '[]');
+      localStorage.setItem('dapodik_notifications', JSON.stringify([notifItem, ...existingNotifs]));
+    } catch (e) {
+      console.warn('Gagal menyimpan notifikasi lokal:', e);
     }
 
     await persistAndSyncFiles(updatedFiles, undefined, note);
+  };
+
+  // Clean up corrupted or dummy local files that were not saved in Google Drive
+  const handleCleanCorruptedFiles = async () => {
+    const cleanList = files.filter(f => {
+      if (!f.id) return false;
+      if (f.id.startsWith('gdrive-file-') || f.id.startsWith('local-file-') || f.id.startsWith('fallback-')) return false;
+      if (!f.driveFileUrl || f.driveFileUrl.includes('gdrive-file-')) return false;
+      return true;
+    });
+
+    const deletedCount = files.length - cleanList.length;
+    setFiles(cleanList);
+    try {
+      localStorage.setItem('dapodik_school_files_v3', JSON.stringify(cleanList));
+      fetch('/api/app-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ schoolFiles: cleanList })
+      }).catch(() => {});
+    } catch (e) {}
+
+    setSyncFeedback(`Berhasil membersihkan ${deletedCount} berkas dummy/rusak yang tidak tersimpan di Google Drive.`);
+    setTimeout(() => setSyncFeedback(null), 4000);
   };
 
   // Handle Request Access Submission
@@ -1465,6 +1537,16 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
 
           {/* Action Buttons */}
           <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto shrink-0">
+            {isAdmin && (
+              <button
+                onClick={handleCleanCorruptedFiles}
+                className="px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer hover:scale-[1.02]"
+                title="Hapus berkas lokal / dummy yang tidak tersimpan di Google Drive"
+              >
+                <Trash2 className="w-4 h-4 text-rose-300" />
+                <span>Bersihkan Berkas Non-Drive</span>
+              </button>
+            )}
             {activeTab === 'folders' && isSchoolStaff && (
               <button
                 onClick={handleCreateFolderPrompt}
