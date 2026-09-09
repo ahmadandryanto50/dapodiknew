@@ -1059,13 +1059,9 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       const file = selectedUploadFiles[i];
       setCurrentUploadingFileName(file.name);
 
-      // Realistic progress mapping based on actual steps:
-      const fileProgressStep = 100 / total;
-      const startP = Math.round(i * fileProgressStep + 5);
-      const uploadingP = Math.round(startP + fileProgressStep * 0.4);
-      const savingP = Math.round(startP + fileProgressStep * 0.85);
-
-      setUploadProgress(startP);
+      // Dynamic smooth progress: start at phase beginning
+      const baseProgress = Math.round((i / total) * 90);
+      setUploadProgress(Math.max(5, baseProgress + 10));
 
       let dataUrl: string | undefined = undefined;
       let base64Pure = '';
@@ -1079,18 +1075,19 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       }
 
       if (uploadCancelledRef.current) break;
-      setUploadProgress(uploadingP);
+      setUploadProgress(Math.max(20, baseProgress + 35));
 
       let driveResult: any = null;
 
       // 1. Try Apps Script Upload if URL exists
       if (hasAppsScriptUrl && base64Pure) {
         try {
+          setUploadProgress(Math.max(40, baseProgress + 55));
           const appsScriptRes = await uploadFileToDriveViaAppsScript(currentCfg!, {
             name: file.name,
             type: file.type || 'application/octet-stream',
             base64Data: base64Pure,
-            description: uploadDescription || `Berkas resmi ${targetCategory} diunggah.`,
+            description: `Berkas resmi ${targetCategory} diunggah.`,
             parentFolderId: GOOGLE_DRIVE_FOLDER_ID,
             folderName: targetCategory
           });
@@ -1103,10 +1100,10 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       // 2. Try Google Drive OAuth API if connected
       if (!driveResult && hasDriveOAuth) {
         try {
+          setUploadProgress(Math.max(50, baseProgress + 65));
           const oAuthRes = await uploadFileToGoogleDrive(file, {
             category: targetCategory,
             customFolderName: folderChoiceMode === 'custom' ? customFolder.trim() : undefined,
-            description: uploadDescription,
             parentFolderId: GOOGLE_DRIVE_FOLDER_ID
           });
           if (oAuthRes && oAuthRes.id) {
@@ -1132,7 +1129,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
         continue;
       }
 
-      setUploadProgress(savingP);
+      setUploadProgress(Math.max(85, baseProgress + 85));
 
       let finalSize = file.size;
       if (base64Pure) {
@@ -1153,14 +1150,14 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
         driveFileUrl: driveResult.webViewLink || `https://drive.google.com/file/d/${driveResult.id}/view`,
         privacy: uploadPrivacy,
         dataUrl: isImg ? dataUrl : undefined,
-        description: uploadDescription || `Berkas resmi tersimpan (${targetCategory}).`,
+        description: `Berkas resmi tersimpan (${targetCategory}).`,
         tags: [ext.toUpperCase(), 'DapodikStorage'],
         allowedUserIds: uploadPrivacy === 'restricted' && currentUser ? [currentUser.id] : undefined,
         allowedRoles: uploadPrivacy === 'Public' ? ['*'] : uploadPrivacy === 'Guru Only' ? ['Administrator', 'Guru', 'Operator'] : ['Administrator']
       };
 
       newItems.push(fileItem);
-      setUploadProgress(Math.min(99, Math.round((i + 1) * fileProgressStep)));
+      setUploadProgress(Math.min(98, Math.round(((i + 1) / total) * 98)));
     }
 
     if (uploadCancelledRef.current) {
@@ -1180,9 +1177,10 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       return;
     }
 
-    // Fully saved & verified in Google Drive -> hit 100% and return to file management
+    // Fully saved & verified in Google Drive -> hit 100% and automatically close modal
     setUploadProgress(100);
-    await new Promise(r => setTimeout(r, 400));
+    setCurrentUploadingFileName('Berhasil disimpan di Google Drive!');
+    await new Promise(r => setTimeout(r, 600));
 
     const updatedFiles = [...newItems, ...files];
     setIsUploading(false);
