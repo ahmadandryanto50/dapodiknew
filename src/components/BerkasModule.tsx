@@ -209,6 +209,63 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
     } catch (e) {}
   }, [syncConfig]);
 
+  // Helper function to safely merge incoming remote files with local files without losing newly uploaded items
+  const mergeFilesWithLocal = (incomingFiles: SchoolFileItem[]): SchoolFileItem[] => {
+    let deletedIds: string[] = [];
+    try {
+      const savedDel = localStorage.getItem('dapodik_deleted_file_ids');
+      if (savedDel) deletedIds = JSON.parse(savedDel);
+    } catch (e) {}
+    const delSet = new Set(deletedIds);
+
+    let currentLocal: SchoolFileItem[] = [];
+    try {
+      const savedLocal = localStorage.getItem('dapodik_school_files_v3');
+      if (savedLocal) currentLocal = JSON.parse(savedLocal);
+    } catch (e) {}
+
+    const fileMap = new Map<string, SchoolFileItem>();
+
+    // 1. Put current local state files into map first
+    (files || []).forEach(f => {
+      if (f && f.id && !delSet.has(String(f.id))) {
+        fileMap.set(String(f.id), f);
+      }
+    });
+
+    // 2. Put current localStorage files into map
+    (currentLocal || []).forEach(f => {
+      if (f && f.id && !delSet.has(String(f.id))) {
+        const existing = fileMap.get(String(f.id));
+        if (existing) {
+          fileMap.set(String(f.id), { ...existing, ...f, dataUrl: f.dataUrl || existing.dataUrl });
+        } else {
+          fileMap.set(String(f.id), f);
+        }
+      }
+    });
+
+    // 3. Put incoming files from server or Google Sheets into map
+    (incomingFiles || []).forEach(f => {
+      if (f && f.id && !delSet.has(String(f.id))) {
+        const existing = fileMap.get(String(f.id));
+        if (existing) {
+          fileMap.set(String(f.id), { ...existing, ...f, dataUrl: f.dataUrl || existing.dataUrl });
+        } else {
+          fileMap.set(String(f.id), f);
+        }
+      }
+    });
+
+    const merged = Array.from(fileMap.values());
+    merged.sort((a, b) => {
+      const timeA = a.uploadedAt ? new Date(a.uploadedAt).getTime() : 0;
+      const timeB = b.uploadedAt ? new Date(b.uploadedAt).getTime() : 0;
+      return timeB - timeA;
+    });
+    return merged;
+  };
+
   // Pull latest access requests & school files from Server Cache and Google Sheets
   const handlePullRequestsFromCloud = async (silent: boolean = false) => {
     try {
@@ -222,8 +279,9 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
             localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(cacheData.permintaanAkses));
           }
           if (Array.isArray(cacheData.schoolFiles) && cacheData.schoolFiles.length > 0) {
-            setFiles(cacheData.schoolFiles);
-            localStorage.setItem('dapodik_school_files_v3', JSON.stringify(cacheData.schoolFiles));
+            const merged = mergeFilesWithLocal(cacheData.schoolFiles);
+            setFiles(merged);
+            localStorage.setItem('dapodik_school_files_v3', JSON.stringify(merged));
           }
         }
       } catch (cacheErr) {
@@ -251,19 +309,28 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
           }
 
           if (Array.isArray(res.data.berkas) && res.data.berkas.length > 0) {
-            const remoteFiles = res.data.berkas;
-            setFiles(remoteFiles);
-            localStorage.setItem('dapodik_school_files_v3', JSON.stringify(remoteFiles));
+            const merged = mergeFilesWithLocal(res.data.berkas);
+            setFiles(merged);
+            localStorage.setItem('dapodik_school_files_v3', JSON.stringify(merged));
             updatedAny = true;
           }
           
           // Also update server cache
+          const currentSchoolFiles = (() => {
+            try {
+              const saved = localStorage.getItem('dapodik_school_files_v3');
+              return saved ? JSON.parse(saved) : files;
+            } catch (e) {
+              return files;
+            }
+          })();
+
           fetch('/api/app-data', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               ...(res.data.permintaanAkses ? { permintaanAkses: res.data.permintaanAkses } : {}),
-              ...(res.data.berkas ? { schoolFiles: res.data.berkas } : {})
+              schoolFiles: currentSchoolFiles
             })
           }).catch(() => {});
 
@@ -366,6 +433,15 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
     deletedId?: string,
     successNote?: string
   ) => {
+    if (deletedId) {
+      try {
+        const savedDel = localStorage.getItem('dapodik_deleted_file_ids');
+        const delList: string[] = savedDel ? JSON.parse(savedDel) : [];
+        if (!delList.includes(deletedId)) delList.push(deletedId);
+        localStorage.setItem('dapodik_deleted_file_ids', JSON.stringify(delList));
+      } catch (e) {}
+    }
+
     setLocalFiles(updatedFiles);
     if (propSetFiles) {
       propSetFiles(updatedFiles);
@@ -402,26 +478,20 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       } catch (e) {}
     }
 
+    if (successNote) {
+      setSyncFeedback(successNote);
+      setTimeout(() => setSyncFeedback(null), 4000);
+    }
+
     if (currentCfg?.webAppUrl) {
       setIsSyncingRequests(true);
       try {
-        const syncRes = await syncBerkasToGoogleSheets(currentCfg, updatedFiles);
-        if (syncRes.success) {
-          if (successNote) {
-            setSyncFeedback(successNote);
-            setTimeout(() => setSyncFeedback(null), 4000);
-          }
-        } else {
-          console.warn('Sync warning:', syncRes.message);
-        }
+        await syncBerkasToGoogleSheets(currentCfg, updatedFiles);
       } catch (syncErr) {
         console.warn('Sync berkas error:', syncErr);
       } finally {
         setIsSyncingRequests(false);
       }
-    } else if (successNote) {
-      setSyncFeedback(successNote);
-      setTimeout(() => setSyncFeedback(null), 4000);
     }
   };
 
@@ -791,7 +861,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
         return f;
       });
 
-      await persistAndSyncFiles(updatedFiles, undefined, `Berkas "${file.name}" berhasil disimpan di Google Drive & Database Spreadsheet!`);
+      await persistAndSyncFiles(updatedFiles, undefined, `Berkas "${file.name}" berhasil diunggah langsung ke Google Drive!`);
     } catch (err: any) {
       console.error('Error syncing file to drive:', err);
       setDriveConnectError(`Gagal upload "${file.name}" ke Google Drive: ${err?.message || err}`);
@@ -958,7 +1028,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
     setUploadProgress(0);
     setCurrentUploadingFileName('');
 
-    let note = `Sukses! ${newItems.length} berkas berhasil diunggah dan tersimpan di Google Drive!`;
+    let note = `Sukses! ${newItems.length} berkas berhasil diunggah langsung ke Google Drive (Folder: ${targetCategory})!`;
 
     if (newItems.length > 0) {
       try {

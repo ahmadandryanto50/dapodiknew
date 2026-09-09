@@ -241,18 +241,36 @@ async function startServer() {
         : (incoming.deletedFileId ? [incoming.deletedFileId] : []);
       const mergedDeletedFiles = Array.from(new Set([...currentDeletedFiles, ...incomingDeletedFiles]));
 
-      // Merge schoolFiles
-      let mergedFiles = currentData.schoolFiles || currentData.files || [];
-      if (Array.isArray(incoming.schoolFiles)) {
-        mergedFiles = incoming.schoolFiles;
-      } else if (Array.isArray(incoming.files)) {
-        mergedFiles = incoming.files;
-      }
+      // Merge schoolFiles carefully so no file is lost across devices or background syncs
+      const currentFilesList: any[] = Array.isArray(currentData.schoolFiles) ? currentData.schoolFiles : (Array.isArray(currentData.files) ? currentData.files : []);
+      const incomingFilesList: any[] = Array.isArray(incoming.schoolFiles) ? incoming.schoolFiles : (Array.isArray(incoming.files) ? incoming.files : []);
 
-      if (mergedDeletedFiles.length > 0) {
-        const delFileSet = new Set(mergedDeletedFiles);
-        mergedFiles = mergedFiles.filter((f: any) => f && f.id && !delFileSet.has(String(f.id)));
-      }
+      const fileMap = new Map<string, any>();
+      const delFileSet = new Set<string>(mergedDeletedFiles);
+
+      currentFilesList.forEach((f: any) => {
+        if (f && f.id && !delFileSet.has(String(f.id))) {
+          fileMap.set(String(f.id), f);
+        }
+      });
+
+      incomingFilesList.forEach((f: any) => {
+        if (f && f.id && !delFileSet.has(String(f.id))) {
+          if (fileMap.has(String(f.id))) {
+            const exist = fileMap.get(String(f.id));
+            fileMap.set(String(f.id), { ...exist, ...f, dataUrl: f.dataUrl || exist.dataUrl });
+          } else {
+            fileMap.set(String(f.id), f);
+          }
+        }
+      });
+
+      let mergedFiles = Array.from(fileMap.values());
+      mergedFiles.sort((a: any, b: any) => {
+        const timeA = a.uploadedAt ? new Date(a.uploadedAt).getTime() : 0;
+        const timeB = b.uploadedAt ? new Date(b.uploadedAt).getTime() : 0;
+        return timeB - timeA;
+      });
 
       // Merge notifications carefully so no notification is ever lost by cross-device race conditions
       const currentNotifs: any[] = Array.isArray(currentData.notifications) ? currentData.notifications : [];
