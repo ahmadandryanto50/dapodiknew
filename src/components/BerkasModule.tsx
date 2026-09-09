@@ -46,8 +46,7 @@ import {
   ShieldAlert,
   Loader2,
   ShieldX,
-  Power,
-  Download
+  Power
 } from 'lucide-react';
 import { SchoolFileItem, FileAccessRequest, AdminUser, SyncConfig } from '../types';
 import { GOOGLE_DRIVE_MAIN_FOLDER_URL, GOOGLE_DRIVE_FOLDER_ID, initialSchoolFiles, initialAccessRequests } from '../data/mockFiles';
