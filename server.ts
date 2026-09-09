@@ -6,6 +6,33 @@ import { createServer as createViteServer } from "vite";
 const CONFIG_FILE = path.join(process.cwd(), "sync_config.json");
 const DATA_FILE = path.join(process.cwd(), "app_data.json");
 
+function safeReadJSON(filePath: string, fallback: any = {}) {
+  try {
+    if (fs.existsSync(filePath)) {
+      const content = fs.readFileSync(filePath, "utf-8").trim();
+      if (content) {
+        return JSON.parse(content);
+      }
+    }
+  } catch (err) {
+    console.error(`Error reading ${path.basename(filePath)}:`, err);
+  }
+  return fallback;
+}
+
+function safeWriteJSON(filePath: string, data: any) {
+  try {
+    const tempPath = `${filePath}.tmp`;
+    fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), "utf-8");
+    fs.renameSync(tempPath, filePath);
+  } catch (err) {
+    console.error(`Error writing ${path.basename(filePath)}:`, err);
+    try {
+      fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
+    } catch (e) {}
+  }
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -24,13 +51,9 @@ async function startServer() {
 
   // API Route: Get Shared Sync Config
   app.get("/api/sync-config", (req, res) => {
-    try {
-      if (fs.existsSync(CONFIG_FILE)) {
-        const data = fs.readFileSync(CONFIG_FILE, "utf-8");
-        return res.json(JSON.parse(data));
-      }
-    } catch (err) {
-      console.error("Error reading sync_config.json:", err);
+    const config = safeReadJSON(CONFIG_FILE, null);
+    if (config) {
+      return res.json(config);
     }
     // Fallback to default
     return res.json({
@@ -132,36 +155,8 @@ async function startServer() {
         return res.json(data);
       } else {
         // Fallback to locally cached app_data.json so multi-device/browser sync never fails
-        if (fs.existsSync(DATA_FILE)) {
-          try {
-            const cached = JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
-            return res.json({
-              status: 'success',
-              source: 'cache',
-              siswa: cached.students || [],
-              ptk: cached.teachers || [],
-              sarpras: cached.sarpras || [],
-              rapor: cached.reports || [],
-              administrator: cached.administrators || [],
-              aplikasi: cached.aplikasiLinks || [],
-              notifikasi: cached.notifications || [],
-              permintaanAkses: cached.permintaanAkses || [],
-              berkas: cached.schoolFiles || cached.files || []
-            });
-          } catch (e) {}
-        }
-
-        return res.json({
-          status: 'error',
-          message: data?.message || 'Tidak dapat memuat data dari Spreadsheet saat ini.'
-        });
-      }
-    } catch (err: any) {
-      console.warn("Proxying from Google Sheets warning in /api/load-sheets:", err?.message || err);
-      // Fallback to locally cached app_data.json
-      if (fs.existsSync(DATA_FILE)) {
-        try {
-          const cached = JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
+        const cached = safeReadJSON(DATA_FILE, null);
+        if (cached) {
           return res.json({
             status: 'success',
             source: 'cache',
@@ -175,7 +170,31 @@ async function startServer() {
             permintaanAkses: cached.permintaanAkses || [],
             berkas: cached.schoolFiles || cached.files || []
           });
-        } catch (e) {}
+        }
+
+        return res.json({
+          status: 'error',
+          message: data?.message || 'Tidak dapat memuat data dari Spreadsheet saat ini.'
+        });
+      }
+    } catch (err: any) {
+      console.warn("Proxying from Google Sheets warning in /api/load-sheets:", err?.message || err);
+      // Fallback to locally cached app_data.json
+      const cached = safeReadJSON(DATA_FILE, null);
+      if (cached) {
+        return res.json({
+          status: 'success',
+          source: 'cache',
+          siswa: cached.students || [],
+          ptk: cached.teachers || [],
+          sarpras: cached.sarpras || [],
+          rapor: cached.reports || [],
+          administrator: cached.administrators || [],
+          aplikasi: cached.aplikasiLinks || [],
+          notifikasi: cached.notifications || [],
+          permintaanAkses: cached.permintaanAkses || [],
+          berkas: cached.schoolFiles || cached.files || []
+        });
       }
       return res.json({ status: 'error', message: err?.message || 'Gagal memuat data dari Google Sheets' });
     }
@@ -185,7 +204,7 @@ async function startServer() {
   app.post("/api/sync-config", (req, res) => {
     try {
       const config = req.body;
-      fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), "utf-8");
+      safeWriteJSON(CONFIG_FILE, config);
       return res.json({ success: true, config });
     } catch (err) {
       console.error("Error writing sync_config.json:", err);
@@ -195,27 +214,15 @@ async function startServer() {
 
   // API Route: Get Shared App Data Cache
   app.get("/api/app-data", (req, res) => {
-    try {
-      if (fs.existsSync(DATA_FILE)) {
-        const data = fs.readFileSync(DATA_FILE, "utf-8");
-        return res.json(JSON.parse(data));
-      }
-    } catch (err) {
-      console.error("Error reading app_data.json:", err);
-    }
-    return res.json({});
+    const data = safeReadJSON(DATA_FILE, {});
+    return res.json(data);
   });
 
   // API Route: Save Shared App Data Cache
   app.post("/api/app-data", (req, res) => {
     try {
       const incoming = req.body || {};
-      let currentData: any = {};
-      if (fs.existsSync(DATA_FILE)) {
-        try {
-          currentData = JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
-        } catch (e) {}
-      }
+      const currentData: any = safeReadJSON(DATA_FILE, {});
 
       // Merge deletedNotifIds
       const currentDeleted: string[] = Array.isArray(currentData.deletedNotifIds) ? currentData.deletedNotifIds : [];
@@ -320,7 +327,7 @@ async function startServer() {
         schoolFiles: mergedFiles
       };
 
-      fs.writeFileSync(DATA_FILE, JSON.stringify(finalData, null, 2), "utf-8");
+      safeWriteJSON(DATA_FILE, finalData);
       return res.json({ success: true, notifications: mergedNotifs, permintaanAkses: mergedRequests, schoolFiles: mergedFiles });
     } catch (err) {
       console.error("Error writing app_data.json:", err);
