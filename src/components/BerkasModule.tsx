@@ -1059,11 +1059,11 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       const file = selectedUploadFiles[i];
       setCurrentUploadingFileName(file.name);
 
-      // Smooth progress calculation per file (0% to 100%)
+      // Realistic progress mapping based on actual steps:
       const fileProgressStep = 100 / total;
-      const startP = Math.round(i * fileProgressStep);
-      const midP = Math.round(startP + fileProgressStep * 0.4);
-      const nearEndP = Math.round(startP + fileProgressStep * 0.8);
+      const startP = Math.round(i * fileProgressStep + 5);
+      const uploadingP = Math.round(startP + fileProgressStep * 0.4);
+      const savingP = Math.round(startP + fileProgressStep * 0.85);
 
       setUploadProgress(startP);
 
@@ -1079,7 +1079,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       }
 
       if (uploadCancelledRef.current) break;
-      setUploadProgress(midP);
+      setUploadProgress(uploadingP);
 
       let driveResult: any = null;
 
@@ -1126,13 +1126,13 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
 
       if (uploadCancelledRef.current) break;
 
-      // STRICT GOOGLE DRIVE UPLOAD CHECK: No local fallback, must succeed in Google Drive
+      // STRICT GOOGLE DRIVE UPLOAD CHECK: Must succeed in Google Drive before proceeding
       if (!driveResult || !driveResult.id) {
         uploadErrors.push(`Gagal mengunggah "${file.name}" langsung ke Google Drive. Pastikan koneksi Apps Script atau Google Drive valid.`);
         continue;
       }
 
-      setUploadProgress(nearEndP);
+      setUploadProgress(savingP);
 
       let finalSize = file.size;
       if (base64Pure) {
@@ -1160,7 +1160,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       };
 
       newItems.push(fileItem);
-      setUploadProgress(Math.min(100, Math.round((i + 1) * fileProgressStep)));
+      setUploadProgress(Math.min(99, Math.round((i + 1) * fileProgressStep)));
     }
 
     if (uploadCancelledRef.current) {
@@ -1179,6 +1179,10 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       setDriveConnectError(`❌ Gagal Upload ke Google Drive:\n${uploadErrors.join('; ') || 'Berkas tidak terunggah. Pastikan URL Google Apps Script atau koneksi Google Drive sudah diatur.'}`);
       return;
     }
+
+    // Fully saved & verified in Google Drive -> hit 100% and return to file management
+    setUploadProgress(100);
+    await new Promise(r => setTimeout(r, 400));
 
     const updatedFiles = [...newItems, ...files];
     setIsUploading(false);
@@ -2678,16 +2682,15 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       {/* MODAL: MULTI-UPLOAD BERKAS */}
       {/* ========================================================================= */}
       {isUploadModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-100 space-y-4 animate-scale-up">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 pt-20 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-md w-full p-4 sm:p-5 shadow-2xl border border-slate-100 space-y-3 animate-scale-up max-h-[85vh] overflow-y-auto my-auto">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-600 flex items-center justify-center">
                   <Upload className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-slate-900 text-base">Unggah Berkas Baru ke Google Drive</h3>
-                  <p className="text-[11px] text-slate-500">Mendukung multi-upload otomatis tersimpan di Cloud Storage</p>
+                  <h3 className="font-extrabold text-slate-900 text-base">Unggah Berkas Baru ke Database</h3>
                 </div>
               </div>
               <button
@@ -2890,17 +2893,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
               )}
             </div>
 
-            {/* Description */}
-            <div className="text-xs">
-              <label className="block font-bold text-slate-700 mb-1">Keterangan / Catatan Dokumen</label>
-              <textarea
-                value={uploadDescription}
-                onChange={e => setUploadDescription(e.target.value)}
-                rows={2}
-                placeholder="Deskripsi singkat isi dokumen..."
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-sky-500 resize-none"
-              />
-            </div>
+
 
             {/* Upload Progress Bar */}
             {isUploading && (
