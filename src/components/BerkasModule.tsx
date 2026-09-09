@@ -1034,8 +1034,23 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       };
     }
 
-    // Instant save & upload without requiring external Google Drive URL or blocking connection
+    const hasAppsScriptUrl = Boolean(currentCfg?.webAppUrl && currentCfg.webAppUrl.trim().startsWith('http'));
+    const hasDriveOAuth = isGoogleDriveConnected();
+
+    if (!hasAppsScriptUrl && !hasDriveOAuth) {
+      setDriveConnectError('⚠️ Pengunggahan ke Google Drive belum terhubung! Silakan klik tombol "Hubungkan Akun Google" di atas atau atur URL Google Apps Script pada menu Pengaturan Integrasi agar berkas tersimpan langsung di Google Drive Anda.');
+      setIsUploading(false);
+      setUploadProgress(0);
+      return;
+    }
+
     const total = selectedUploadFiles.length;
+    if (total === 0) {
+      setIsUploading(false);
+      setUploadProgress(0);
+      return;
+    }
+
     const uploadErrors: string[] = [];
 
     for (let i = 0; i < total; i++) {
@@ -1044,8 +1059,13 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       const file = selectedUploadFiles[i];
       setCurrentUploadingFileName(file.name);
 
-      const baseStartProgress = Math.round((i / total) * 100);
-      setUploadProgress(Math.min(99, baseStartProgress + 10));
+      // Smooth progress calculation per file (0% to 100%)
+      const fileProgressStep = 100 / total;
+      const startP = Math.round(i * fileProgressStep);
+      const midP = Math.round(startP + fileProgressStep * 0.4);
+      const nearEndP = Math.round(startP + fileProgressStep * 0.8);
+
+      setUploadProgress(startP);
 
       let dataUrl: string | undefined = undefined;
       let base64Pure = '';
@@ -1054,25 +1074,65 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
         if (dataUrl && dataUrl.includes(',')) {
           base64Pure = dataUrl.split(',')[1];
         }
-      } catch (e) {}
+      } catch (e) {
+        // ignore
+      }
 
       if (uploadCancelledRef.current) break;
+      setUploadProgress(midP);
 
-      setUploadProgress(Math.min(99, baseStartProgress + Math.round((1 / total) * 70)));
+      let driveResult: any = null;
 
-      // Instant local/cloud file record creation without waiting for slow external Google Apps Script responses
+      // 1. Try Apps Script Upload if URL exists
+      if (hasAppsScriptUrl && base64Pure) {
+        try {
+          const appsScriptRes = await uploadFileToDriveViaAppsScript(currentCfg!, {
+            name: file.name,
+            type: file.type || 'application/octet-stream',
+            base64Data: base64Pure,
+            description: uploadDescription || `Berkas resmi ${targetCategory} diunggah.`,
+            parentFolderId: GOOGLE_DRIVE_FOLDER_ID,
+            folderName: targetCategory
+          });
+          if (appsScriptRes.success && appsScriptRes.id) {
+            driveResult = appsScriptRes;
+          }
+        } catch (asErr: any) {}
+      }
+
+      // 2. Try Google Drive OAuth API if connected
+      if (!driveResult && hasDriveOAuth) {
+        try {
+          const oAuthRes = await uploadFileToGoogleDrive(file, {
+            category: targetCategory,
+            customFolderName: folderChoiceMode === 'custom' ? customFolder.trim() : undefined,
+            description: uploadDescription,
+            parentFolderId: GOOGLE_DRIVE_FOLDER_ID
+          });
+          if (oAuthRes && oAuthRes.id) {
+            driveResult = {
+              id: oAuthRes.id,
+              name: oAuthRes.name,
+              webViewLink: oAuthRes.webViewLink,
+              folderId: oAuthRes.folderId || GOOGLE_DRIVE_FOLDER_ID,
+              folderName: oAuthRes.folderName || targetCategory
+            };
+          }
+        } catch (oErr: any) {}
+      }
+
       const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
       const isImg = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext);
 
-      const driveResult = {
-        id: 'file_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
-        name: file.name,
-        webViewLink: isImg && dataUrl ? dataUrl : '#',
-        folderId: GOOGLE_DRIVE_FOLDER_ID,
-        folderName: targetCategory
-      };
+      if (uploadCancelledRef.current) break;
 
-      setUploadProgress(Math.min(99, baseStartProgress + Math.round((1 / total) * 90)));
+      // STRICT GOOGLE DRIVE UPLOAD CHECK: No local fallback, must succeed in Google Drive
+      if (!driveResult || !driveResult.id) {
+        uploadErrors.push(`Gagal mengunggah "${file.name}" langsung ke Google Drive. Pastikan koneksi Apps Script atau Google Drive valid.`);
+        continue;
+      }
+
+      setUploadProgress(nearEndP);
 
       let finalSize = file.size;
       if (base64Pure) {
@@ -1087,19 +1147,20 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
         fileType: file.type || 'application/octet-stream',
         fileExtension: ext,
         uploadedAt: nowStr,
-        uploadedBy: currentUser?.nama || 'Administrator Sekolah',
+        uploadedBy: currentUser?.nama || driveUser?.displayName || driveUser?.email || 'Administrator Sekolah',
         uploadedByRole: currentUser?.role || 'Administrator',
-        driveFolderId: driveResult.folderId,
-        driveFileUrl: driveResult.webViewLink,
+        driveFolderId: driveResult.folderId || GOOGLE_DRIVE_FOLDER_ID,
+        driveFileUrl: driveResult.webViewLink || `https://drive.google.com/file/d/${driveResult.id}/view`,
         privacy: uploadPrivacy,
         dataUrl: isImg ? dataUrl : undefined,
-        description: `Berkas resmi tersimpan (${targetCategory}).`,
+        description: uploadDescription || `Berkas resmi tersimpan (${targetCategory}).`,
         tags: [ext.toUpperCase(), 'DapodikStorage'],
+        allowedUserIds: uploadPrivacy === 'restricted' && currentUser ? [currentUser.id] : undefined,
         allowedRoles: uploadPrivacy === 'Public' ? ['*'] : uploadPrivacy === 'Guru Only' ? ['Administrator', 'Guru', 'Operator'] : ['Administrator']
       };
 
       newItems.push(fileItem);
-      setUploadProgress(Math.round(((i + 1) / total) * 100));
+      setUploadProgress(Math.min(100, Math.round((i + 1) * fileProgressStep)));
     }
 
     if (uploadCancelledRef.current) {
@@ -2829,7 +2890,17 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
               )}
             </div>
 
-
+            {/* Description */}
+            <div className="text-xs">
+              <label className="block font-bold text-slate-700 mb-1">Keterangan / Catatan Dokumen</label>
+              <textarea
+                value={uploadDescription}
+                onChange={e => setUploadDescription(e.target.value)}
+                rows={2}
+                placeholder="Deskripsi singkat isi dokumen..."
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-sky-500 resize-none"
+              />
+            </div>
 
             {/* Upload Progress Bar */}
             {isUploading && (
