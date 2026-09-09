@@ -1057,11 +1057,14 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       if (uploadCancelledRef.current) break;
 
       const file = selectedUploadFiles[i];
-      setCurrentUploadingFileName(file.name);
+      const fileSize = file.size || 100000;
+      const sizeStr = fileSize > 1024 * 1024 ? `${(fileSize / (1024 * 1024)).toFixed(1)} MB` : `${Math.round(fileSize / 1024)} KB`;
+      
+      setCurrentUploadingFileName(`Mengunggah: ${file.name} (${sizeStr})`);
 
-      // Dynamic smooth progress: start at phase beginning
-      const baseProgress = Math.round((i / total) * 90);
-      setUploadProgress(Math.max(5, baseProgress + 10));
+      // Clean sequential progress per file (0% to 50% for preparation & compression)
+      const basePct = Math.round((i / total) * 90);
+      setUploadProgress(Math.max(5, basePct + 5));
 
       let dataUrl: string | undefined = undefined;
       let base64Pure = '';
@@ -1075,14 +1078,14 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       }
 
       if (uploadCancelledRef.current) break;
-      setUploadProgress(Math.max(20, baseProgress + 35));
+      setUploadProgress(Math.max(10, basePct + 25));
 
       let driveResult: any = null;
 
       // 1. Try Apps Script Upload if URL exists
       if (hasAppsScriptUrl && base64Pure) {
         try {
-          setUploadProgress(Math.max(40, baseProgress + 55));
+          setUploadProgress(Math.max(15, basePct + 45));
           const appsScriptRes = await uploadFileToDriveViaAppsScript(currentCfg!, {
             name: file.name,
             type: file.type || 'application/octet-stream',
@@ -1100,7 +1103,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       // 2. Try Google Drive OAuth API if connected
       if (!driveResult && hasDriveOAuth) {
         try {
-          setUploadProgress(Math.max(50, baseProgress + 65));
+          setUploadProgress(Math.max(20, basePct + 65));
           const oAuthRes = await uploadFileToGoogleDrive(file, {
             category: targetCategory,
             customFolderName: folderChoiceMode === 'custom' ? customFolder.trim() : undefined,
@@ -1123,13 +1126,13 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
 
       if (uploadCancelledRef.current) break;
 
-      // STRICT GOOGLE DRIVE UPLOAD CHECK: Must succeed in Google Drive before proceeding
+      // STRICT GOOGLE DRIVE UPLOAD CHECK
       if (!driveResult || !driveResult.id) {
         uploadErrors.push(`Gagal mengunggah "${file.name}" langsung ke Google Drive. Pastikan koneksi Apps Script atau Google Drive valid.`);
         continue;
       }
 
-      setUploadProgress(Math.max(85, baseProgress + 85));
+      setUploadProgress(Math.min(95, basePct + 85));
 
       let finalSize = file.size;
       if (base64Pure) {
@@ -1157,7 +1160,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       };
 
       newItems.push(fileItem);
-      setUploadProgress(Math.min(98, Math.round(((i + 1) / total) * 98)));
+      setUploadProgress(Math.min(98, Math.round(((i + 1) / total) * 95)));
     }
 
     if (uploadCancelledRef.current) {
@@ -1177,10 +1180,13 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       return;
     }
 
-    // Fully saved & verified in Google Drive -> hit 100% and automatically close modal
+    // Fully saved & verified in Google Drive -> 100%
     setUploadProgress(100);
-    setCurrentUploadingFileName('Berhasil disimpan di Google Drive!');
-    await new Promise(r => setTimeout(r, 600));
+    setCurrentUploadingFileName('✅ Berhasil tersimpan di Google Drive!');
+    setSyncFeedback(`Berhasil! ${newItems.length} berkas sukses masuk ke Google Drive.`);
+    setTimeout(() => setSyncFeedback(null), 4000);
+
+    await new Promise(r => setTimeout(r, 800));
 
     const updatedFiles = [...newItems, ...files];
     setIsUploading(false);
