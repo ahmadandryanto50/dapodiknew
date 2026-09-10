@@ -466,31 +466,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               </p>
             </div>
 
-            {/* Database Connection Status & Tarik Data Button */}
-            <div className="mb-5 p-3 rounded-2xl bg-sky-50/80 border border-sky-100 text-sky-900 text-xs flex items-center justify-between shadow-sm">
-              <div className="flex items-center gap-2">
-                <span className="relative flex h-2.5 w-2.5 shrink-0">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                </span>
-                <span className="text-[11px] font-semibold text-slate-700">
-                  Database
-                </span>
-              </div>
-              {onPullData && (
-                <button
-                  type="button"
-                  onClick={handleManualSync}
-                  disabled={isSyncing || isLoading}
-                  className="px-2.5 py-1 rounded-xl bg-sky-600 hover:bg-sky-500 active:scale-95 text-white font-bold text-[10px] tracking-wide flex items-center gap-1.5 transition-all cursor-pointer shadow-sm disabled:opacity-50"
-                  title="Tarik data terbaru dari Spreadsheet"
-                >
-                  <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
-                  <span>{isSyncing ? 'Menarik...' : 'Tarik Data'}</span>
-                </button>
-              )}
-            </div>
-
             {/* Sync Status Toast Notification */}
             {syncStatusMsg && (
               <div className="mb-4 p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2 font-medium animate-fade-in">

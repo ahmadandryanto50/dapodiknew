@@ -257,11 +257,20 @@ export default function App() {
   const lastLocalMutationRef = useRef<number>(0);
   const isSyncingFromServerRef = useRef<boolean>(false);
 
-  // State Initialization from LocalStorage
+  // State Initialization from LocalStorage with automatic obsolete offline cache purge
   const [activeTab, setActiveTab] = useState<ActiveTab>('home');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
   
   const [students, setStudents] = useState<Student[]>(() => {
+    // Purge obsolete mock data from localStorage if version does not match
+    const CLEAN_OFFLINE_VER = 'dapodik_offline_clean_v2026_09';
+    if (typeof window !== 'undefined' && localStorage.getItem(CLEAN_OFFLINE_VER) !== 'true') {
+      localStorage.removeItem('dapodik_students');
+      localStorage.removeItem('dapodik_teachers');
+      localStorage.removeItem('dapodik_sarpras');
+      localStorage.removeItem('dapodik_reports');
+      localStorage.setItem(CLEAN_OFFLINE_VER, 'true');
+    }
     const saved = localStorage.getItem('dapodik_students');
     const data = saved ? JSON.parse(saved) : initialStudents;
     return sanitizeStudentDates(data);
@@ -1242,6 +1251,32 @@ export default function App() {
 
   const handleManualSync = async () => {
     return handlePullFromSheets(false);
+  };
+
+  const handleClearOfflineCache = () => {
+    localStorage.removeItem('dapodik_students');
+    localStorage.removeItem('dapodik_teachers');
+    localStorage.removeItem('dapodik_sarpras');
+    localStorage.removeItem('dapodik_reports');
+    setStudents([]);
+    setTeachers([]);
+    setSarpras([]);
+    setReports([]);
+    saveCacheToServer(
+      [],
+      [],
+      [],
+      [],
+      displayConfig,
+      schoolProfile,
+      administrators,
+      notificationsRef.current,
+      aplikasiLinks,
+      getDeletedNotifIds(),
+      schoolFiles,
+      accessRequests
+    );
+    showToast('Seluruh cache data offline (Siswa, PTK, Sarpras, Rapor) berhasil dibersihkan permanen!');
   };
 
   const handleSaveAplikasiLinks = (newLinks: any[]) => {
@@ -2331,6 +2366,7 @@ export default function App() {
               onLogout={handleLogout}
               isSyncing={isSyncing}
               onSync={handleManualSync}
+              onClearOfflineCache={handleClearOfflineCache}
               onSaveSyncConfig={(newConfig) => {
                 setSyncConfig(newConfig);
                 localStorage.setItem('dapodik_sync_config', JSON.stringify(newConfig));

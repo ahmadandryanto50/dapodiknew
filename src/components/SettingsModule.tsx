@@ -75,6 +75,7 @@ interface SettingsModuleProps {
   isSyncing?: boolean;
   onSync?: () => void;
   onSaveSyncConfig?: (newConfig: SyncConfig) => void;
+  onClearOfflineCache?: () => void;
 }
 
 export const SettingsModule: React.FC<SettingsModuleProps> = ({
@@ -92,7 +93,8 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   onLogout,
   isSyncing = false,
   onSync,
-  onSaveSyncConfig
+  onSaveSyncConfig,
+  onClearOfflineCache
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'display' | 'admins' | 'school' | 'sync'>('display');
   const [activeComponentFilter, setActiveComponentFilter] = useState<'all' | '1' | '2' | '3' | '4' | '5'>(initialComponentFilter);
@@ -2516,20 +2518,38 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
 
                 {/* Action Buttons */}
                 <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-200">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (onSaveSyncConfig) {
-                        onSaveSyncConfig(localSyncConfig);
-                        setSyncSavedMessage('✅ Pengaturan Database Spreadsheet Tersimpan!');
-                        setTimeout(() => setSyncSavedMessage(null), 3000);
-                      }
-                    }}
-                    className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-2 transition-colors"
-                  >
-                    <Save className="w-4 h-4" />
-                    <span>Simpan Konfigurasi Spreadsheet</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (onSaveSyncConfig) {
+                          onSaveSyncConfig(localSyncConfig);
+                          setSyncSavedMessage('✅ Pengaturan Database Spreadsheet Tersimpan!');
+                          setTimeout(() => setSyncSavedMessage(null), 3000);
+                        }
+                      }}
+                      className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-2 transition-colors cursor-pointer"
+                    >
+                      <Save className="w-4 h-4" />
+                      <span>Simpan Konfigurasi Spreadsheet</span>
+                    </button>
+
+                    {onClearOfflineCache && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm('Apakah Anda yakin ingin membersihkan seluruh cache data offline lokal (Siswa, PTK, Sarpras, Rapor) di browser ini agar data fresh sesuai database?')) {
+                            onClearOfflineCache();
+                          }
+                        }}
+                        className="px-4 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs flex items-center gap-1.5 border border-rose-200 transition-colors cursor-pointer"
+                        title="Hapus cache offline browser"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                        <span>Bersihkan Cache Offline</span>
+                      </button>
+                    )}
+                  </div>
 
                   {onSync && (
                     <button
@@ -2538,7 +2558,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                         if (onSync) onSync();
                       }}
                       disabled={isSyncing}
-                      className={`px-5 py-2.5 rounded-xl text-white font-bold text-xs flex items-center gap-2 shadow-sm transition-all ${
+                      className={`px-5 py-2.5 rounded-xl text-white font-bold text-xs flex items-center gap-2 shadow-sm transition-all cursor-pointer ${
                         isSyncing
                           ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none'
                           : 'bg-emerald-600 hover:bg-emerald-700'
