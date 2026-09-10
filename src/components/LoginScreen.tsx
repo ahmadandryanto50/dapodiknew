@@ -57,14 +57,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const handleManualSync = async () => {
     if (!onPullData || isSyncing) return;
     setIsSyncing(true);
-    setSyncStatusMsg('Menyinkronkan dengan Database Spreadsheet...');
+    setSyncStatusMsg('Menyinkronkan dengan Cloud Database...');
     try {
       const ok = await onPullData();
       if (ok) {
-        setSyncStatusMsg('✅ Data Database Spreadsheet berhasil ditarik!');
+        setSyncStatusMsg('✅ Data Cloud Database berhasil ditarik!');
         setTimeout(() => setSyncStatusMsg(null), 3500);
       } else {
-        setSyncStatusMsg('Gagal terhubung ke Database Spreadsheet.');
+        setSyncStatusMsg('Gagal terhubung ke Cloud Database.');
         setTimeout(() => setSyncStatusMsg(null), 3500);
       }
     } catch (e) {

@@ -245,7 +245,9 @@ async function startServer() {
 
       // Merge deletedPermintaanAksesIds
       const currentDeletedReqs: string[] = Array.isArray(currentData.deletedPermintaanAksesIds) ? currentData.deletedPermintaanAksesIds : [];
-      const incomingDeletedReqs: string[] = Array.isArray(incoming.deletedPermintaanAksesIds) ? incoming.deletedPermintaanAksesIds : [];
+      const incomingDeletedReqs: string[] = Array.isArray(incoming.deletedPermintaanAksesIds)
+        ? incoming.deletedPermintaanAksesIds
+        : (incoming.deletedPermintaanAksesId ? [incoming.deletedPermintaanAksesId] : []);
       const mergedDeletedReqs = Array.from(new Set([...currentDeletedReqs, ...incomingDeletedReqs]));
 
       // Merge deletedFileIds
@@ -255,93 +257,45 @@ async function startServer() {
         : (incoming.deletedFileId ? [incoming.deletedFileId] : []);
       const mergedDeletedFiles = Array.from(new Set([...currentDeletedFiles, ...incomingDeletedFiles]));
 
-      // Merge schoolFiles carefully so no file is lost across devices or background syncs
-      const currentFilesList: any[] = Array.isArray(currentData.schoolFiles) ? currentData.schoolFiles : (Array.isArray(currentData.files) ? currentData.files : []);
-      const incomingFilesList: any[] = Array.isArray(incoming.schoolFiles) ? incoming.schoolFiles : (Array.isArray(incoming.files) ? incoming.files : []);
-
-      const fileMap = new Map<string, any>();
+      // Handle schoolFiles
+      let mergedFiles: any[] = [];
       const delFileSet = new Set<string>(mergedDeletedFiles);
-
-      currentFilesList.forEach((f: any) => {
-        if (f && f.id && !delFileSet.has(String(f.id))) {
-          fileMap.set(String(f.id), f);
-        }
-      });
-
-      incomingFilesList.forEach((f: any) => {
-        if (f && f.id && !delFileSet.has(String(f.id))) {
-          if (fileMap.has(String(f.id))) {
-            const exist = fileMap.get(String(f.id));
-            fileMap.set(String(f.id), { ...exist, ...f, dataUrl: f.dataUrl || exist.dataUrl });
-          } else {
-            fileMap.set(String(f.id), f);
-          }
-        }
-      });
-
-      let mergedFiles = Array.from(fileMap.values());
+      if (Array.isArray(incoming.schoolFiles)) {
+        mergedFiles = incoming.schoolFiles.filter((f: any) => f && f.id && !delFileSet.has(String(f.id)));
+      } else {
+        const currentFilesList: any[] = Array.isArray(currentData.schoolFiles) ? currentData.schoolFiles : (Array.isArray(currentData.files) ? currentData.files : []);
+        mergedFiles = currentFilesList.filter((f: any) => f && f.id && !delFileSet.has(String(f.id)));
+      }
       mergedFiles.sort((a: any, b: any) => {
         const timeA = a.uploadedAt ? new Date(a.uploadedAt).getTime() : 0;
         const timeB = b.uploadedAt ? new Date(b.uploadedAt).getTime() : 0;
         return timeB - timeA;
       });
 
-      // Merge notifications carefully so no notification is ever lost by cross-device race conditions
-      const currentNotifs: any[] = Array.isArray(currentData.notifications) ? currentData.notifications : [];
-      const incomingNotifs: any[] = Array.isArray(incoming.notifications) ? incoming.notifications : [];
-      
-      const notifMap = new Map<string, any>();
+      // Handle notifications
+      let mergedNotifs: any[] = [];
       const deletedSet = new Set<string>(['notif-1', 'notif-2', 'notif-3', ...mergedDeleted]);
-
-      // Add current notifs
-      currentNotifs.forEach((n: any) => {
-        if (n && n.id && !deletedSet.has(String(n.id))) {
-          notifMap.set(String(n.id), n);
-        }
-      });
-      // Add incoming notifs (if existing, update read status or properties)
-      incomingNotifs.forEach((n: any) => {
-        if (n && n.id && !deletedSet.has(String(n.id))) {
-          if (notifMap.has(String(n.id))) {
-            const exist = notifMap.get(String(n.id));
-            notifMap.set(String(n.id), { ...exist, ...n, read: Boolean(exist.read || n.read) });
-          } else {
-            notifMap.set(String(n.id), n);
-          }
-        }
-      });
-
-      const mergedNotifs = Array.from(notifMap.values());
+      if (Array.isArray(incoming.notifications)) {
+        mergedNotifs = incoming.notifications.filter((n: any) => n && n.id && !deletedSet.has(String(n.id)));
+      } else {
+        const currentNotifs: any[] = Array.isArray(currentData.notifications) ? currentData.notifications : [];
+        mergedNotifs = currentNotifs.filter((n: any) => n && n.id && !deletedSet.has(String(n.id)));
+      }
       mergedNotifs.sort((a: any, b: any) => {
         const timeA = a.time ? new Date(a.time).getTime() : 0;
         const timeB = b.time ? new Date(b.time).getTime() : 0;
         return timeB - timeA;
       });
 
-      // Merge permintaanAkses
-      const currentRequests: any[] = Array.isArray(currentData.permintaanAkses) ? currentData.permintaanAkses : [];
-      const incomingRequests: any[] = Array.isArray(incoming.permintaanAkses) ? incoming.permintaanAkses : [];
-      
-      const reqMap = new Map<string, any>();
+      // Handle permintaanAkses
+      let mergedRequests: any[] = [];
       const deletedReqSet = new Set<string>(mergedDeletedReqs);
-
-      currentRequests.forEach((r: any) => {
-        if (r && r.id && !deletedReqSet.has(String(r.id))) {
-          reqMap.set(String(r.id), r);
-        }
-      });
-      incomingRequests.forEach((r: any) => {
-        if (r && r.id && !deletedReqSet.has(String(r.id))) {
-          if (reqMap.has(String(r.id))) {
-            const exist = reqMap.get(String(r.id));
-            reqMap.set(String(r.id), { ...exist, ...r });
-          } else {
-            reqMap.set(String(r.id), r);
-          }
-        }
-      });
-
-      const mergedRequests = Array.from(reqMap.values());
+      if (Array.isArray(incoming.permintaanAkses)) {
+        mergedRequests = incoming.permintaanAkses.filter((r: any) => r && r.id && !deletedReqSet.has(String(r.id)));
+      } else {
+        const currentRequests: any[] = Array.isArray(currentData.permintaanAkses) ? currentData.permintaanAkses : [];
+        mergedRequests = currentRequests.filter((r: any) => r && r.id && !deletedReqSet.has(String(r.id)));
+      }
       mergedRequests.sort((a: any, b: any) => {
         const timeA = a.requestedAt ? new Date(a.requestedAt).getTime() : 0;
         const timeB = b.requestedAt ? new Date(b.requestedAt).getTime() : 0;

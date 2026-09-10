@@ -399,19 +399,19 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
 
       {/* Modal Add / Edit */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-lg shadow-2xl p-6">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-200">
-              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <Building2 className="w-5 h-5 text-emerald-600" />
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 pt-16 sm:pt-6 bg-slate-900/60 backdrop-blur-sm animate-fadeIn overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-lg shadow-2xl p-4 sm:p-5 my-auto max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <h2 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-emerald-600 shrink-0" />
                 <span>{editingItem ? 'Edit Sarana Prasarana' : 'Tambah Sarpras Baru'}</span>
               </h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100">
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100 transition-colors shrink-0">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="mt-4 space-y-4 text-xs">
+            <form onSubmit={handleSubmit} className="mt-3 space-y-3 text-xs">
               <div>
                 <label className="block text-slate-700 font-medium mb-1">Kode Sarpras / Aset *</label>
                 <input
@@ -419,7 +419,7 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
                   required
                   value={formData.kodeBarang}
                   onChange={(e) => setFormData({ ...formData, kodeBarang: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none font-mono"
+                  className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none font-mono"
                   placeholder="Contoh: RK-01, LAB-IPA, PROJ-01"
                 />
               </div>
@@ -431,7 +431,7 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
                   required
                   value={formData.namaBarang}
                   onChange={(e) => setFormData({ ...formData, namaBarang: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none"
+                  className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none"
                   placeholder="Contoh: Ruang Kelas 7B, Proyektor EPSON, Set Meja Kursi"
                 />
               </div>
@@ -442,7 +442,7 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
                   <select
                     value={formData.kategori}
                     onChange={(e) => setFormData({ ...formData, kategori: e.target.value as any })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none"
+                    className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none"
                   >
                     <option value="Ruang Teori/Kelas">Ruang Teori/Kelas</option>
                     <option value="Ruang Laboratorium">Ruang Laboratorium</option>
@@ -458,7 +458,7 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
                   <select
                     value={formData.kondisi}
                     onChange={(e) => setFormData({ ...formData, kondisi: e.target.value as any })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none"
+                    className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none"
                   >
                     <option value="Baik">Baik (Layak 100%)</option>
                     <option value="Rusak Ringan">Rusak Ringan (&lt;30%)</option>
@@ -476,7 +476,7 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
                     min="1"
                     value={formData.jumlah}
                     onChange={(e) => setFormData({ ...formData, jumlah: parseInt(e.target.value) || 1 })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none"
+                    className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none"
                   />
                 </div>
 
@@ -486,7 +486,7 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
                     type="text"
                     value={formData.satuan}
                     onChange={(e) => setFormData({ ...formData, satuan: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none"
+                    className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none"
                     placeholder="Unit / Set / Ruang"
                   />
                 </div>
@@ -499,7 +499,7 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
                     type="text"
                     value={formData.letakRuang}
                     onChange={(e) => setFormData({ ...formData, letakRuang: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none"
+                    className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none"
                     placeholder="Gedung A Lantai 1"
                   />
                 </div>
@@ -510,23 +510,23 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
                     type="text"
                     value={formData.tahunPengadaan}
                     onChange={(e) => setFormData({ ...formData, tahunPengadaan: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none font-mono"
+                    className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none font-mono"
                     placeholder="2023"
                   />
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium transition-colors"
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium transition-colors cursor-pointer"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm transition-colors"
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm transition-colors cursor-pointer"
                 >
                   {editingItem ? 'Simpan Perubahan' : 'Tambah Sarpras'}
                 </button>
@@ -538,8 +538,8 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
 
       {/* Modal Konfirmasi Hapus Sarpras */}
       {deletingSarpras && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl p-6 text-center space-y-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 pt-16 sm:pt-6 bg-slate-900/60 backdrop-blur-sm animate-fadeIn overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl p-6 text-center space-y-4 my-auto max-h-[85vh] overflow-y-auto">
             <div className="w-14 h-14 rounded-full bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center mx-auto">
               <Trash2 className="w-7 h-7" />
             </div>
@@ -556,14 +556,14 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
               <button
                 type="button"
                 onClick={() => setDeletingSarpras(null)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors"
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
               >
                 Batal
               </button>
               <button
                 type="button"
                 onClick={confirmDeleteSarpras}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 transition-colors shadow-sm flex items-center gap-2"
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 transition-colors shadow-sm flex items-center gap-2 cursor-pointer"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 Ya, Hapus Sarpras

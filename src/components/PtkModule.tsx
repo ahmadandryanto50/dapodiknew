@@ -33,6 +33,7 @@ import { exportToCSV } from '../services/googleSheetsService';
 import { 
   downloadPtkExcelTemplate, 
   downloadPtkCSVTemplate, 
+  exportPtkExcelData,
   parsePtkImportFile, 
   DAPODIK_PTK_HEADERS 
 } from '../utils/ptkTemplateHelper';
@@ -61,6 +62,7 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTeacher, setEditingTeacher] = useState<TeacherStaff | null>(null);
 
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [isTemplateMenuOpen, setIsTemplateMenuOpen] = useState(false);
   const [isImportPreviewOpen, setIsImportPreviewOpen] = useState(false);
   const [importedPreviewTeachers, setImportedPreviewTeachers] = useState<TeacherStaff[]>([]);
@@ -173,6 +175,7 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
                         (filterStatus === 'Guru Honor Sekolah' && (t.statusKepegawaian === 'Guru Honor Sekolah' || (statusLower.includes('honor') && isPendidik(t))));
     const matchJenis = filterJenis === 'ALL' || 
                        t.jenisPtk === filterJenis ||
+                       (filterJenis === 'Guru' && (t.jenisPtk === 'Guru' || t.jenisPtk?.toLowerCase().includes('guru') || isPendidik(t))) ||
                        (filterJenis === 'Tenaga Kependidikan' && isTenagaKependidikan(t)) ||
                        (filterJenis === 'Pendidik' && isPendidik(t));
     return matchSearch && matchStatus && matchJenis;
@@ -478,14 +481,75 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
             <span>Impor Data PTK</span>
           </button>
 
-          {/* Ekspor Data */}
-          <button
-            onClick={() => exportToCSV(teachers, 'DAPODIK_DATA_PTK_LENGKAP')}
-            className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm shadow-emerald-500/20 cursor-pointer"
-          >
-            <Download className="w-4 h-4 text-white" />
-            <span>Ekspor Data</span>
-          </button>
+          {/* Ekspor Data Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
+              className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm shadow-emerald-500/20 cursor-pointer"
+            >
+              <Download className="w-4 h-4 text-white" />
+              <span>Ekspor Data</span>
+              <ChevronDown className="w-3.5 h-3.5 text-white" />
+            </button>
+
+            {isExportMenuOpen && (
+              <div 
+                className="absolute right-0 mt-2 w-72 bg-white border border-slate-200 rounded-xl shadow-xl p-2 z-50 space-y-1"
+                onMouseLeave={() => setIsExportMenuOpen(false)}
+              >
+                <div className="px-3 py-1.5 text-[11px] font-bold text-slate-400 border-b border-slate-100">
+                  Pilih Data PTK Yang Ingin Diekspor:
+                </div>
+                
+                {/* 1. Guru / Pendidik */}
+                <button
+                  onClick={() => {
+                    const guruList = teachers.filter(t => isPendidik(t) || t.jenisPtk?.toLowerCase().includes('guru'));
+                    exportPtkExcelData(guruList, `DAPODIK_DATA_GURU_${new Date().toISOString().split('T')[0]}`);
+                    setIsExportMenuOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-emerald-50 text-emerald-700 text-xs font-medium flex items-center gap-2 transition-colors cursor-pointer"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <div>
+                    <div className="font-bold text-slate-900 text-[11px]">Guru / Pendidik</div>
+                    <div className="text-[10px] text-slate-500">Hanya data guru & tenaga pendidik</div>
+                  </div>
+                </button>
+
+                {/* 2. Tenaga Kependidikan */}
+                <button
+                  onClick={() => {
+                    const tendikList = teachers.filter(t => isTenagaKependidikan(t));
+                    exportPtkExcelData(tendikList, `DAPODIK_DATA_TENDIK_${new Date().toISOString().split('T')[0]}`);
+                    setIsExportMenuOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-amber-50 text-amber-700 text-xs font-medium flex items-center gap-2 transition-colors cursor-pointer"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-amber-600 shrink-0" />
+                  <div>
+                    <div className="font-bold text-slate-900 text-[11px]">Tenaga Kependidikan</div>
+                    <div className="text-[10px] text-slate-500">Hanya data TU, Laboran, Pustakawan, dll.</div>
+                  </div>
+                </button>
+
+                {/* 3. Semua Data PTK */}
+                <button
+                  onClick={() => {
+                    exportPtkExcelData(teachers, `DAPODIK_DATA_PTK_LENGKAP_${new Date().toISOString().split('T')[0]}`);
+                    setIsExportMenuOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-sky-50 text-sky-700 text-xs font-medium flex items-center gap-2 transition-colors cursor-pointer"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-sky-600 shrink-0" />
+                  <div>
+                    <div className="font-bold text-slate-900 text-[11px]">Semua Data PTK</div>
+                    <div className="text-[10px] text-slate-500">Seluruh data Guru & Tenaga Kependidikan</div>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* Tambah PTK */}
           <button
@@ -552,6 +616,7 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
             <option value="ALL">Semua Jenis Tugas PTK</option>
             <option value="Pendidik">-- Semua Guru / Pendidik ({totalGuru}) --</option>
             <option value="Tenaga Kependidikan">-- Semua Tenaga Kependidikan ({totalTendik}) --</option>
+            <option value="Guru">Guru</option>
             <option value="Guru Mapel">Guru Mapel</option>
             <option value="Guru BK">Guru BK (Bimbingan Konseling)</option>
             <option value="Guru Kelas">Guru Kelas</option>
@@ -1272,6 +1337,7 @@ export const PtkModule: React.FC<PtkModuleProps> = ({
                         onChange={(e) => setFormData({ ...formData, jenisPtk: e.target.value as any })}
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-amber-500 focus:bg-white focus:outline-none"
                       >
+                        <option value="Guru">Guru (Pendidik)</option>
                         <option value="Guru Mapel">Guru Mapel (Pendidik)</option>
                         <option value="Guru BK">Guru BK / Bimbingan Konseling (Pendidik)</option>
                         <option value="Guru Kelas">Guru Kelas (Pendidik)</option>

@@ -598,22 +598,28 @@ async function callProxyOrDirectPost(webAppUrl: string, payload: any): Promise<{
 }
 
 function parseSheetsResult(result: any) {
+  const rawSiswa = Array.isArray(result.siswa) ? result.siswa : [];
+  const rawSiswaKeluar = Array.isArray(result.siswaKeluar) ? result.siswaKeluar : [];
+  const rawAlumni = Array.isArray(result.alumni) ? result.alumni : [];
+
+  const combinedStudents = [
+    ...rawSiswa.map((s: any) => ({ ...s, status: s.status || 'Aktif' })),
+    ...rawSiswaKeluar.map((sk: any) => ({ ...sk, status: sk.status || 'Mutasi' })).filter((sk: any) => !rawSiswa.some((s: any) => s.id === sk.id)),
+    ...rawAlumni.map((al: any) => ({ ...al, status: al.status || 'Lulus' })).filter((al: any) => !rawSiswa.some((s: any) => s.id === al.id) && !rawSiswaKeluar.some((sk: any) => sk.id === al.id))
+  ];
+
   return {
     success: true,
     message: 'Data berhasil ditarik dari Database!',
     data: {
-      siswa: [
-        ...(result.siswa || []),
-        ...(result.siswaKeluar || []).filter((sk: any) => !(result.siswa || []).some((s: any) => s.id === sk.id)),
-        ...(result.alumni || []).map((al: any) => ({ ...al, status: al.status || 'Lulus' })).filter((al: any) => !(result.siswa || []).some((s: any) => s.id === al.id) && !(result.siswaKeluar || []).some((sk: any) => sk.id === al.id))
-      ],
-      ptk: result.ptk || [],
-      sarpras: result.sarpras || [],
-      rapor: result.rapor || [],
-      pengaturan: result.pengaturan || [],
-      administrator: result.administrator || [],
-      profilSekolah: result.profilSekolah || [],
-      aplikasi: result.aplikasi || [],
+      siswa: combinedStudents,
+      ptk: Array.isArray(result.ptk) ? result.ptk : [],
+      sarpras: Array.isArray(result.sarpras) ? result.sarpras : [],
+      rapor: Array.isArray(result.rapor) ? result.rapor : [],
+      pengaturan: Array.isArray(result.pengaturan) ? result.pengaturan : [],
+      administrator: Array.isArray(result.administrator) ? result.administrator : [],
+      profilSekolah: Array.isArray(result.profilSekolah) ? result.profilSekolah : [],
+      aplikasi: Array.isArray(result.aplikasi) ? result.aplikasi : [],
       permintaanAkses: (result.permintaanAkses || []).map((p: any, idx: number) => {
         const id = String(p.id || `req-pulled-${Date.now()}-${idx}`);
         const fileId = String(p.fileId || '');
@@ -757,42 +763,53 @@ export async function syncToGoogleSheets(
       };
     });
 
+    const isKeluar = (status?: string) => {
+      if (!status) return false;
+      const s = String(status).trim().toLowerCase();
+      return ['mutasi', 'putus sekolah', 'wafat/meninggal', 'dikeluarkan', 'mengundurkan diri', 'keluar'].includes(s);
+    };
+
+    const isLulus = (status?: string, tahunLulus?: string) => {
+      if (tahunLulus && String(tahunLulus).trim().length > 0) return true;
+      if (!status) return false;
+      const s = String(status).trim().toLowerCase();
+      return s === 'lulus' || s === 'alumni';
+    };
+
+    const siswaAktif = (data.siswa || []).filter(s => !isKeluar(s.status) && !isLulus(s.status, s.tahunLulus));
+    const siswaKeluar = (data.siswa || []).filter(s => isKeluar(s.status));
+    const siswaAlumni = (data.siswa || []).filter(s => isLulus(s.status, s.tahunLulus));
+
     const payload = {
       type: 'SYNC_ALL',
-      siswa: data.siswa
-        .filter(s => !s.status || s.status === 'Aktif')
-        .map(s => {
-          const { alasanKeluar, ...rest } = s;
-          return {
-            ...rest,
-            alasanKeluar: alasanKeluar || '',
-            tahunLulus: s.tahunLulus || ''
-          };
-        }),
-      siswaKeluar: data.siswa
-        .filter(s => s.status && s.status !== 'Aktif' && s.status !== 'Lulus')
-        .map(s => {
-          const { alasanKeluar, ...rest } = s;
-          return {
-            ...rest,
-            alasanKeluar: alasanKeluar || ''
-          };
-        }),
-      alumni: data.siswa
-        .filter(s => s.status === 'Lulus')
-        .map(s => {
-          const { alasanKeluar, ...rest } = s;
-          return {
-            ...rest,
-            status: 'Lulus',
-            alasanKeluar: alasanKeluar || 'Lulus',
-            tahunLulus: s.tahunLulus || '2024/2025',
-            noSeriIjazah: s.noSeriIjazah || ''
-          };
-        }),
-      ptk: data.ptk,
-      sarpras: data.sarpras,
-      rapor: data.rapor,
+      siswa: siswaAktif.map(s => {
+        const { alasanKeluar, ...rest } = s;
+        return {
+          ...rest,
+          alasanKeluar: alasanKeluar || '',
+          tahunLulus: s.tahunLulus || ''
+        };
+      }),
+      siswaKeluar: siswaKeluar.map(s => {
+        const { alasanKeluar, ...rest } = s;
+        return {
+          ...rest,
+          alasanKeluar: alasanKeluar || s.status || 'Mutasi'
+        };
+      }),
+      alumni: siswaAlumni.map(s => {
+        const { alasanKeluar, ...rest } = s;
+        return {
+          ...rest,
+          status: 'Lulus',
+          alasanKeluar: alasanKeluar || 'Lulus',
+          tahunLulus: s.tahunLulus || '2024/2025',
+          noSeriIjazah: s.noSeriIjazah || ''
+        };
+      }),
+      ptk: data.ptk || [],
+      sarpras: data.sarpras || [],
+      rapor: data.rapor || [],
       pengaturan: data.pengaturan || [],
       administrator: data.administrator || [],
       profilSekolah: data.profilSekolah || [],

@@ -41,6 +41,7 @@ interface AplikasiModuleProps {
   isSyncing?: boolean;
   aplikasiLinks?: any[];
   setAplikasiLinks?: React.Dispatch<React.SetStateAction<any[]>>;
+  onSaveLinks?: (newLinks: AplikasiLink[]) => void;
 }
 
 // Map string icon name to Lucide Icon component
@@ -126,7 +127,8 @@ export const AplikasiModule: React.FC<AplikasiModuleProps> = ({
   onSync,
   isSyncing = false,
   aplikasiLinks,
-  setAplikasiLinks
+  setAplikasiLinks,
+  onSaveLinks
 }) => {
   const [links, setLinks] = useState<AplikasiLink[]>(() => {
     let list: AplikasiLink[] = [];
@@ -233,10 +235,14 @@ export const AplikasiModule: React.FC<AplikasiModuleProps> = ({
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 3000);
     
-    // Instantly trigger sync
-    setTimeout(() => {
-      onSync();
-    }, 500);
+    // Call parent onSaveLinks handler if provided (for instant Firestore & Server sync)
+    if (onSaveLinks) {
+      onSaveLinks(editLinks);
+    } else {
+      setTimeout(() => {
+        onSync();
+      }, 500);
+    }
   };
 
   // Reset to Default Link Config

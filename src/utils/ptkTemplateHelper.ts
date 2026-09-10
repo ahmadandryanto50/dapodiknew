@@ -189,6 +189,84 @@ export function downloadPtkExcelTemplate() {
 }
 
 /**
+ * Exports all PTK data to clean Excel (.xlsx) file matching the exact 51-column Dapodik template format
+ */
+export function exportPtkExcelData(teachers: TeacherStaff[], fileName = 'DAPODIK_DATA_PTK_LENGKAP_2026') {
+  const rows = teachers.map(t => [
+    t.nama || '',
+    t.nuptk || '',
+    t.jenisKelamin || '',
+    t.tempatLahir || '',
+    t.tanggalLahir || '',
+    t.nip || '',
+    t.statusKepegawaian || '',
+    t.jenisPtk || '',
+    t.agama || '',
+    t.alamatJalan || '',
+    t.rt || '',
+    t.rw || '',
+    t.namaDusun || '',
+    t.desaKelurahan || '',
+    t.kecamatan || '',
+    t.kodePos || '',
+    t.telepon || '',
+    t.noHp || '',
+    t.email || '',
+    t.tugasTambahan || '',
+    t.skCpns || '',
+    t.tanggalCpns || '',
+    t.skPengangkatan || '',
+    t.tmtPengangkatan || '',
+    t.lembagaPengangkatan || '',
+    t.pangkatGolongan || '',
+    t.sumberGaji || '',
+    t.namaIbuKandung || '',
+    t.statusPerkawinan || '',
+    t.namaSuamiIstri || '',
+    t.nipSuamiIstri || '',
+    t.pekerjaanSuamiIstri || '',
+    t.tmtPns || '',
+    t.sudahLisensiKepalaSekolah || '',
+    t.pernahDiklatKepengawasan || '',
+    t.keahlianBraille || '',
+    t.keahlianBahasaIsyarat || '',
+    t.npwp || '',
+    t.namaWajibPajak || '',
+    t.kewarganegaraan || '',
+    t.bank || '',
+    t.nomorRekeningBank || '',
+    t.rekeningAtasNama || '',
+    t.nik || '',
+    t.noKk || '',
+    t.karpeg || '',
+    t.karisKarsu || '',
+    t.lintang || '',
+    t.bujur || '',
+    t.nuks || '',
+    t.statusSertifikasi || t.sertifikasi || ''
+  ]);
+
+  const wsData = [DAPODIK_PTK_HEADERS, ...rows];
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+  // Set column widths dynamically
+  const colWidths = DAPODIK_PTK_HEADERS.map((h, i) => {
+    let maxLen = h.length;
+    rows.forEach(r => {
+      const valStr = String(r[i] || '');
+      if (valStr.length > maxLen) maxLen = valStr.length;
+    });
+    return { wch: Math.min(Math.max(maxLen + 3, 12), 40) };
+  });
+  ws['!cols'] = colWidths;
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Data_PTK_Dapodik');
+
+  XLSX.writeFile(wb, `${fileName}.xlsx`);
+}
+
+/**
  * Downloads Dapodik PTK CSV (.csv) template with sample data (51 Columns)
  */
 export function downloadPtkCSVTemplate() {

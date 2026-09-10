@@ -2420,59 +2420,21 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
 
         {activeSubTab === 'sync' && (
           <div className="space-y-6">
-            {/* Firebase Real-time Firestore Banner */}
-            <div className="bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-slate-900/5 border border-amber-300/60 p-6 rounded-2xl shadow-sm space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-amber-200/80">
-                <div className="flex items-center gap-2.5 text-slate-900 font-bold text-base">
-                  <span className="text-xl">🔥</span>
-                  <span>Database Utama: Google Firebase Firestore (Real-Time Live Sync)</span>
-                </div>
-                <span className="px-3.5 py-1.5 rounded-full bg-emerald-500 text-white text-xs font-bold shadow-xs flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
-                  🟢 Online & Tersinkron Real-time Multi-Perangkat
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                <div className="p-3.5 rounded-xl bg-white border border-amber-200/60 shadow-xs space-y-1">
-                  <span className="text-slate-500 font-medium">Google Firebase Project ID:</span>
-                  <p className="font-mono font-bold text-slate-900 text-xs truncate">gen-lang-client-0948533779</p>
-                </div>
-
-                <div className="p-3.5 rounded-xl bg-white border border-amber-200/60 shadow-xs space-y-1">
-                  <span className="text-slate-500 font-medium">Firestore Database ID:</span>
-                  <p className="font-mono font-bold text-amber-800 text-xs truncate">ai-studio-dapodikkemendikb-963b7972</p>
-                </div>
-
-                <div className="p-3.5 rounded-xl bg-white border border-amber-200/60 shadow-xs space-y-1">
-                  <span className="text-slate-500 font-medium">Status Koneksi Database:</span>
-                  <p className="font-bold text-emerald-700 text-xs flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                    Terhubung & Siap Digunakan
-                  </p>
-                </div>
-              </div>
-
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Seluruh data sekolah (<strong>Profil Sekolah, Pengaturan, Data Siswa, PTK/Guru, Sarpras, Rapor, Berkas, dan Administrator</strong>) tersimpan secara permanen dan tersinkronisasi detik itu juga ke <strong>Firebase Cloud Database</strong>. Jika Anda membuka aplikasi di HP, Laptop, atau Browser baru, data akan langsung muncul persis sama secara otomatis tanpa perlu muat ulang!
-              </p>
-            </div>
-
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               <div className="lg:col-span-8 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-5">
                 <div className="flex items-center justify-between pb-3 border-b border-slate-200">
                   <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
                     <Database className="w-5 h-5 text-emerald-600" />
-                    <span>Database Google Sheets & Apps Script Sync (Backup)</span>
+                    <span>Database Google Sheets & Apps Script Sync (2-Way Real-Time)</span>
                   </div>
                   <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-200 flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    Google Spreadsheet Endpoint (Aktif)
+                    Google Spreadsheet (Aktif & Sinkron)
                   </span>
                 </div>
 
                 <p className="text-xs text-slate-600 leading-relaxed">
-                  Selain tersimpan di Firebase Firestore, data aplikasi Anda juga dapat tersinkronkan ke <strong>Google Spreadsheet</strong> sebagai cadangan berkala atau integrasi Excel.
+                  Seluruh data sekolah (<strong>Data Siswa, PTK/Guru, Sarpras, Rapor, Berkas, Permintaan Akses, Notifikasi, Administrator, Profil Sekolah, Pengaturan, dan Aplikasi</strong>) terhubung dan tersinkronisasi 2 arah secara otomatis ke <strong>Google Spreadsheet</strong>.
                 </p>
 
                 {/* Status Banner */}

@@ -290,41 +290,55 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
         if (cacheRes.ok) {
           const cacheData = await cacheRes.json();
           if (Array.isArray(cacheData.permintaanAkses)) {
-            setAccessRequests(prev => {
-              const map = new Map<string, FileAccessRequest>();
-              if (Array.isArray(prev)) {
-                prev.forEach(req => {
-                  if (req && req.id) map.set(req.id, req);
-                });
-              }
-              cacheData.permintaanAkses.forEach((req: FileAccessRequest) => {
-                if (req && req.id) {
-                  const existing = map.get(req.id);
-                  if (existing) {
-                    map.set(req.id, { ...existing, ...req });
-                  } else {
-                    map.set(req.id, req);
-                  }
-                }
-              });
-              const merged = Array.from(map.values()).sort((a, b) => {
-                const timeA = a.requestedAt ? new Date(a.requestedAt).getTime() : 0;
-                const timeB = b.requestedAt ? new Date(b.requestedAt).getTime() : 0;
-                return timeB - timeA;
-              });
+            let delIds: string[] = [];
+            try {
+              delIds = JSON.parse(localStorage.getItem('dapodik_deleted_request_ids') || '[]');
+            } catch (e) {}
+            const serverDelIds: string[] = Array.isArray(cacheData.deletedPermintaanAksesIds) ? cacheData.deletedPermintaanAksesIds : [];
+            const allDelIds = new Set<string>([...delIds, ...serverDelIds]);
 
-              if (JSON.stringify(prev) !== JSON.stringify(merged)) {
-                localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(merged));
-                return merged;
+            const cleanRequests = cacheData.permintaanAkses.filter(
+              (r: FileAccessRequest) => r && r.id && !allDelIds.has(String(r.id))
+            );
+            cleanRequests.sort((a: any, b: any) => {
+              const timeA = a.requestedAt ? new Date(a.requestedAt).getTime() : 0;
+              const timeB = b.requestedAt ? new Date(b.requestedAt).getTime() : 0;
+              return timeB - timeA;
+            });
+
+            setAccessRequests(prev => {
+              if (JSON.stringify(prev) !== JSON.stringify(cleanRequests)) {
+                localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(cleanRequests));
+                return cleanRequests;
               }
               return prev;
             });
             updatedAny = true;
           }
-          if (Array.isArray(cacheData.schoolFiles) && cacheData.schoolFiles.length > 0) {
-            const merged = mergeFilesWithLocal(cacheData.schoolFiles);
-            setFiles(merged);
-            localStorage.setItem('dapodik_school_files_v3', JSON.stringify(merged));
+          if (Array.isArray(cacheData.schoolFiles)) {
+            let delFileIds: string[] = [];
+            try {
+              delFileIds = JSON.parse(localStorage.getItem('dapodik_deleted_file_ids') || '[]');
+            } catch (e) {}
+            const serverDelFileIds: string[] = Array.isArray(cacheData.deletedFileIds) ? cacheData.deletedFileIds : [];
+            const allDelFiles = new Set<string>([...delFileIds, ...serverDelFileIds]);
+
+            const cleanFiles = cacheData.schoolFiles.filter(
+              (f: SchoolFileItem) => f && f.id && !allDelFiles.has(String(f.id))
+            );
+            cleanFiles.sort((a: any, b: any) => {
+              const timeA = a.uploadedAt ? new Date(a.uploadedAt).getTime() : 0;
+              const timeB = b.uploadedAt ? new Date(b.uploadedAt).getTime() : 0;
+              return timeB - timeA;
+            });
+
+            setFiles(prev => {
+              if (JSON.stringify(prev) !== JSON.stringify(cleanFiles)) {
+                localStorage.setItem('dapodik_school_files_v3', JSON.stringify(cleanFiles));
+                return cleanFiles;
+              }
+              return prev;
+            });
             updatedAny = true;
           }
         }
@@ -351,7 +365,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
 
     const intervalId = setInterval(() => {
       handlePullRequestsFromCloud(true);
-    }, 4000);
+    }, 5000);
 
     const onFocus = () => {
       handlePullRequestsFromCloud(true);
@@ -370,6 +384,15 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
     deletedId?: string,
     successNote?: string
   ) => {
+    if (deletedId) {
+      try {
+        const savedDel = localStorage.getItem('dapodik_deleted_request_ids');
+        const delList: string[] = savedDel ? JSON.parse(savedDel) : [];
+        if (!delList.includes(deletedId)) delList.push(deletedId);
+        localStorage.setItem('dapodik_deleted_request_ids', JSON.stringify(delList));
+      } catch (e) {}
+    }
+
     setLocalAccessRequests(updatedRequests);
     if (propSetAccessRequests) {
       propSetAccessRequests(updatedRequests);
@@ -384,7 +407,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         permintaanAkses: updatedRequests,
-        ...(deletedId ? { deletedPermintaanAksesIds: [deletedId] } : {})
+        ...(deletedId ? { deletedPermintaanAksesIds: [deletedId], deletedPermintaanAksesId: deletedId } : {})
       })
     }).catch(() => {});
 
@@ -1663,15 +1686,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
 
           {/* Action Buttons */}
           <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto shrink-0">
-            {activeTab === 'folders' && isSchoolStaff && (
-              <button
-                onClick={handleCreateFolderPrompt}
-                className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-sky-400 to-sky-500 hover:from-sky-300 hover:to-sky-400 text-slate-900 font-extrabold text-xs transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-sky-500/25 hover:scale-[1.02]"
-              >
-                <FolderPlus className="w-4 h-4 text-slate-900" />
-                <span>Buat Folder Baru</span>
-              </button>
-            )}
+
             <button
               onClick={() => setIsUploadModalOpen(true)}
               className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-900 font-extrabold text-xs transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-amber-500/25 hover:scale-[1.02]"
@@ -1761,6 +1776,96 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
             </div>
           </div>
         )}
+      </div>
+
+      {/* Global Search & Filter Bar */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-3 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+        {/* Search Input Box */}
+        <div className="relative flex-1">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={
+              activeTab === 'folders'
+                ? "Cari nama kategori folder..."
+                : activeTab === 'approvals'
+                ? "Cari pemohon, nama berkas, atau alasan..."
+                : "Cari nama berkas, pengunggah, deskripsi, atau kata kunci..."
+            }
+            className="w-full pl-10 pr-9 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-xs font-medium focus:bg-white focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 outline-none transition-all placeholder:text-slate-400"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-200/80 transition-colors cursor-pointer"
+              title="Hapus Kata Kunci"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* Filter Controls */}
+        <div className="flex flex-wrap items-center gap-2">
+          {activeTab === 'files' && (
+            <>
+              {/* Filter Category Dropdown */}
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold focus:bg-white focus:border-sky-500 outline-none transition-all cursor-pointer"
+              >
+                <option value="ALL">Semua Kategori ({categories.length})</option>
+                {categories.map(cat => (
+                  <option key={cat} value={cat}>
+                    Folder: {cat}
+                  </option>
+                ))}
+              </select>
+
+              {/* Filter Privacy Dropdown */}
+              <select
+                value={selectedPrivacy}
+                onChange={(e) => setSelectedPrivacy(e.target.value)}
+                className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold focus:bg-white focus:border-sky-500 outline-none transition-all cursor-pointer"
+              >
+                <option value="ALL">Semua Akses</option>
+                <option value="Publik">Publik</option>
+                <option value="Restricted">Terbatas (Restricted)</option>
+                <option value="Secret">Rahasia (Secret)</option>
+              </select>
+            </>
+          )}
+
+          {activeTab === 'folders' && selectedCategory !== 'ALL' && (
+            <button
+              onClick={() => setSelectedCategory('ALL')}
+              className="px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold border border-amber-200 transition-colors cursor-pointer flex items-center gap-1.5"
+            >
+              <Folder className="w-3.5 h-3.5 text-amber-600" />
+              <span>Filter: {selectedCategory}</span>
+              <X className="w-3 h-3 text-amber-600" />
+            </button>
+          )}
+
+          {/* Reset button if search or filter is active */}
+          {(searchQuery || selectedCategory !== 'ALL' || selectedPrivacy !== 'ALL') && (
+            <button
+              onClick={() => {
+                setSearchQuery('');
+                setSelectedCategory('ALL');
+                setSelectedPrivacy('ALL');
+              }}
+              className="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs border border-rose-200 transition-colors cursor-pointer flex items-center gap-1 shrink-0"
+              title="Reset Semua Filter"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span>Reset</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Permanent Information Banner */}
@@ -2343,63 +2448,71 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {isSchoolStaff && (
-                <div
-                  onClick={handleCreateFolderPrompt}
-                  className="bg-slate-50/50 p-5 rounded-2xl border-2 border-dashed border-slate-300 hover:border-sky-500 hover:bg-sky-50/20 hover:shadow-md transition-all cursor-pointer flex flex-col items-center justify-center text-center group min-h-[160px]"
-                >
-                  <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 group-hover:scale-110 group-hover:bg-sky-500 group-hover:text-white group-hover:border-sky-500 transition-all mb-3 shadow-xs">
-                    <FolderPlus className="w-6 h-6" />
-                  </div>
-                  <h3 className="font-bold text-slate-800 text-xs sm:text-sm group-hover:text-sky-600 transition-colors">
-                    + Buat Folder Baru
-                  </h3>
-                  <p className="text-[10px] sm:text-[11px] text-slate-500 mt-1 max-w-[200px]">
-                    Tambah folder kustom kosong yang akan disimpan permanen
-                  </p>
-                </div>
-              )}
-              {categories.map(cat => {
-                const catFiles = files.filter(f => f.category === cat);
-                const accessibleCount = catFiles.filter(f => hasAccessToFile(f)).length;
-                const totalSize = catFiles.reduce((sum, f) => sum + f.fileSize, 0);
+            (() => {
+              const filteredCats = categories.filter(cat =>
+                cat.toLowerCase().includes(searchQuery.toLowerCase().trim())
+              );
 
+              if (filteredCats.length === 0) {
                 return (
-                  <div
-                    key={cat}
-                    onClick={() => {
-                      setSelectedCategory(cat);
-                      setActiveTab('files');
-                    }}
-                    className="bg-white p-5 rounded-2xl border border-slate-200 hover:border-sky-400 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
-                  >
-                    <div className="flex items-start justify-between gap-3 mb-4">
-                      <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 group-hover:scale-105 transition-transform">
-                        <Folder className="w-6 h-6" />
-                      </div>
-                      <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 font-bold text-xs">
-                        {catFiles.length} Berkas
-                      </span>
-                    </div>
-
-                    <div>
-                      <h3 className="font-bold text-slate-900 text-sm group-hover:text-sky-600 transition-colors mb-1">
-                        {cat}
-                      </h3>
-                      <p className="text-[11px] text-slate-500 mb-3">
-                        Total Ukuran: {formatBytes(totalSize)}
-                      </p>
-
-                      <div className="flex items-center justify-between text-xs text-sky-600 font-bold pt-2 border-t border-slate-100">
-                        <span>{accessibleCount} Berkas Terbuka</span>
-                        <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                      </div>
-                    </div>
+                  <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center shadow-xs">
+                    <p className="text-sm text-slate-600 mb-3 font-medium">
+                      Tidak ada kategori folder yang sesuai dengan kata kunci "<span className="font-bold text-slate-900">{searchQuery}</span>".
+                    </p>
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-all cursor-pointer"
+                    >
+                      Reset Pencarian
+                    </button>
                   </div>
                 );
-              })}
-            </div>
+              }
+
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredCats.map(cat => {
+                    const catFiles = files.filter(f => f.category === cat);
+                    const accessibleCount = catFiles.filter(f => hasAccessToFile(f)).length;
+                    const totalSize = catFiles.reduce((sum, f) => sum + f.fileSize, 0);
+
+                    return (
+                      <div
+                        key={cat}
+                        onClick={() => {
+                          setSelectedCategory(cat);
+                          setActiveTab('files');
+                        }}
+                        className="bg-white p-5 rounded-2xl border border-slate-200 hover:border-sky-400 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
+                      >
+                        <div className="flex items-start justify-between gap-3 mb-4">
+                          <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 group-hover:scale-105 transition-transform">
+                            <Folder className="w-6 h-6" />
+                          </div>
+                          <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 font-bold text-xs">
+                            {catFiles.length} Berkas
+                          </span>
+                        </div>
+
+                        <div>
+                          <h3 className="font-bold text-slate-900 text-sm group-hover:text-sky-600 transition-colors mb-1">
+                            {cat}
+                          </h3>
+                          <p className="text-[11px] text-slate-500 mb-3">
+                            Total Ukuran: {formatBytes(totalSize)}
+                          </p>
+
+                          <div className="flex items-center justify-between text-xs text-sky-600 font-bold pt-2 border-t border-slate-100">
+                            <span>{accessibleCount} Berkas Terbuka</span>
+                            <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()
           )}
         </div>
       )}
@@ -2427,6 +2540,29 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
                 <div className="px-3 py-1.5 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-800 text-xs font-bold">
                   Total Permintaan: {accessRequests.filter(req => isAdmin || isUserRequestMatch(req)).length}
                 </div>
+                {isAdmin && accessRequests.length > 0 && (
+                  <button
+                    onClick={() => {
+                      if (window.confirm('Apakah Anda yakin ingin mengosongkan seluruh riwayat permintaan izin akses? Data akan dihapus permanen dari database.')) {
+                        const allIds = accessRequests.map(r => r.id);
+                        try {
+                          const savedDel = localStorage.getItem('dapodik_deleted_request_ids');
+                          const delList: string[] = savedDel ? JSON.parse(savedDel) : [];
+                          allIds.forEach(id => {
+                            if (!delList.includes(id)) delList.push(id);
+                          });
+                          localStorage.setItem('dapodik_deleted_request_ids', JSON.stringify(delList));
+                        } catch (e) {}
+                        persistAndSyncRequests([], undefined, 'Semua riwayat permintaan akses berhasil dikosongkan!');
+                      }
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                    title="Kosongkan seluruh daftar permintaan izin akses"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                    <span>Kosongkan Riwayat</span>
+                  </button>
+                )}
               </div>
             </div>
  
@@ -2727,8 +2863,8 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       {/* MODAL: MULTI-UPLOAD BERKAS */}
       {/* ========================================================================= */}
       {isUploadModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl sm:rounded-3xl max-w-md w-full p-4 sm:p-5 shadow-2xl border border-slate-100 space-y-3 animate-scale-up max-h-[92vh] sm:max-h-[85vh] overflow-y-auto my-auto">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-2 sm:p-4 pt-16 sm:pt-6 overflow-y-auto">
+          <div className="bg-white rounded-2xl sm:rounded-3xl max-w-md w-full p-4 sm:p-5 shadow-2xl border border-slate-100 space-y-3 animate-scale-up max-h-[85vh] overflow-y-auto my-auto">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-600 flex items-center justify-center">
@@ -3012,8 +3148,8 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       {/* MODAL: REQUEST ACCESS TO RESTRICTED FILE */}
       {/* ========================================================================= */}
       {isRequestModalOpen && selectedFileForRequest && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-5 animate-scale-up">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-3 sm:p-4 pt-16 sm:pt-6 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-5 animate-scale-up max-h-[85vh] overflow-y-auto my-auto">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-700 flex items-center justify-center">
@@ -3149,13 +3285,13 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       {/* MODAL: FILE PREVIEW & DETAILS */}
       {/* ========================================================================= */}
       {previewFile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 space-y-4 animate-scale-up">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2.5 overflow-hidden">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-3 sm:p-4 pt-16 sm:pt-6 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-4 sm:p-5 shadow-2xl border border-slate-100 space-y-3 animate-scale-up max-h-[85vh] overflow-y-auto my-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <div className="flex items-center gap-2 overflow-hidden">
                 {getFileIcon(previewFile.fileExtension)}
-                <div>
-                  <h3 className="font-extrabold text-slate-900 text-base truncate max-w-md">
+                <div className="min-w-0">
+                  <h3 className="font-extrabold text-slate-900 text-sm sm:text-base truncate max-w-xs sm:max-w-sm">
                     {previewFile.name}
                   </h3>
                   <p className="text-[11px] text-slate-500">
@@ -3165,36 +3301,36 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
               </div>
               <button
                 onClick={() => setPreviewFile(null)}
-                className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
+                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors shrink-0"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Document Details & Viewer Simulator */}
-            <div className="space-y-3">
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-2">
-                <div className="grid grid-cols-2 gap-2 text-slate-600">
+            <div className="space-y-2.5">
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1.5">
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-slate-600 text-[11px]">
                   <div>
                     <span className="text-slate-400">Pengunggah:</span>{' '}
-                    <strong className="text-slate-900">{previewFile.uploadedBy}</strong> ({previewFile.uploadedByRole})
+                    <strong className="text-slate-900">{previewFile.uploadedBy}</strong>
                   </div>
                   <div>
-                    <span className="text-slate-400">Waktu Unggah:</span>{' '}
+                    <span className="text-slate-400">Waktu:</span>{' '}
                     <strong className="text-slate-900">{previewFile.uploadedAt}</strong>
                   </div>
                   <div>
-                    <span className="text-slate-400">Format File:</span>{' '}
-                    <strong className="text-slate-900">{previewFile.fileExtension.toUpperCase()} ({previewFile.fileType})</strong>
+                    <span className="text-slate-400">Format:</span>{' '}
+                    <strong className="text-slate-900">{previewFile.fileExtension.toUpperCase()}</strong>
                   </div>
                   <div>
-                    <span className="text-slate-400">Status Akses:</span>{' '}
+                    <span className="text-slate-400">Akses:</span>{' '}
                     <strong className="text-emerald-700">{previewFile.privacy}</strong>
                   </div>
                 </div>
 
                 {previewFile.description && (
-                  <div className="pt-2 border-t border-slate-200/80">
+                  <div className="pt-1.5 border-t border-slate-200/80 text-[11px]">
                     <span className="text-slate-400">Deskripsi:</span>
                     <p className="text-slate-800 mt-0.5">{previewFile.description}</p>
                   </div>
@@ -3203,42 +3339,42 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
 
               {/* Preview Window: Actual Image Display or Drive Simulator */}
               {previewFile.dataUrl || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(previewFile.fileExtension?.toLowerCase()) ? (
-                <div className="p-4 bg-slate-900 rounded-2xl text-center space-y-3 border border-slate-800 flex flex-col items-center">
-                  <div className="max-h-[360px] w-full flex items-center justify-center bg-slate-950/80 rounded-xl overflow-hidden p-2 border border-slate-800">
+                <div className="p-2.5 bg-slate-900 rounded-xl text-center space-y-2 border border-slate-800 flex flex-col items-center">
+                  <div className="max-h-[200px] w-full flex items-center justify-center bg-slate-950/80 rounded-lg overflow-hidden p-1.5 border border-slate-800">
                     <img
                       src={previewFile.dataUrl || previewFile.driveFileUrl}
                       alt={previewFile.name}
                       referrerPolicy="no-referrer"
-                      className="max-h-[340px] max-w-full object-contain rounded-lg shadow-lg"
+                      className="max-h-[180px] max-w-full object-contain rounded-md shadow-md"
                     />
                   </div>
-                  <div className="pt-1 flex flex-wrap items-center justify-center gap-3">
+                  <div className="pt-0.5 flex flex-wrap items-center justify-center gap-2">
                     <a
                       href={previewFile.driveFileUrl || GOOGLE_DRIVE_MAIN_FOLDER_URL}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 transition-colors shadow-sm"
+                      className="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold text-[11px] flex items-center gap-1.5 transition-colors shadow-xs"
                     >
-                      <ExternalLink className="w-4 h-4" />
+                      <ExternalLink className="w-3.5 h-3.5" />
                       <span>Buka File Asli di Google Drive</span>
                     </a>
                   </div>
                 </div>
               ) : (
-                <div className="p-8 bg-slate-900 rounded-2xl text-center text-slate-300 space-y-3 border border-slate-800">
-                  <FileCheck2 className="w-12 h-12 text-emerald-400 mx-auto" />
-                  <div className="font-bold text-white text-sm">Pratinjau Dokumen Tersedia</div>
-                  <p className="text-xs text-slate-400 max-w-md mx-auto">
-                    Berkas ini telah diverifikasi dan tersimpan aman di Google Drive Repository SMP Negeri Palu.
+                <div className="p-4 bg-slate-900 rounded-xl text-center text-slate-300 space-y-2 border border-slate-800">
+                  <FileCheck2 className="w-8 h-8 text-emerald-400 mx-auto" />
+                  <div className="font-bold text-white text-xs">Pratinjau Dokumen Tersedia</div>
+                  <p className="text-[11px] text-slate-400 max-w-xs mx-auto leading-tight">
+                    Berkas telah diverifikasi & tersimpan di Google Drive Repository.
                   </p>
-                  <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+                  <div className="pt-1 flex flex-wrap items-center justify-center gap-2">
                     <a
                       href={previewFile.driveFileUrl || GOOGLE_DRIVE_MAIN_FOLDER_URL}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 transition-colors"
+                      className="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold text-[11px] flex items-center gap-1.5 transition-colors"
                     >
-                      <ExternalLink className="w-4 h-4" />
+                      <ExternalLink className="w-3.5 h-3.5" />
                       <span>Buka File Asli di Google Drive</span>
                     </a>
                   </div>
@@ -3253,7 +3389,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
                   onClick={() => {
                     handleDeleteFile(previewFile);
                   }}
-                  className="px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer border border-rose-200"
+                  className="px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer border border-rose-200"
                   title="Hapus Berkas dari Repositori"
                 >
                   <Trash2 className="w-3.5 h-3.5 text-rose-600" />
@@ -3262,7 +3398,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
               ) : <div />}
               <button
                 onClick={() => setPreviewFile(null)}
-                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+                className="px-3.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
               >
                 Tutup
               </button>
@@ -3275,8 +3411,8 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       {/* MODAL: CONFIRM DELETE FILE */}
       {/* ========================================================================= */}
       {deletingFile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto animate-fadeIn">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4 animate-scale-up">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 pt-16 sm:pt-6 overflow-y-auto animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4 animate-scale-up my-auto max-h-[85vh] overflow-y-auto">
             <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
               <div className="w-12 h-12 rounded-2xl bg-rose-100 border border-rose-200 text-rose-600 flex items-center justify-center shrink-0 shadow-xs">
                 <Trash2 className="w-6 h-6" />
@@ -3330,8 +3466,8 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       {/* MODAL: CONFIRM DELETE ACCESS REQUEST */}
       {/* ========================================================================= */}
       {deletingRequest && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto animate-fadeIn">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4 animate-scale-up">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 pt-16 sm:pt-6 overflow-y-auto animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4 animate-scale-up my-auto max-h-[85vh] overflow-y-auto">
             <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
               <div className="w-12 h-12 rounded-2xl bg-rose-100 border border-rose-200 text-rose-600 flex items-center justify-center shrink-0 shadow-xs">
                 <Trash2 className="w-6 h-6" />
@@ -3373,7 +3509,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       {/* MODAL: GOOGLE DRIVE DIAGNOSTICS & SETUP GUIDE */}
       {/* ========================================================================= */}
       {isDriveGuideModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-md p-4 overflow-y-auto animate-fadeIn">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/70 backdrop-blur-md p-4 pt-16 sm:pt-6 overflow-y-auto animate-fadeIn">
           <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 space-y-5 animate-scale-up my-8 max-h-[90vh] overflow-y-auto">
             {/* Header */}
             <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-100">

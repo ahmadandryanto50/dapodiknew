@@ -144,32 +144,60 @@ app.post("/api/app-data", (req, res) => {
     });
 
     const mergedDeleted = Array.from(new Set([...(currentData.deletedNotifIds || []), ...(incoming.deletedNotifIds || [])]));
-    const mergedDeletedReqs = Array.from(new Set([...(currentData.deletedPermintaanAksesIds || []), ...(incoming.deletedPermintaanAksesIds || [])]));
-    const mergedDeletedFiles = Array.from(new Set([...(currentData.deletedFileIds || []), ...(incoming.deletedFileIds || [])]));
+    const incomingDeletedReqs = Array.isArray(incoming.deletedPermintaanAksesIds)
+      ? incoming.deletedPermintaanAksesIds
+      : (incoming.deletedPermintaanAksesId ? [incoming.deletedPermintaanAksesId] : []);
+    const mergedDeletedReqs = Array.from(new Set([...(currentData.deletedPermintaanAksesIds || []), ...incomingDeletedReqs]));
 
-    const notifMap = new Map();
-    [...(currentData.notifications || []), ...(incoming.notifications || [])].forEach((n: any) => {
-      if (n && n.id && !mergedDeleted.includes(n.id)) {
-        notifMap.set(n.id, n);
-      }
-    });
-    const mergedNotifs = Array.from(notifMap.values());
+    const incomingDeletedFiles = Array.isArray(incoming.deletedFileIds)
+      ? incoming.deletedFileIds
+      : (incoming.deletedFileId ? [incoming.deletedFileId] : []);
+    const mergedDeletedFiles = Array.from(new Set([...(currentData.deletedFileIds || []), ...incomingDeletedFiles]));
 
-    const reqMap = new Map();
-    [...(currentData.permintaanAkses || []), ...(incoming.permintaanAkses || [])].forEach((r: any) => {
-      if (r && r.id && !mergedDeletedReqs.includes(r.id)) {
-        reqMap.set(r.id, r);
-      }
+    // Handle notifications
+    let mergedNotifs: any[] = [];
+    const deletedSet = new Set<string>(['notif-1', 'notif-2', 'notif-3', ...mergedDeleted]);
+    if (Array.isArray(incoming.notifications)) {
+      mergedNotifs = incoming.notifications.filter((n: any) => n && n.id && !deletedSet.has(String(n.id)));
+    } else {
+      const currentNotifs: any[] = Array.isArray(currentData.notifications) ? currentData.notifications : [];
+      mergedNotifs = currentNotifs.filter((n: any) => n && n.id && !deletedSet.has(String(n.id)));
+    }
+    mergedNotifs.sort((a: any, b: any) => {
+      const timeA = a.time ? new Date(a.time).getTime() : 0;
+      const timeB = b.time ? new Date(b.time).getTime() : 0;
+      return timeB - timeA;
     });
-    const mergedRequests = Array.from(reqMap.values());
 
-    const fileMap = new Map();
-    [...(currentData.schoolFiles || []), ...(incoming.schoolFiles || [])].forEach((f: any) => {
-      if (f && f.id && !mergedDeletedFiles.includes(f.id)) {
-        fileMap.set(f.id, f);
-      }
+    // Handle requests
+    let mergedRequests: any[] = [];
+    const deletedReqSet = new Set<string>(mergedDeletedReqs);
+    if (Array.isArray(incoming.permintaanAkses)) {
+      mergedRequests = incoming.permintaanAkses.filter((r: any) => r && r.id && !deletedReqSet.has(String(r.id)));
+    } else {
+      const currentRequests: any[] = Array.isArray(currentData.permintaanAkses) ? currentData.permintaanAkses : [];
+      mergedRequests = currentRequests.filter((r: any) => r && r.id && !deletedReqSet.has(String(r.id)));
+    }
+    mergedRequests.sort((a: any, b: any) => {
+      const timeA = a.requestedAt ? new Date(a.requestedAt).getTime() : 0;
+      const timeB = b.requestedAt ? new Date(b.requestedAt).getTime() : 0;
+      return timeB - timeA;
     });
-    const mergedFiles = Array.from(fileMap.values());
+
+    // Handle files
+    let mergedFiles: any[] = [];
+    const delFileSet = new Set<string>(mergedDeletedFiles);
+    if (Array.isArray(incoming.schoolFiles)) {
+      mergedFiles = incoming.schoolFiles.filter((f: any) => f && f.id && !delFileSet.has(String(f.id)));
+    } else {
+      const currentFilesList: any[] = Array.isArray(currentData.schoolFiles) ? currentData.schoolFiles : (Array.isArray(currentData.files) ? currentData.files : []);
+      mergedFiles = currentFilesList.filter((f: any) => f && f.id && !delFileSet.has(String(f.id)));
+    }
+    mergedFiles.sort((a: any, b: any) => {
+      const timeA = a.uploadedAt ? new Date(a.uploadedAt).getTime() : 0;
+      const timeB = b.uploadedAt ? new Date(b.uploadedAt).getTime() : 0;
+      return timeB - timeA;
+    });
 
     const finalData = {
       ...currentData,

@@ -692,53 +692,69 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
                 onMouseLeave={() => setIsExportMenuOpen(false)}
               >
                 <div className="px-3 py-1.5 text-[11px] font-bold text-slate-400 border-b border-slate-100">
-                  Pilih Format & Cakupan Data:
+                  Pilih Data Siswa Yang Ingin Diekspor:
                 </div>
                 
-                {/* 1. Ekspor Excel: Semua Kelas */}
+                {/* 1. Siswa Aktif */}
+                <button
+                  onClick={() => {
+                    const activeStudents = students.filter(s => !s.status || s.status === 'Aktif');
+                    exportStudentsToExcel(activeStudents, 'ALL');
+                    setIsExportMenuOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-emerald-50 text-emerald-700 text-xs font-medium flex items-center gap-2 transition-colors cursor-pointer"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <div>
+                    <div className="font-bold text-slate-900 text-[11px]">Data Siswa Aktif</div>
+                    <div className="text-[10px] text-slate-500">Hanya siswa yang sedang aktif bersekolah</div>
+                  </div>
+                </button>
+
+                {/* 2. Siswa Keluar / Mutasi */}
+                <button
+                  onClick={() => {
+                    const keluarStudents = students.filter(s => s.status && s.status !== 'Aktif' && s.status !== 'Lulus');
+                    exportStudentsToExcel(keluarStudents, 'ALL');
+                    setIsExportMenuOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-amber-50 text-amber-700 text-xs font-medium flex items-center gap-2 transition-colors cursor-pointer"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-amber-600 shrink-0" />
+                  <div>
+                    <div className="font-bold text-slate-900 text-[11px]">Data Siswa Keluar / Mutasi</div>
+                    <div className="text-[10px] text-slate-500">Hanya siswa mutasi, dikeluarkan, dll.</div>
+                  </div>
+                </button>
+
+                {/* 3. Alumni / Lulus */}
+                <button
+                  onClick={() => {
+                    const alumniStudents = students.filter(s => s.status === 'Lulus');
+                    exportStudentsToExcel(alumniStudents, 'ALL');
+                    setIsExportMenuOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-purple-50 text-purple-700 text-xs font-medium flex items-center gap-2 transition-colors cursor-pointer"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-purple-600 shrink-0" />
+                  <div>
+                    <div className="font-bold text-slate-900 text-[11px]">Data Alumni / Lulus</div>
+                    <div className="text-[10px] text-slate-500">Hanya data siswa yang telah lulus</div>
+                  </div>
+                </button>
+
+                {/* 4. Semua Data Siswa */}
                 <button
                   onClick={() => {
                     exportStudentsToExcel(students, 'ALL');
                     setIsExportMenuOpen(false);
                   }}
-                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-emerald-50 text-emerald-700 text-xs font-medium flex items-center gap-2 transition-colors"
+                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-sky-50 text-sky-700 text-xs font-medium flex items-center gap-2 transition-colors cursor-pointer"
                 >
-                  <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <FileSpreadsheet className="w-4 h-4 text-sky-600 shrink-0" />
                   <div>
-                    <div className="font-bold text-slate-900 text-[11px]">Ekspor Excel (.xlsx) - Semua Kelas</div>
-                    <div className="text-[10px] text-slate-500">Seluruh data siswa dari database</div>
-                  </div>
-                </button>
-
-                {/* 2. Ekspor Excel: Kelas Terpilih */}
-                {filterRombel !== 'ALL' && (
-                  <button
-                    onClick={() => {
-                      exportStudentsToExcel(students, filterRombel);
-                    setIsExportMenuOpen(false);
-                  }}
-                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-amber-50 text-amber-700 text-xs font-medium flex items-center gap-2 transition-colors"
-                >
-                  <FileSpreadsheet className="w-4 h-4 text-amber-600 shrink-0" />
-                  <div>
-                    <div className="font-bold text-slate-900 text-[11px]">Ekspor Excel (.xlsx) - {filterRombel}</div>
-                    <div className="text-[10px] text-slate-500">Hanya data kelas/rombel yang aktif</div>
-                  </div>
-                </button>
-              )}
-
-                {/* 3. Ekspor CSV: Semua Data */}
-                <button
-                  onClick={() => {
-                    handleExportCSV();
-                    setIsExportMenuOpen(false);
-                  }}
-                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-sky-50 text-sky-700 text-xs font-medium flex items-center gap-2 transition-colors"
-                >
-                  <FileDown className="w-4 h-4 text-sky-600 shrink-0" />
-                  <div>
-                    <div className="font-bold text-slate-900 text-[11px]">Ekspor CSV (.csv) - Semua Data</div>
-                    <div className="text-[10px] text-slate-500">Format text kompresi universal</div>
+                    <div className="font-bold text-slate-900 text-[11px]">Semua Data Siswa</div>
+                    <div className="text-[10px] text-slate-500">Gabungan Siswa Aktif, Keluar, dan Alumni</div>
                   </div>
                 </button>
               </div>

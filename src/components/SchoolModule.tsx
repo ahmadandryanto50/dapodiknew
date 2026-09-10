@@ -136,27 +136,7 @@ export const SchoolModule: React.FC<SchoolModuleProps> = ({
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={handlePrint}
-            className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs transition-all flex items-center gap-2 border border-slate-200 shadow-xs cursor-pointer"
-            title="Cetak Profil Sekolah"
-          >
-            <Printer className="w-4 h-4 text-slate-500" />
-            <span className="hidden md:inline">Cetak Profil</span>
-          </button>
 
-          <button
-            onClick={onSync}
-            disabled={isSyncing}
-            className="px-3.5 py-2 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 font-semibold text-xs transition-all flex items-center gap-2 border border-sky-200 shadow-xs cursor-pointer"
-            title="Sinkronkan Data Sekolah ke Database Cloud"
-          >
-            <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-            <span className="hidden md:inline">Sinkronkan</span>
-          </button>
-        </div>
       </div>
 
       {/* Hero Banner Card for School */}
@@ -737,8 +717,8 @@ export const SchoolModule: React.FC<SchoolModuleProps> = ({
 
       {/* Modal Edit Profil Satuan Pendidikan */}
       {isEditModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
-          <div className="relative w-full max-w-3xl bg-white border border-sky-100 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 my-8 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 pt-16 sm:pt-6 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+          <div className="relative w-full max-w-3xl bg-white border border-sky-100 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-6 my-auto max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center font-bold">
