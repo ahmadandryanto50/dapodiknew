@@ -49,9 +49,15 @@ import {
   Building2,
   Eye,
   EyeOff,
-  ChevronDown
+  ChevronDown,
+  Copy,
+  Check,
+  FileCode,
+  Code2,
+  Terminal
 } from 'lucide-react';
 import { SyncConfig, AppDisplayConfig, SchoolProfile, AdminUser } from '../types';
+import { APPS_SCRIPT_TEMPLATE } from '../services/googleSheetsService';
 
 interface SettingsModuleProps {
   syncConfig: SyncConfig;
@@ -67,6 +73,8 @@ interface SettingsModuleProps {
   currentUser?: AdminUser | null;
   onLogout?: () => void;
   isSyncing?: boolean;
+  onSync?: () => void;
+  onSaveSyncConfig?: (newConfig: SyncConfig) => void;
 }
 
 export const SettingsModule: React.FC<SettingsModuleProps> = ({
@@ -82,10 +90,31 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   onSaveAdministrators,
   currentUser,
   onLogout,
-  isSyncing = false
+  isSyncing = false,
+  onSync,
+  onSaveSyncConfig
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'display' | 'admins' | 'school' | 'sync'>('display');
   const [activeComponentFilter, setActiveComponentFilter] = useState<'all' | '1' | '2' | '3' | '4' | '5'>(initialComponentFilter);
+
+  // Sync config form state
+  const [localSyncConfig, setLocalSyncConfig] = useState<SyncConfig>(syncConfig);
+  const [syncSavedMessage, setSyncSavedMessage] = useState<string | null>(null);
+  const [copiedScript, setCopiedScript] = useState(false);
+
+  const handleCopyAppsScript = () => {
+    try {
+      navigator.clipboard.writeText(APPS_SCRIPT_TEMPLATE);
+      setCopiedScript(true);
+      setTimeout(() => setCopiedScript(false), 4000);
+    } catch (e) {
+      console.error('Failed to copy Apps Script template:', e);
+    }
+  };
+
+  useEffect(() => {
+    setLocalSyncConfig(syncConfig);
+  }, [syncConfig]);
 
   // Admin management states
   const [adminList, setAdminList] = useState<AdminUser[]>(administrators);
@@ -2390,50 +2419,259 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
         )}
 
         {activeSubTab === 'sync' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <div className="lg:col-span-7 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-4">
-              <div className="flex items-center gap-2 pb-2 border-b border-slate-200 text-slate-900 font-bold text-sm">
-                <Database className="w-4 h-4 text-sky-600" />
-                <span>Penyimpanan Database Lokal & Server Cache</span>
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <div className="lg:col-span-8 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-5">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                  <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
+                    <Database className="w-5 h-5 text-emerald-600" />
+                    <span>Database Google Sheets & Sinkronisasi Cloud</span>
+                  </div>
+                  <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-200 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    Murni Database Spreadsheet (Aktif)
+                  </span>
+                </div>
+
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Seluruh data aplikasi (Siswa, PTK, Sarpras, Rapor, Berkas, dan Pengaturan) tersinkronisasi secara langsung ke <strong>Google Spreadsheet</strong>. Tidak memerlukan database external lainnya.
+                </p>
+
+                {/* Status Banner */}
+                <div className="p-4 rounded-xl bg-emerald-50/70 border border-emerald-200 space-y-2 text-xs text-slate-700">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-600 font-medium">Status Integrasi Google Workspace:</span>
+                    <strong className="text-emerald-700 font-bold">🟢 Google Sheets API Authorized</strong>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-600 font-medium">Mode Database Utama:</span>
+                    <strong className="text-slate-900 font-bold">Google Spreadsheet & Apps Script Endpoint</strong>
+                  </div>
+                  {syncConfig.lastSynced && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-600 font-medium">Terakhir Disinkronkan:</span>
+                      <strong className="text-slate-900 font-mono">{syncConfig.lastSynced}</strong>
+                    </div>
+                  )}
+                </div>
+
+                {/* Google Spreadsheet URL / ID Input */}
+                <div className="space-y-3 text-xs">
+                  <div>
+                    <label className="block text-slate-700 font-semibold mb-1">
+                      ID / Link Google Spreadsheet
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={localSyncConfig.spreadsheetUrl || ''}
+                        onChange={(e) => setLocalSyncConfig({ ...localSyncConfig, spreadsheetUrl: e.target.value })}
+                        placeholder="Masukkan ID Spreadsheet Google Anda"
+                        className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-mono text-xs outline-none focus:border-sky-500 shadow-xs"
+                      />
+                      <a
+                        href={`https://docs.google.com/spreadsheets/d/${localSyncConfig.spreadsheetUrl || '1XmLmshCOhSktRfzW8uG_8RqxlxVCQt5eUVekEFLwj_M'}/edit`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-colors"
+                        title="Buka Google Spreadsheet"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>Buka Sheet</span>
+                      </a>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 font-semibold mb-1">
+                      URL Google Apps Script Web App (API Endpoint)
+                    </label>
+                    <input
+                      type="text"
+                      value={localSyncConfig.webAppUrl || ''}
+                      onChange={(e) => setLocalSyncConfig({ ...localSyncConfig, webAppUrl: e.target.value })}
+                      placeholder="https://script.google.com/macros/s/.../exec"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-mono text-xs outline-none focus:border-sky-500 shadow-xs"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2">
+                    <label className="flex items-center gap-2 cursor-pointer text-slate-700 font-medium">
+                      <input
+                        type="checkbox"
+                        checked={localSyncConfig.autoSync ?? true}
+                        onChange={(e) => setLocalSyncConfig({ ...localSyncConfig, autoSync: e.target.checked })}
+                        className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
+                      />
+                      <span>Aktifkan Sinkronisasi Otomatis Setiap Ada Perubahan Data</span>
+                    </label>
+
+                    {syncSavedMessage && (
+                      <span className="text-emerald-600 text-xs font-semibold animate-fade-in">
+                        {syncSavedMessage}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onSaveSyncConfig) {
+                        onSaveSyncConfig(localSyncConfig);
+                        setSyncSavedMessage('✅ Pengaturan Database Spreadsheet Tersimpan!');
+                        setTimeout(() => setSyncSavedMessage(null), 3000);
+                      }
+                    }}
+                    className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-2 transition-colors"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>Simpan Konfigurasi Spreadsheet</span>
+                  </button>
+
+                  {onSync && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (onSync) onSync();
+                      }}
+                      disabled={isSyncing}
+                      className={`px-5 py-2.5 rounded-xl text-white font-bold text-xs flex items-center gap-2 shadow-sm transition-all ${
+                        isSyncing
+                          ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none'
+                          : 'bg-emerald-600 hover:bg-emerald-700'
+                      }`}
+                    >
+                      <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                      <span>{isSyncing ? 'Menyinkronkan...' : 'Sinkronkan Sekarang'}</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Seluruh data sekolah (profil sekolah, data siswa, PTK, sarpras, berkas, dan rapor) disimpan langsung secara real-time ke penyimpanan internal server sekolah Anda. Ini memastikan performa akses super cepat dan handal.
-              </p>
+              <div className="lg:col-span-4 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b border-slate-200 text-slate-900 font-bold text-sm">
+                  <Globe className="w-4 h-4 text-sky-600" />
+                  <span>Informasi Sinkronisasi Multi-Perangkat</span>
+                </div>
 
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs text-slate-700">
-                <div>Status Database: <strong className="text-emerald-600">Aktif & Terhubung (Local Node Server)</strong></div>
-                <div>Metode Penyimpanan: <strong className="text-slate-900">JSON File Server Storage (/api/app-data)</strong></div>
-                <div>Terakhir Disimpan: <strong className="text-slate-900">Tersimpan Otomatis Real-Time</strong></div>
+                <div className="space-y-3 text-xs text-slate-600">
+                  <div className="p-3.5 rounded-xl bg-sky-50 border border-sky-200 space-y-1">
+                    <div className="font-bold text-sky-900 flex items-center gap-1.5">
+                      <Zap className="w-4 h-4 text-sky-600" />
+                      <span>Akses HP & Komputer Lain</span>
+                    </div>
+                    <p className="text-[11px] text-sky-800 leading-relaxed">
+                      Karena murni menggunakan Google Spreadsheet sebagai database, data yang Anda tambahkan atau edit di HP/komputer mana pun akan langsung muncul di semua perangkat secara real-time.
+                    </p>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                    <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <Server className="w-3.5 h-3.5 text-slate-700" />
+                      <span>Cadangan Aman (Backup)</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      Anda juga dapat membuka Google Spreadsheet langsung kapan saja untuk melihat, mengunduh, atau mengekspor data dalam format Excel (.xlsx).
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="lg:col-span-5 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-3">
-              <div className="flex items-center gap-2 pb-2 border-b border-slate-200 text-slate-900 font-bold text-sm">
-                <Globe className="w-4 h-4 text-sky-600" />
-                <span>Deploy ke GitHub & Vercel</span>
+            {/* Google Apps Script (Code.gs) Box Section */}
+            <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-5">
+              <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-slate-200">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-slate-900 text-emerald-400 flex items-center justify-center shadow-xs">
+                    <FileCode className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-slate-900 font-bold text-sm flex items-center gap-2">
+                      <span>Kode Google Apps Script (Code.gs) Terbaru</span>
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                        v3.0 (Pure Google Sheets Database)
+                      </span>
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Salin kode berikut dan tempelkan ke editor Apps Script Google Spreadsheet Anda untuk memperbarui skrip endpoint.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleCopyAppsScript}
+                  className={`px-5 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 shadow-sm transition-all ${
+                    copiedScript
+                      ? 'bg-emerald-600 text-white scale-105'
+                      : 'bg-slate-900 hover:bg-slate-800 text-white'
+                  }`}
+                >
+                  {copiedScript ? <Check className="w-4 h-4 text-white" /> : <Copy className="w-4 h-4" />}
+                  <span>{copiedScript ? '✅ Kode GS Berhasil Disalin!' : 'Salin Kode Apps Script (Code.gs)'}</span>
+                </button>
               </div>
 
-              <div className="space-y-2.5 text-xs text-slate-600">
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-                  <div className="font-bold text-slate-900 flex items-center gap-1.5 mb-1">
-                    <Github className="w-3.5 h-3.5 text-slate-700" />
-                    <span>1. Export ke GitHub</span>
-                  </div>
-                  <p className="text-[11px] text-slate-500">
-                    Klik menu <strong>Settings</strong> di AI Studio &gt; pilih <strong>Export to GitHub</strong>.
-                  </p>
+              {/* Step by step guide */}
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3 text-xs text-slate-700">
+                <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                  <Terminal className="w-4 h-4 text-emerald-600" />
+                  <span>Panduan Cara Pemasangan / Update Kode Apps Script:</span>
                 </div>
+                <ol className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 text-[11px] text-slate-600">
+                  <li className="p-2.5 bg-white border border-slate-200 rounded-lg flex items-start gap-2">
+                    <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[11px] flex items-center justify-center shrink-0">1</span>
+                    <span>Buka Google Spreadsheet Anda &gt; Klik <strong>Ekstensi (Extensions)</strong> &gt; Pilih <strong>Apps Script</strong>.</span>
+                  </li>
+                  <li className="p-2.5 bg-white border border-slate-200 rounded-lg flex items-start gap-2">
+                    <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[11px] flex items-center justify-center shrink-0">2</span>
+                    <span>Hapus seluruh isi kode lama pada file <code>Code.gs</code>.</span>
+                  </li>
+                  <li className="p-2.5 bg-white border border-slate-200 rounded-lg flex items-start gap-2">
+                    <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[11px] flex items-center justify-center shrink-0">3</span>
+                    <span>Klik tombol <strong>Salin Kode Apps Script</strong> di atas, lalu <strong>Paste (Tempel)</strong> ke editor.</span>
+                  </li>
+                  <li className="p-2.5 bg-white border border-slate-200 rounded-lg flex items-start gap-2">
+                    <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[11px] flex items-center justify-center shrink-0">4</span>
+                    <span>Klik ikon <strong>Simpan</strong> 💾 (Ctrl + S).</span>
+                  </li>
+                  <li className="p-2.5 bg-white border border-slate-200 rounded-lg flex items-start gap-2">
+                    <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[11px] flex items-center justify-center shrink-0">5</span>
+                    <span>Klik <strong>Terapkan (Deploy)</strong> &gt; <strong>Terapkan sebagai Aplikasi Web (New deployment)</strong>. Set <em>Who has access</em> ke <strong>Anyone (Siapa saja)</strong>.</span>
+                  </li>
+                  <li className="p-2.5 bg-white border border-slate-200 rounded-lg flex items-start gap-2">
+                    <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[11px] flex items-center justify-center shrink-0">6</span>
+                    <span>Salin <strong>URL Aplikasi Web (Web App URL)</strong> dan tempelkan ke kolom input URL di atas!</span>
+                  </li>
+                </ol>
+              </div>
 
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-                  <div className="font-bold text-slate-900 flex items-center gap-1.5 mb-1">
-                    <Server className="w-3.5 h-3.5 text-sky-600" />
-                    <span>2. Import di Vercel</span>
+              {/* Code display window */}
+              <div className="relative rounded-2xl bg-slate-950 border border-slate-800 overflow-hidden shadow-xl">
+                <div className="px-4 py-2.5 bg-slate-900 border-b border-slate-800 flex items-center justify-between text-xs text-slate-400">
+                  <div className="flex items-center gap-2">
+                    <div className="flex gap-1.5">
+                      <div className="w-2.5 h-2.5 rounded-full bg-red-500/80" />
+                      <div className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
+                      <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
+                    </div>
+                    <span className="font-mono text-[11px] text-slate-300 ml-2">Code.gs (Dapodik Google Apps Script Endpoint v3.0)</span>
                   </div>
-                  <p className="text-[11px] text-slate-500">
-                    Buka <strong>vercel.com</strong> &gt; Impor repositori GitHub Anda &gt; Klik <strong>Deploy</strong>.
-                  </p>
+                  <button
+                    type="button"
+                    onClick={handleCopyAppsScript}
+                    className="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-[11px] flex items-center gap-1.5 transition-colors"
+                  >
+                    {copiedScript ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedScript ? 'Tersalin' : 'Salin Kode'}</span>
+                  </button>
                 </div>
+                <pre className="p-4 font-mono text-[11px] leading-relaxed text-emerald-300/90 overflow-x-auto max-h-[420px] overflow-y-auto whitespace-pre selection:bg-emerald-500 selection:text-slate-950">
+                  {APPS_SCRIPT_TEMPLATE}
+                </pre>
               </div>
             </div>
           </div>

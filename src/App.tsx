@@ -43,6 +43,7 @@ import { NotificationDrawer } from './components/NotificationDrawer';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { SafeImage } from './components/SafeImage';
 import { formatDateIndonesian, cleanLeadingZerosCode } from './utils/dateUtils';
+import { loadFromGoogleSheets, syncToGoogleSheets } from './services/googleSheetsService';
 import { 
   Home, 
   School,
@@ -54,6 +55,7 @@ import {
   Settings, 
   Database, 
   RefreshCw,
+  DownloadCloud,
   Bell,
   Search,
   LogOut,
@@ -706,30 +708,114 @@ export default function App() {
   const handlePullFromSheets = async (silent = false) => {
     setIsSyncing(true);
     try {
+      const currentCfg = syncConfigRef.current || syncConfig;
+      if (currentCfg && currentCfg.webAppUrl) {
+        const result = await loadFromGoogleSheets(currentCfg);
+        if (result && result.success && result.data) {
+          const {
+            siswa, ptk, sarpras, rapor, administrator, profilSekolah, aplikasi, notifikasi, permintaanAkses, berkas
+          } = result.data;
+
+          if (Array.isArray(siswa) && siswa.length > 0) {
+            const clean = sanitizeStudentDates(siswa);
+            setStudents(clean);
+            localStorage.setItem('dapodik_students', JSON.stringify(clean));
+          }
+          if (Array.isArray(ptk) && ptk.length > 0) {
+            const clean = sanitizeTeacherDates(ptk);
+            setTeachers(clean);
+            localStorage.setItem('dapodik_teachers', JSON.stringify(clean));
+          }
+          if (Array.isArray(sarpras) && sarpras.length > 0) {
+            setSarpras(sarpras);
+            localStorage.setItem('dapodik_sarpras', JSON.stringify(sarpras));
+          }
+          if (Array.isArray(rapor) && rapor.length > 0) {
+            const clean = sanitizeReports(rapor);
+            setReports(clean);
+            localStorage.setItem('dapodik_reports', JSON.stringify(clean));
+          }
+          if (Array.isArray(administrator) && administrator.length > 0) {
+            const cleanAdmins = getCleanAdministrators(administrator);
+            setAdministrators(cleanAdmins);
+            localStorage.setItem('dapodik_administrators', JSON.stringify(cleanAdmins));
+          }
+          if (Array.isArray(notifikasi) && notifikasi.length > 0) {
+            const mergedNotifs = mergeNotifications(notificationsRef.current, notifikasi);
+            setNotifications(mergedNotifs);
+            notificationsRef.current = mergedNotifs;
+            localStorage.setItem('dapodik_notifications', JSON.stringify(mergedNotifs));
+          }
+          if (Array.isArray(permintaanAkses)) {
+            setAccessRequests(permintaanAkses);
+            localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(permintaanAkses));
+          }
+          if (Array.isArray(berkas)) {
+            setSchoolFiles(berkas);
+            localStorage.setItem('dapodik_school_files_v3', JSON.stringify(berkas));
+          }
+          if (Array.isArray(aplikasi) && aplikasi.length > 0) {
+            setAplikasiLinks(aplikasi);
+            localStorage.setItem('dapodik_aplikasi_links', JSON.stringify(aplikasi));
+          }
+
+          // Update server cache
+          saveCacheToServer(
+            siswa || students,
+            ptk || teachers,
+            sarpras || sarpras,
+            rapor || reports,
+            displayConfig,
+            schoolProfile,
+            administrator || administrators,
+            notifikasi || notificationsRef.current,
+            aplikasi || aplikasiLinks
+          );
+
+          const nowStr = new Date().toLocaleString('id-ID');
+          const updatedSyncCfg = { ...currentCfg, lastSynced: nowStr };
+          setSyncConfig(updatedSyncCfg);
+          localStorage.setItem('dapodik_sync_config', JSON.stringify(updatedSyncCfg));
+          saveSyncConfigToServer(updatedSyncCfg);
+
+          setIsSyncing(false);
+          if (!silent) {
+            showToast('✅ Data berhasil ditarik dari Database Google Spreadsheet!');
+            try { confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 } }); } catch (e) {}
+          }
+          return true;
+        }
+      }
+
+      // Fallback: server cache
       const cacheRes = await fetch(`/api/app-data?t=${Date.now()}`);
       setIsSyncing(false);
       if (cacheRes.ok) {
         const serverData = await cacheRes.json();
         if (serverData) {
           if (serverData.students && Array.isArray(serverData.students)) {
-            setStudents(serverData.students);
-            localStorage.setItem('dapodik_students', JSON.stringify(serverData.students));
+            const clean = sanitizeStudentDates(serverData.students);
+            setStudents(clean);
+            localStorage.setItem('dapodik_students', JSON.stringify(clean));
           }
           if (serverData.teachers && Array.isArray(serverData.teachers)) {
-            setTeachers(serverData.teachers);
-            localStorage.setItem('dapodik_teachers', JSON.stringify(serverData.teachers));
+            const clean = sanitizeTeacherDates(serverData.teachers);
+            setTeachers(clean);
+            localStorage.setItem('dapodik_teachers', JSON.stringify(clean));
           }
           if (serverData.sarpras && Array.isArray(serverData.sarpras)) {
             setSarpras(serverData.sarpras);
             localStorage.setItem('dapodik_sarpras', JSON.stringify(serverData.sarpras));
           }
           if (serverData.reports && Array.isArray(serverData.reports)) {
-            setReports(serverData.reports);
-            localStorage.setItem('dapodik_reports', JSON.stringify(serverData.reports));
+            const clean = sanitizeReports(serverData.reports);
+            setReports(clean);
+            localStorage.setItem('dapodik_reports', JSON.stringify(clean));
           }
           if (serverData.administrators && Array.isArray(serverData.administrators)) {
-            setAdministrators(serverData.administrators);
-            localStorage.setItem('dapodik_administrators', JSON.stringify(serverData.administrators));
+            const cleanAdmins = getCleanAdministrators(serverData.administrators);
+            setAdministrators(cleanAdmins);
+            localStorage.setItem('dapodik_administrators', JSON.stringify(cleanAdmins));
           }
           if (serverData.aplikasiLinks && Array.isArray(serverData.aplikasiLinks)) {
             setAplikasiLinks(serverData.aplikasiLinks);
@@ -760,7 +846,7 @@ export default function App() {
         }
         
         if (!silent) {
-          showToast('Data berhasil disinkronkan!');
+          showToast('✅ Data disinkronkan dari server cache!');
         }
         return true;
       }
@@ -769,7 +855,7 @@ export default function App() {
     }
     setIsSyncing(false);
     if (!silent) {
-      showToast('Gagal memuat data sinkronisasi.');
+      showToast('⚠️ Gagal memuat data dari Spreadsheet/Server.');
     }
     return false;
   };
@@ -1360,23 +1446,41 @@ export default function App() {
       aplikasiLinks
     );
 
+    // Otomatis simpan & sync perubahan ke Google Spreadsheet
+    const currentCfg = syncConfigRef.current || syncConfig;
+    if (currentCfg && currentCfg.webAppUrl && currentCfg.autoSync !== false) {
+      syncToGoogleSheets(currentCfg, {
+        siswa: customStudents,
+        ptk: customTeachers,
+        sarpras: customSarpras,
+        rapor: customReports,
+        administrator: customAdministrators,
+        notifikasi: activeNotifs,
+        aplikasi: aplikasiLinks,
+        permintaanAkses: accessRequests,
+        berkas: schoolFiles
+      }).then(res => {
+        if (res && res.success) {
+          const nowStr = new Date().toLocaleString('id-ID');
+          setSyncConfig(prev => {
+            const updated = { ...prev, lastSynced: nowStr };
+            localStorage.setItem('dapodik_sync_config', JSON.stringify(updated));
+            saveSyncConfigToServer(updated);
+            return updated;
+          });
+        }
+      }).catch(err => {
+        console.error('Auto sync to Google Sheets failed:', err);
+      });
+    }
+
     if (force) {
-      showToast('Data berhasil disimpan secara real-time!');
+      showToast('Data berhasil disimpan & ter-update di Spreadsheet!');
     }
   };
 
   const handleManualSync = async () => {
-    setIsSyncing(true);
-    try {
-      const freshNotifs = addNotification('Sinkronisasi Database', 'Seluruh data aplikasi telah berhasil disinkronkan ke Database Server.', 'success');
-      await saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, freshNotifs, aplikasiLinks);
-      setIsSyncing(false);
-      showToast('Data berhasil disinkronkan!');
-      confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 } });
-    } catch (e) {
-      setIsSyncing(false);
-      showToast('Gagal menyinkronkan data.');
-    }
+    return handlePullFromSheets(false);
   };
 
   const handleSaveDisplayConfig = (newConfig: AppDisplayConfig) => {
@@ -2243,10 +2347,20 @@ export default function App() {
 
           <div className="flex items-center gap-2">
             <button
-              onClick={handleManualSync}
+              onClick={() => handlePullFromSheets(false)}
+              disabled={isSyncing}
+              className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs flex items-center gap-1.5 border border-emerald-400/30 shadow-md transition-all cursor-pointer active:scale-95 disabled:opacity-60"
+              title="Tarik Data Terbaru dari Google Spreadsheet"
+            >
+              <DownloadCloud className={`w-4 h-4 ${isSyncing ? 'animate-bounce' : ''}`} />
+              <span className="hidden sm:inline">Tarik Data</span>
+            </button>
+
+            <button
+              onClick={() => handlePullFromSheets(false)}
               disabled={isSyncing}
               className="p-2 rounded-xl bg-white/15 hover:bg-white/25 text-white border border-white/20 backdrop-blur-md transition-all shadow-xs cursor-pointer"
-              title="Sinkronkan Sekarang"
+              title="Sinkronkan / Refresh Data"
             >
               <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin text-cyan-300' : ''}`} />
             </button>
@@ -2446,6 +2560,13 @@ export default function App() {
               currentUser={currentUser}
               onLogout={handleLogout}
               isSyncing={isSyncing}
+              onSync={handleManualSync}
+              onSaveSyncConfig={(newConfig) => {
+                setSyncConfig(newConfig);
+                localStorage.setItem('dapodik_sync_config', JSON.stringify(newConfig));
+                saveSyncConfigToServer(newConfig);
+                showToast('Konfigurasi Google Spreadsheet berhasil disimpan.');
+              }}
             />
           </div>
         )}
@@ -2526,6 +2647,33 @@ export default function App() {
                 className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Quick Action: Tarik Data Spreadsheet */}
+            <div className="p-3 mb-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs space-y-2">
+              <div className="flex items-center justify-between text-emerald-900 font-bold">
+                <span className="flex items-center gap-1.5">
+                  <Database className="w-4 h-4 text-emerald-600" />
+                  <span>Google Spreadsheet</span>
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-200/60 text-emerald-800 font-extrabold">
+                  TERHUBUNG
+                </span>
+              </div>
+              <p className="text-[11px] text-emerald-700 leading-tight">
+                Tarik data terbaru jika ada pembaruan dari perangkat laptop / browser lain.
+              </p>
+              <button
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  handlePullFromSheets(false);
+                }}
+                disabled={isSyncing}
+                className="w-full py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-60"
+              >
+                <DownloadCloud className={`w-4 h-4 ${isSyncing ? 'animate-bounce' : ''}`} />
+                <span>{isSyncing ? 'Menarik Data...' : 'Tarik Data Terbaru'}</span>
               </button>
             </div>
 
