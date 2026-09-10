@@ -265,18 +265,6 @@ export default function App() {
   });
 
   const [teachers, setTeachers] = useState<TeacherStaff[]>(() => {
-    const saved = localStorage.getItem('dapodik_teachers');
-    const ver = localStorage.getItem('dapodik_teachers_ver');
-    if (saved && ver === 'v6_25guru_9tendik_clean') {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return sanitizeTeacherDates(parsed);
-        }
-      } catch (e) {
-        console.error('Failed to parse dapodik_teachers', e);
-      }
-    }
     localStorage.setItem('dapodik_teachers_ver', 'v6_25guru_9tendik_clean');
     localStorage.setItem('dapodik_teachers', JSON.stringify(initialTeachers));
     return sanitizeTeacherDates(initialTeachers);

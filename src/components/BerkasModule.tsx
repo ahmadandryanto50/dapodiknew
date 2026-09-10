@@ -674,27 +674,10 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
   const [uploadDescription, setUploadDescription] = useState<string>('');
   const [selectedUploadFiles, setSelectedUploadFiles] = useState<File[]>([]);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [uploadRemainingBytesText, setUploadRemainingBytesText] = useState<string>('');
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const uploadCancelledRef = useRef<boolean>(false);
   const multiFileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    let timer: any;
-    if (isUploading) {
-      timer = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 99) return 99;
-          const step = prev < 50 ? 10 : prev < 85 ? 6 : 3;
-          return prev + step;
-        });
-      }, 40);
-    } else {
-      setUploadProgress(0);
-    }
-    return () => {
-      if (timer) clearInterval(timer);
-    };
-  }, [isUploading]);
 
   // Request Access Form State
   const [requestName, setRequestName] = useState<string>(currentUser?.nama || '');
@@ -1060,11 +1043,19 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       const fileSize = file.size || 100000;
       const sizeStr = fileSize > 1024 * 1024 ? `${(fileSize / (1024 * 1024)).toFixed(1)} MB` : `${Math.round(fileSize / 1024)} KB`;
       
-      setCurrentUploadingFileName(`Mengunggah: ${file.name} (${sizeStr})`);
+      setCurrentUploadingFileName(`${file.name} (${sizeStr})`);
+      setUploadRemainingBytesText(`Mempersiapkan berkas: ${formatBytes(fileSize)}...`);
 
-      // Clean sequential progress per file (0% to 50% for preparation & compression)
-      const basePct = Math.round((i / total) * 90);
-      setUploadProgress(Math.max(5, basePct + 5));
+      // 1. Simulasikan pembacaan & kompresi berkas terlebih dahulu
+      const prepSteps = 4;
+      for (let step = 1; step <= prepSteps; step++) {
+        if (uploadCancelledRef.current) break;
+        const processed = Math.round((step / prepSteps) * (fileSize * 0.2));
+        setUploadRemainingBytesText(`Telah terbaca: ${formatBytes(processed)} dari ${formatBytes(fileSize)}`);
+        const subProgress = Math.round(((i / total) * 100) + ((step / prepSteps) * (20 / total)));
+        setUploadProgress(Math.min(95, subProgress));
+        await new Promise(r => setTimeout(r, 80));
+      }
 
       let dataUrl: string | undefined = undefined;
       let base64Pure = '';
@@ -1078,14 +1069,35 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       }
 
       if (uploadCancelledRef.current) break;
-      setUploadProgress(Math.max(10, basePct + 25));
+
+      const activeSize = base64Pure ? Math.round(base64Pure.length * 0.75) : fileSize;
+
+      // 2. Simulasikan pengiriman potongan data (chunking) dan hitung mundur sisa KB/MB/GB
+      const uploadSteps = 10;
+      for (let step = 1; step <= uploadSteps; step++) {
+        if (uploadCancelledRef.current) break;
+        const ratio = step / uploadSteps;
+        const sentBytes = Math.round(ratio * activeSize);
+        const remainingBytes = activeSize - sentBytes;
+
+        setUploadRemainingBytesText(`Telah terkirim: ${formatBytes(sentBytes)} dari ${formatBytes(activeSize)}`);
+
+        const currentFileProgress = (20 + (ratio * 70)) * (100 / total); // Dari 20% ke 90% proses per file
+        const overallProgress = Math.round(((i / total) * 100) + currentFileProgress);
+        setUploadProgress(Math.min(95, overallProgress));
+
+        await new Promise(r => setTimeout(r, 120));
+      }
+
+      if (uploadCancelledRef.current) break;
+
+      setUploadRemainingBytesText(`Menyimpan & Memverifikasi di Google Drive...`);
 
       let driveResult: any = null;
 
       // 1. Try Apps Script Upload if URL exists
       if (hasAppsScriptUrl && base64Pure) {
         try {
-          setUploadProgress(Math.max(15, basePct + 45));
           const appsScriptRes = await uploadFileToDriveViaAppsScript(currentCfg!, {
             name: file.name,
             type: file.type || 'application/octet-stream',
@@ -1103,7 +1115,6 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       // 2. Try Google Drive OAuth API if connected
       if (!driveResult && hasDriveOAuth) {
         try {
-          setUploadProgress(Math.max(20, basePct + 65));
           const oAuthRes = await uploadFileToGoogleDrive(file, {
             category: targetCategory,
             customFolderName: folderChoiceMode === 'custom' ? customFolder.trim() : undefined,
@@ -1132,7 +1143,10 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
         continue;
       }
 
-      setUploadProgress(Math.min(95, basePct + 85));
+      // 3. Sukses Terunggah per berkas -> Set ke sisa 0 Bytes murni
+      setUploadRemainingBytesText(`Sisa: 0 Bytes dari ${formatBytes(activeSize)} (Selesai!)`);
+      setUploadProgress(Math.min(99, Math.round(((i + 1) / total) * 98)));
+      await new Promise(r => setTimeout(r, 200));
 
       let finalSize = file.size;
       if (base64Pure) {
@@ -1160,7 +1174,6 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       };
 
       newItems.push(fileItem);
-      setUploadProgress(Math.min(98, Math.round(((i + 1) / total) * 95)));
     }
 
     if (uploadCancelledRef.current) {
@@ -1183,25 +1196,25 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
     // Fully saved & verified in Google Drive -> 100%
     setUploadProgress(100);
     setCurrentUploadingFileName('✅ Berhasil tersimpan di Google Drive!');
-    setSyncFeedback(`Berhasil! ${newItems.length} berkas sukses masuk ke Google Drive.`);
-    setTimeout(() => setSyncFeedback(null), 4000);
-
-    await new Promise(r => setTimeout(r, 800));
-
+    
     const updatedFiles = [...newItems, ...files];
     setIsUploading(false);
-    setIsUploadModalOpen(false);
+    setIsUploadModalOpen(false); // CLOSE INSTANTLY
     setSelectedUploadFiles([]);
     setUploadDescription('');
     setCustomFolder('');
     setFolderChoiceMode('category');
     setUploadProgress(0);
     setCurrentUploadingFileName('');
+    setUploadRemainingBytesText('');
 
     let note = `Sukses! ${newItems.length} berkas berhasil tersimpan di Google Drive (Folder: ${targetCategory})!`;
     if (uploadErrors.length > 0) {
       note += ` (${uploadErrors.length} berkas gagal)`;
     }
+
+    setSyncFeedback(note);
+    setTimeout(() => setSyncFeedback(null), 4000);
 
     try {
       const notifItem = {
@@ -2686,8 +2699,8 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       {/* MODAL: MULTI-UPLOAD BERKAS */}
       {/* ========================================================================= */}
       {isUploadModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 pt-20 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-md w-full p-4 sm:p-5 shadow-2xl border border-slate-100 space-y-3 animate-scale-up max-h-[85vh] overflow-y-auto my-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl sm:rounded-3xl max-w-md w-full p-4 sm:p-5 shadow-2xl border border-slate-100 space-y-3 animate-scale-up max-h-[92vh] sm:max-h-[85vh] overflow-y-auto my-auto">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-600 flex items-center justify-center">
@@ -2901,30 +2914,41 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
 
             {/* Upload Progress Bar */}
             {isUploading && (
-              <div className="space-y-2 p-3.5 bg-sky-50 rounded-2xl border border-sky-200 shadow-xs">
+              <div className="space-y-3 p-3.5 bg-sky-50 rounded-2xl border border-sky-200 shadow-xs">
                 <div className="flex items-center justify-between text-xs font-bold text-sky-950">
                   <span className="truncate max-w-[260px] flex items-center gap-1.5">
                     <Loader2 className="w-4 h-4 text-sky-600 animate-spin shrink-0" />
                     <span className="truncate">{currentUploadingFileName ? `Mengunggah: ${currentUploadingFileName}` : 'Mengirim ke Google Drive...'}</span>
                   </span>
-                  <span className="font-extrabold text-sky-700 font-mono text-sm">{uploadProgress}%</span>
+                  <span className="font-extrabold text-sky-700 font-mono text-sm shrink-0">{uploadProgress}%</span>
                 </div>
+                
                 <div className="w-full bg-sky-200/80 rounded-full h-3 overflow-hidden p-0.5 shadow-inner">
                   <div
                     className="bg-gradient-to-r from-sky-500 via-indigo-500 to-emerald-500 h-2 transition-all duration-300 ease-out rounded-full shadow-sm animate-pulse"
                     style={{ width: `${uploadProgress}%` }}
                   />
                 </div>
+
+                <div className="p-2 bg-white/75 rounded-xl border border-sky-100 flex items-center justify-between text-[11px] text-sky-950">
+                  <div className="flex items-center gap-1.5 font-bold font-mono">
+                    <span>{uploadRemainingBytesText || 'Mengunggah...'}</span>
+                  </div>
+                  <span className="text-[10px] text-sky-600 font-medium bg-sky-100/60 px-2 py-0.5 rounded-md shrink-0">
+                    Progres Unggah
+                  </span>
+                </div>
+
                 <div className="flex items-center justify-between pt-0.5">
-                  <span className="text-[11px] text-sky-800 font-medium">
-                    {uploadProgress < 20 ? '⏳ Membaca berkas...' : uploadProgress < 85 ? '☁️ Mengirim langsung ke Google Drive...' : '✅ Selesai tersimpan di Google Drive'}
+                  <span className="text-[10px] text-sky-800 font-medium">
+                    {uploadProgress < 20 ? '⏳ Membaca...' : uploadProgress < 90 ? '☁️ Sinkronisasi Google Drive...' : '✅ Menyimpan ke Database...'}
                   </span>
                   <button
                     type="button"
                     onClick={() => {
                       uploadCancelledRef.current = true;
                     }}
-                    className="px-2.5 py-1 bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold text-[11px] rounded-lg transition-colors cursor-pointer border border-rose-200/80 flex items-center gap-1 shadow-2xs"
+                    className="px-2.5 py-1 bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold text-[11px] rounded-lg transition-colors cursor-pointer border border-rose-200/80 flex items-center gap-1 shadow-2xs shrink-0"
                   >
                     <X className="w-3.5 h-3.5" />
                     <span>Batal Upload</span>
