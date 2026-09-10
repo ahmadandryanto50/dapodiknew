@@ -187,12 +187,16 @@ function doPost(e) {
       if (data.parentFolderId) {
         try {
           parentFolder = DriveApp.getFolderById(data.parentFolderId);
-        } catch(err) {}
+        } catch(err) {
+          parentFolder = null;
+        }
       }
       if (!parentFolder) {
         try {
           parentFolder = DriveApp.getRootFolder();
-        } catch(err) {}
+        } catch(err) {
+          parentFolder = null;
+        }
       }
       
       // 2. Cari atau buat subfolder (folder kategori) di dalam folder induk tersebut
@@ -205,7 +209,9 @@ function doPost(e) {
           } else {
             folder = parentFolder.createFolder(folderName);
           }
-        } catch(err) {}
+        } catch(err) {
+          folder = null;
+        }
       }
       
       // Fallback jika semua di atas gagal, buat di root
@@ -217,28 +223,44 @@ function doPost(e) {
           } else {
             folder = DriveApp.createFolder(folderName);
           }
-        } catch(err) {}
+        } catch(err) {
+          folder = null;
+        }
       }
       
-      var decodedBytes = Utilities.base64Decode(data.base64Data);
-      var blob = Utilities.newBlob(decodedBytes, data.mimeType || 'application/octet-stream', data.fileName);
+      var rawBase64 = String(data.base64Data || '');
+      if (rawBase64.indexOf(',') > -1) {
+        rawBase64 = rawBase64.split(',')[1];
+      }
+      var decodedBytes = Utilities.base64Decode(rawBase64);
+      var safeMimeType = data.mimeType || 'application/octet-stream';
+      var safeFileName = data.fileName || ('berkas_' + new Date().getTime());
+      var blob = Utilities.newBlob(decodedBytes, safeMimeType, safeFileName);
+      
       var createdFile = folder ? folder.createFile(blob) : DriveApp.createFile(blob);
       if (data.description) {
-        try { createdFile.setDescription(data.description); } catch(e) {}
+        try { createdFile.setDescription(String(data.description)); } catch(e) {}
       }
       try {
         createdFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
       } catch(e) {}
       
+      var fileId = createdFile.getId();
+      var fileUrl = createdFile.getUrl();
+      var fileSize = createdFile.getSize();
+      var actualMimeType = createdFile.getMimeType();
+      var folderId = folder ? folder.getId() : (parentFolder ? parentFolder.getId() : '');
+      var folderActualName = folder ? folder.getName() : folderName;
+      
       return ContentService.createTextOutput(JSON.stringify({
         status: 'success',
-        id: createdFile.getId(),
+        id: fileId,
         name: createdFile.getName(),
-        webViewLink: createdFile.getUrl(),
-        size: createdFile.getSize(),
-        mimeType: createdFile.getMimeType(),
-        folderId: folder.getId(),
-        folderName: folder.getName()
+        webViewLink: fileUrl,
+        size: fileSize,
+        mimeType: actualMimeType,
+        folderId: folderId,
+        folderName: folderActualName
       })).setMimeType(ContentService.MimeType.JSON);
     } else if (data.type === 'SYNC_PENGATURAN') {
       saveSheetData(ss, 'Data_Pengaturan', data.payload);
@@ -1012,7 +1034,7 @@ export async function syncBerkasToGoogleSheets(
 }
 
 export async function uploadFileToDriveViaAppsScript(
-  config: SyncConfig,
+  config: SyncConfig | null | undefined,
   fileInfo: {
     name: string;
     type?: string;
@@ -1033,20 +1055,50 @@ export async function uploadFileToDriveViaAppsScript(
   size?: number;
   mimeType?: string;
 }> {
-  if (!config.webAppUrl) {
-    return { success: false, message: 'URL Google Apps Script belum dikonfigurasi.' };
+  let webAppUrl = config?.webAppUrl;
+  if (!webAppUrl) {
+    try {
+      const saved = localStorage.getItem('dapodik_sync_config');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.webAppUrl) webAppUrl = parsed.webAppUrl;
+      }
+    } catch (e) {}
   }
+  if (!webAppUrl) {
+    webAppUrl = 'https://script.google.com/macros/s/AKfycbyhC26e6a4a0ORdBvnMCz7c1pDR0rQsGkcO_LfVKhxAZGYtBMGle4qbjZoNx6D_uT79/exec';
+  }
+
+  // Infer MIME type if missing or octet-stream
+  let safeMime = fileInfo.type;
+  if (!safeMime || safeMime === 'application/octet-stream') {
+    const ext = fileInfo.name.split('.').pop()?.toLowerCase();
+    if (ext === 'pdf') safeMime = 'application/pdf';
+    else if (ext === 'jpg' || ext === 'jpeg') safeMime = 'image/jpeg';
+    else if (ext === 'png') safeMime = 'image/png';
+    else if (ext === 'docx') safeMime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    else if (ext === 'xlsx') safeMime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    else if (ext === 'pptx') safeMime = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+    else safeMime = 'application/octet-stream';
+  }
+
+  // Strip prefix from base64 if passed with dataUrl header
+  let cleanBase64 = fileInfo.base64Data;
+  if (cleanBase64 && cleanBase64.includes(',')) {
+    cleanBase64 = cleanBase64.split(',')[1];
+  }
+
   const payload = {
     type: 'UPLOAD_FILE_TO_DRIVE',
     fileName: fileInfo.name,
-    mimeType: fileInfo.type || 'application/octet-stream',
-    base64Data: fileInfo.base64Data,
+    mimeType: safeMime,
+    base64Data: cleanBase64,
     folderName: fileInfo.folderName || fileInfo.category || 'Berkas Dapodik',
     description: fileInfo.description || '',
     parentFolderId: fileInfo.parentFolderId || ''
   };
 
-  const res = await callProxyOrDirectPost(config.webAppUrl, payload);
+  const res = await callProxyOrDirectPost(webAppUrl, payload);
   if (res.success && res.data) {
     const d = res.data;
     if (d.status === 'success' && d.id) {
@@ -1058,7 +1110,7 @@ export async function uploadFileToDriveViaAppsScript(
         folderId: d.folderId || 'root',
         folderName: d.folderName || fileInfo.folderName || fileInfo.category || 'Berkas Dapodik',
         size: d.size || 0,
-        mimeType: d.mimeType || fileInfo.type
+        mimeType: d.mimeType || safeMime
       };
     }
     if (d.status === 'error') {

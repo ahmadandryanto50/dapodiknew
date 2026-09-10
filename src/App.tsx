@@ -800,10 +800,26 @@ export default function App() {
             localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(permintaanAkses));
           }
           let pulledFiles = schoolFiles;
-          if (Array.isArray(berkas)) {
+          if (Array.isArray(berkas) && berkas.length > 0) {
             pulledFiles = berkas;
             setSchoolFiles(pulledFiles);
             localStorage.setItem('dapodik_school_files_v3', JSON.stringify(pulledFiles));
+          } else if (schoolFiles && schoolFiles.length > 0) {
+            pulledFiles = schoolFiles;
+          } else {
+            // If empty in this browser (e.g. Mozilla/Mobile), fetch from server cache
+            try {
+              const cacheRes = await fetch(`/api/app-data?t=${Date.now()}`);
+              if (cacheRes.ok) {
+                const cacheData = await cacheRes.json();
+                const serverFiles = cacheData?.schoolFiles || cacheData?.files;
+                if (Array.isArray(serverFiles) && serverFiles.length > 0) {
+                  pulledFiles = serverFiles;
+                  setSchoolFiles(pulledFiles);
+                  localStorage.setItem('dapodik_school_files_v3', JSON.stringify(pulledFiles));
+                }
+              }
+            } catch (e) {}
           }
           if (Array.isArray(aplikasi)) {
             setAplikasiLinks(aplikasi);
@@ -952,6 +968,23 @@ export default function App() {
 
     const initApp = async () => {
       try {
+        // Hydrate from server cache immediately so new browsers (like Mozilla or mobile) have data instantly
+        try {
+          const cacheRes = await fetch(`/api/app-data?t=${Date.now()}`);
+          if (cacheRes.ok) {
+            const serverData = await cacheRes.json();
+            if (serverData) {
+              const sf = serverData.schoolFiles || serverData.files;
+              if (Array.isArray(sf) && sf.length > 0) {
+                setSchoolFiles(prev => prev.length === 0 ? sf : prev);
+              }
+              if (Array.isArray(serverData.customFolders) && serverData.customFolders.length > 0) {
+                setCustomFolders(serverData.customFolders);
+              }
+            }
+          }
+        } catch (e) {}
+
         const currentCfg = syncConfigRef.current || syncConfig;
         if (currentCfg && currentCfg.webAppUrl) {
           await handlePullFromSheets(true);

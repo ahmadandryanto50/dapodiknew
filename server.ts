@@ -37,8 +37,9 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  // Support JSON bodies up to 50MB (for file uploads and base64 strings)
+  // Support JSON & URL-encoded bodies up to 50MB (for file uploads and base64 strings from mobile/browsers)
   app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
   // Prevent caching on all API responses so multi-device/browser sync is always instantaneous and fresh
   app.use("/api", (req, res, next) => {
@@ -52,7 +53,7 @@ async function startServer() {
   // API Route: Get Shared Sync Config
   app.get("/api/sync-config", (req, res) => {
     const config = safeReadJSON(CONFIG_FILE, null);
-    if (config) {
+    if (config && config.webAppUrl) {
       return res.json(config);
     }
     // Fallback to default
@@ -70,18 +71,19 @@ async function startServer() {
   // API Route: Proxy Sync to Google Sheets (bypasses browser CORS & mobile restrictions)
   app.post("/api/sync-sheets", async (req, res) => {
     try {
-      const { webAppUrl, payload } = req.body;
+      let { webAppUrl, payload } = req.body || {};
       if (!webAppUrl) {
-        return res.status(400).json({ success: false, message: "webAppUrl is required" });
+        const savedConfig = safeReadJSON(CONFIG_FILE, null);
+        webAppUrl = savedConfig?.webAppUrl || "https://script.google.com/macros/s/AKfycbyhC26e6a4a0ORdBvnMCz7c1pDR0rQsGkcO_LfVKhxAZGYtBMGle4qbjZoNx6D_uT79/exec";
       }
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 seconds timeout
+      const timeoutId = setTimeout(() => controller.abort(), 180000); // 180 seconds timeout for file uploads
       
       const response = await fetch(webAppUrl, {
         method: "POST",
         headers: { "Content-Type": "text/plain" },
-        body: JSON.stringify(payload),
+        body: typeof payload === 'string' ? payload : JSON.stringify(payload),
         redirect: "follow",
         signal: controller.signal
       });
@@ -257,15 +259,25 @@ async function startServer() {
         : (incoming.deletedFileId ? [incoming.deletedFileId] : []);
       const mergedDeletedFiles = Array.from(new Set([...currentDeletedFiles, ...incomingDeletedFiles]));
 
-      // Handle schoolFiles
+      // Handle schoolFiles with smart merging by ID across multiple devices & browsers
       let mergedFiles: any[] = [];
       const delFileSet = new Set<string>(mergedDeletedFiles);
-      if (Array.isArray(incoming.schoolFiles)) {
-        mergedFiles = incoming.schoolFiles.filter((f: any) => f && f.id && !delFileSet.has(String(f.id)));
-      } else {
-        const currentFilesList: any[] = Array.isArray(currentData.schoolFiles) ? currentData.schoolFiles : (Array.isArray(currentData.files) ? currentData.files : []);
-        mergedFiles = currentFilesList.filter((f: any) => f && f.id && !delFileSet.has(String(f.id)));
+      const currentFilesList: any[] = Array.isArray(currentData.schoolFiles) ? currentData.schoolFiles : (Array.isArray(currentData.files) ? currentData.files : []);
+      
+      const fileMap = new Map<string, any>();
+      for (const f of currentFilesList) {
+        if (f && f.id && !delFileSet.has(String(f.id))) {
+          fileMap.set(String(f.id), f);
+        }
       }
+      if (Array.isArray(incoming.schoolFiles)) {
+        for (const f of incoming.schoolFiles) {
+          if (f && f.id && !delFileSet.has(String(f.id))) {
+            fileMap.set(String(f.id), f);
+          }
+        }
+      }
+      mergedFiles = Array.from(fileMap.values());
       mergedFiles.sort((a: any, b: any) => {
         const timeA = a.uploadedAt ? new Date(a.uploadedAt).getTime() : 0;
         const timeB = b.uploadedAt ? new Date(b.uploadedAt).getTime() : 0;

@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Folder,
-  FolderPlus,
   FileText,
   FileSpreadsheet,
   FileImage,
@@ -9,113 +8,174 @@ import {
   Upload,
   Download,
   Eye,
-  Lock,
-  Unlock,
-  ShieldCheck,
   CheckCircle2,
-  XCircle,
-  Clock,
   Search,
-  Filter,
   ExternalLink,
   Plus,
   Copy,
   Trash2,
   Sparkles,
-  UserCheck,
   HardDrive,
-  Share2,
-  Key,
-  FolderLock,
   RefreshCw,
-  Info,
   ChevronRight,
-  Send,
   Check,
   X,
   FileCheck2,
-  Building,
-  Layers,
   FileCode,
-  Tag,
-  LogIn,
-  LogOut,
   Bell,
-  AlertCircle,
-  Ban,
-  ShieldAlert,
   Loader2,
-  ShieldX,
-  Power
+  ShieldCheck
 } from 'lucide-react';
-import { SchoolFileItem, FileAccessRequest, AdminUser, SyncConfig } from '../types';
-import { GOOGLE_DRIVE_MAIN_FOLDER_URL, GOOGLE_DRIVE_FOLDER_ID, initialSchoolFiles, initialAccessRequests } from '../data/mockFiles';
+import { SchoolFileItem, AdminUser, SyncConfig, FileAccessRequest } from '../types';
+import { GOOGLE_DRIVE_MAIN_FOLDER_URL, GOOGLE_DRIVE_FOLDER_ID, initialSchoolFiles } from '../data/mockFiles';
 import {
   subscribeGoogleDriveAuth,
   signInWithGoogleDrive,
   signOutGoogleDrive,
-  uploadFileToGoogleDrive,
   isGoogleDriveConnected
 } from '../services/googleDriveService';
 import {
   uploadFileToDriveViaAppsScript,
   APPS_SCRIPT_TEMPLATE,
   downloadKodeGsFile,
-  syncPermintaanAksesToGoogleSheets,
   syncBerkasToGoogleSheets
 } from '../services/googleSheetsService';
 
-const compressImageIfNeeded = (file: File, maxWidth = 1000, maxHeight = 1000, quality = 0.5): Promise<string> => {
-  return new Promise((resolve) => {
-    if (!file.type.startsWith('image/')) {
+/**
+ * Universal, robust file reader for mobile (Android/iOS) and all desktop browsers.
+ * Combines FileReader.readAsDataURL and ArrayBuffer binary conversion with safe fallbacks.
+ */
+const readFileAsBase64 = async (
+  file: File
+): Promise<{ dataUrl: string; base64Pure: string; mimeType: string }> => {
+  let mimeType = file.type || '';
+  if (!mimeType) {
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (ext === 'pdf') mimeType = 'application/pdf';
+    else if (ext === 'jpg' || ext === 'jpeg') mimeType = 'image/jpeg';
+    else if (ext === 'png') mimeType = 'image/png';
+    else if (ext === 'docx') mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    else if (ext === 'xlsx') mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    else if (ext === 'pptx') mimeType = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+    else if (ext === 'zip') mimeType = 'application/zip';
+    else mimeType = 'application/octet-stream';
+  }
+
+  // Strategy 1: FileReader.readAsDataURL
+  const readViaDataUrl = (): Promise<string> => {
+    return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => resolve('');
+      reader.onload = () => resolve((reader.result as string) || '');
+      reader.onerror = (e) => reject(e);
+      reader.onabort = (e) => reject(e);
       reader.readAsDataURL(file);
-      return;
-    }
+    });
+  };
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        let width = img.width;
-        let height = img.height;
-
-        if (width > maxWidth || height > maxHeight) {
-          if (width > height) {
-            height = Math.round((height * maxWidth) / width);
-            width = maxWidth;
-          } else {
-            width = Math.round((width * maxHeight) / height);
-            height = maxHeight;
+  // Strategy 2: ArrayBuffer to base64 conversion
+  const readViaArrayBuffer = (): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const buffer = reader.result as ArrayBuffer;
+          const bytes = new Uint8Array(buffer);
+          let binary = '';
+          const chunkSize = 8192;
+          for (let i = 0; i < bytes.length; i += chunkSize) {
+            const chunk = bytes.subarray(i, i + chunkSize);
+            binary += String.fromCharCode.apply(null, chunk as any);
           }
+          const base64 = btoa(binary);
+          resolve(`data:${mimeType};base64,${base64}`);
+        } catch (err) {
+          reject(err);
         }
-
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          resolve(event.target?.result as string || '');
-          return;
-        }
-
-        ctx.drawImage(img, 0, 0, width, height);
-
-        const outputType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
-        const dataUrl = canvas.toDataURL(outputType, quality);
-        resolve(dataUrl);
       };
-      img.onerror = () => {
-        resolve(event.target?.result as string || '');
-      };
-      img.src = event.target?.result as string;
-    };
-    reader.onerror = () => resolve('');
-    reader.readAsDataURL(file);
-  });
+      reader.onerror = (e) => reject(e);
+      reader.onabort = (e) => reject(e);
+      reader.readAsArrayBuffer(file);
+    });
+  };
+
+  let dataUrl = '';
+  try {
+    dataUrl = await Promise.race([
+      readViaDataUrl(),
+      new Promise<string>((_, reject) => setTimeout(() => reject(new Error('Timeout reading file')), 25000))
+    ]);
+  } catch (e1) {
+    try {
+      dataUrl = await readViaArrayBuffer();
+    } catch (e2) {
+      console.warn('Fallback ArrayBuffer read failed:', e2);
+    }
+  }
+
+  if (!dataUrl) {
+    try {
+      dataUrl = await readViaArrayBuffer();
+    } catch (e3) {}
+  }
+
+  // Soft optimization for huge mobile photos (> 3MB) to preserve mobile bandwidth and RAM
+  if (mimeType.startsWith('image/') && file.size > 3 * 1024 * 1024 && dataUrl) {
+    try {
+      const compressed = await new Promise<string>((res) => {
+        const timer = setTimeout(() => res(dataUrl), 3500);
+        const img = new Image();
+        img.onload = () => {
+          clearTimeout(timer);
+          try {
+            const maxDim = 1920;
+            let w = img.width;
+            let h = img.height;
+            if (w <= maxDim && h <= maxDim) {
+              res(dataUrl);
+              return;
+            }
+            if (w > h) {
+              h = Math.round((h * maxDim) / w);
+              w = maxDim;
+            } else {
+              w = Math.round((w * maxDim) / h);
+              h = maxDim;
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+              res(dataUrl);
+              return;
+            }
+            ctx.drawImage(img, 0, 0, w, h);
+            const outputFormat = mimeType === 'image/png' ? 'image/png' : 'image/jpeg';
+            res(canvas.toDataURL(outputFormat, 0.8));
+          } catch (canvasErr) {
+            res(dataUrl);
+          }
+        };
+        img.onerror = () => {
+          clearTimeout(timer);
+          res(dataUrl);
+        };
+        img.src = dataUrl;
+      });
+      if (compressed) {
+        dataUrl = compressed;
+      }
+    } catch (optErr) {
+      // Keep original dataUrl
+    }
+  }
+
+  let base64Pure = dataUrl;
+  if (base64Pure.includes(',')) {
+    base64Pure = base64Pure.split(',')[1];
+  }
+
+  return { dataUrl, base64Pure, mimeType };
 };
 
 interface BerkasModuleProps {
@@ -133,17 +193,14 @@ interface BerkasModuleProps {
 
 export const BerkasModule: React.FC<BerkasModuleProps> = ({ 
   currentUser, 
-  onBackToHome, 
   autoOpenUpload, 
   syncConfig,
   files: propFiles,
   setFiles: propSetFiles,
-  accessRequests: propAccessRequests,
-  setAccessRequests: propSetAccessRequests,
   customFolders: propCustomFolders,
   setCustomFolders: propSetCustomFolders
 }) => {
-  // Persistence state - Clean empty initialization
+  // Persistence state
   const [localFiles, setLocalFiles] = useState<SchoolFileItem[]>(() => {
     try {
       const saved = localStorage.getItem('dapodik_school_files_v3');
@@ -159,21 +216,6 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
   const files = propFiles !== undefined ? propFiles : localFiles;
   const setFiles = propSetFiles !== undefined ? propSetFiles : setLocalFiles;
 
-  const [localAccessRequests, setLocalAccessRequests] = useState<FileAccessRequest[]>(() => {
-    try {
-      const saved = localStorage.getItem('dapodik_file_access_requests_v3');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      }
-    } catch (e) {
-      console.error('Error loading access requests', e);
-    }
-    return initialAccessRequests;
-  });
-  const accessRequests = propAccessRequests !== undefined ? propAccessRequests : localAccessRequests;
-  const setAccessRequests = propSetAccessRequests !== undefined ? propSetAccessRequests : setLocalAccessRequests;
-
   const [localCustomFolders, setLocalCustomFolders] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('dapodik_custom_folders');
@@ -187,7 +229,6 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
   const customFolders = propCustomFolders !== undefined ? propCustomFolders : localCustomFolders;
   const setCustomFolders = propSetCustomFolders !== undefined ? propSetCustomFolders : setLocalCustomFolders;
 
-  const [isSyncingRequests, setIsSyncingRequests] = useState<boolean>(false);
   const [activeSyncConfig, setActiveSyncConfig] = useState<SyncConfig | null>(syncConfig || null);
 
   // Load effective sync configuration if not passed directly
@@ -217,104 +258,14 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
     }
   }, [propFiles]);
 
-  useEffect(() => {
-    if (propAccessRequests !== undefined) {
-      setLocalAccessRequests(propAccessRequests);
-    }
-  }, [propAccessRequests]);
-
-  // Helper function to safely merge incoming remote files with local files without losing newly uploaded items
-  const mergeFilesWithLocal = (incomingFiles: SchoolFileItem[]): SchoolFileItem[] => {
-    let deletedIds: string[] = [];
+  // Pull latest school files from Server Cache
+  const handlePullFilesFromCloud = async (silent: boolean = false) => {
     try {
-      const savedDel = localStorage.getItem('dapodik_deleted_file_ids');
-      if (savedDel) deletedIds = JSON.parse(savedDel);
-    } catch (e) {}
-    const delSet = new Set(deletedIds);
-
-    let currentLocal: SchoolFileItem[] = [];
-    try {
-      const savedLocal = localStorage.getItem('dapodik_school_files_v3');
-      if (savedLocal) currentLocal = JSON.parse(savedLocal);
-    } catch (e) {}
-
-    const fileMap = new Map<string, SchoolFileItem>();
-
-    // 1. Put current local state files into map first
-    (files || []).forEach(f => {
-      if (f && f.id && !delSet.has(String(f.id))) {
-        fileMap.set(String(f.id), f);
-      }
-    });
-
-    // 2. Put current localStorage files into map
-    (currentLocal || []).forEach(f => {
-      if (f && f.id && !delSet.has(String(f.id))) {
-        const existing = fileMap.get(String(f.id));
-        if (existing) {
-          fileMap.set(String(f.id), { ...existing, ...f, dataUrl: f.dataUrl || existing.dataUrl });
-        } else {
-          fileMap.set(String(f.id), f);
-        }
-      }
-    });
-
-    // 3. Put incoming files from server or Google Sheets into map
-    (incomingFiles || []).forEach(f => {
-      if (f && f.id && !delSet.has(String(f.id))) {
-        const existing = fileMap.get(String(f.id));
-        if (existing) {
-          fileMap.set(String(f.id), { ...existing, ...f, dataUrl: f.dataUrl || existing.dataUrl });
-        } else {
-          fileMap.set(String(f.id), f);
-        }
-      }
-    });
-
-    const merged = Array.from(fileMap.values());
-    merged.sort((a, b) => {
-      const timeA = a.uploadedAt ? new Date(a.uploadedAt).getTime() : 0;
-      const timeB = b.uploadedAt ? new Date(b.uploadedAt).getTime() : 0;
-      return timeB - timeA;
-    });
-    return merged;
-  };
-
-  // Pull latest access requests & school files from Server Cache and Google Sheets
-  const handlePullRequestsFromCloud = async (silent: boolean = false) => {
-    try {
-      // Immediately fetch from high-speed Server Cache (/api/app-data)
       let updatedAny = false;
       try {
         const cacheRes = await fetch(`/api/app-data?t=${Date.now()}`);
         if (cacheRes.ok) {
           const cacheData = await cacheRes.json();
-          if (Array.isArray(cacheData.permintaanAkses)) {
-            let delIds: string[] = [];
-            try {
-              delIds = JSON.parse(localStorage.getItem('dapodik_deleted_request_ids') || '[]');
-            } catch (e) {}
-            const serverDelIds: string[] = Array.isArray(cacheData.deletedPermintaanAksesIds) ? cacheData.deletedPermintaanAksesIds : [];
-            const allDelIds = new Set<string>([...delIds, ...serverDelIds]);
-
-            const cleanRequests = cacheData.permintaanAkses.filter(
-              (r: FileAccessRequest) => r && r.id && !allDelIds.has(String(r.id))
-            );
-            cleanRequests.sort((a: any, b: any) => {
-              const timeA = a.requestedAt ? new Date(a.requestedAt).getTime() : 0;
-              const timeB = b.requestedAt ? new Date(b.requestedAt).getTime() : 0;
-              return timeB - timeA;
-            });
-
-            setAccessRequests(prev => {
-              if (JSON.stringify(prev) !== JSON.stringify(cleanRequests)) {
-                localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(cleanRequests));
-                return cleanRequests;
-              }
-              return prev;
-            });
-            updatedAny = true;
-          }
           if (Array.isArray(cacheData.schoolFiles)) {
             let delFileIds: string[] = [];
             try {
@@ -347,28 +298,24 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       }
 
       if (!silent) {
-        setSyncFeedback(updatedAny ? 'Data izin akses berhasil disinkronkan!' : 'Database berkas sudah up-to-date!');
+        setSyncFeedback(updatedAny ? 'Database berkas berhasil disinkronkan!' : 'Database berkas sudah up-to-date!');
         setTimeout(() => setSyncFeedback(null), 3000);
       }
     } catch (err: any) {
-      console.warn('Pull access requests error:', err);
-      if (!silent) {
-        setSyncFeedback('Gagal menyinkronkan data izin akses.');
-        setTimeout(() => setSyncFeedback(null), 4000);
-      }
+      console.warn('Pull files error:', err);
     }
   };
 
   // Pull on initial load and recurring multi-device sync
   useEffect(() => {
-    handlePullRequestsFromCloud(true);
+    handlePullFilesFromCloud(true);
 
     const intervalId = setInterval(() => {
-      handlePullRequestsFromCloud(true);
+      handlePullFilesFromCloud(true);
     }, 5000);
 
     const onFocus = () => {
-      handlePullRequestsFromCloud(true);
+      handlePullFilesFromCloud(true);
     };
     window.addEventListener('focus', onFocus);
 
@@ -377,53 +324,6 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       window.removeEventListener('focus', onFocus);
     };
   }, [activeSyncConfig?.webAppUrl]);
-
-  // Synchronize helper for all operations (Create, Approve, Reject, Delete)
-  const persistAndSyncRequests = async (
-    updatedRequests: FileAccessRequest[],
-    deletedId?: string,
-    successNote?: string
-  ) => {
-    if (deletedId) {
-      try {
-        const savedDel = localStorage.getItem('dapodik_deleted_request_ids');
-        const delList: string[] = savedDel ? JSON.parse(savedDel) : [];
-        if (!delList.includes(deletedId)) delList.push(deletedId);
-        localStorage.setItem('dapodik_deleted_request_ids', JSON.stringify(delList));
-      } catch (e) {}
-    }
-
-    setLocalAccessRequests(updatedRequests);
-    if (propSetAccessRequests) {
-      propSetAccessRequests(updatedRequests);
-    }
-    try {
-      localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(updatedRequests));
-    } catch (e) {}
-
-    // Broadcast to server app-data cache immediately
-    fetch('/api/app-data', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        permintaanAkses: updatedRequests,
-        ...(deletedId ? { deletedPermintaanAksesIds: [deletedId], deletedPermintaanAksesId: deletedId } : {})
-      })
-    }).catch(() => {});
-
-    // Sync to Google Sheets
-    const syncCfg = activeSyncConfig || syncConfig;
-    if (syncCfg && syncCfg.webAppUrl) {
-      syncPermintaanAksesToGoogleSheets(syncCfg, updatedRequests).catch(err => {
-        console.error('Failed to sync permintaan akses to Google Sheets:', err);
-      });
-    }
-
-    if (successNote) {
-      setSyncFeedback(successNote);
-      setTimeout(() => setSyncFeedback(null), 4000);
-    }
-  };
 
   // Synchronize helper for files (Upload, Delete, Update)
   const persistAndSyncFiles = async (
@@ -448,7 +348,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       localStorage.setItem('dapodik_school_files_v3', JSON.stringify(updatedFiles));
     } catch (e) {}
 
-    // Strip large dataUrl before sending over server cache and spreadsheet to save network and prevent payload overflow
+    // Strip large dataUrl before sending over server cache and spreadsheet to save network
     const cleanFiles = updatedFiles.map(f => {
       if (f.dataUrl && f.dataUrl.length > 80000) {
         const { dataUrl, ...rest } = f;
@@ -457,7 +357,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       return f;
     });
 
-    // Broadcast to server app-data cache immediately so any other browser/laptop/HP updates in real-time
+    // Broadcast to server app-data cache immediately
     fetch('/api/app-data', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -535,7 +435,6 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       mode: 'appscript'
     };
 
-    // Sample 10-byte text file base64
     const testBase64 = 'VGVzIEtvbmVrc2kgR29vZ2xlIERyaXZlIERhcG9kaWsgMjAyNg==';
 
     try {
@@ -630,16 +529,8 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
     }
   }, [files]);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(accessRequests));
-    } catch (e) {
-      console.error('Failed to save file access requests', e);
-    }
-  }, [accessRequests]);
-
   // Tab & Filters
-  const [activeTab, setActiveTab] = useState<'files' | 'folders' | 'approvals'>('files');
+  const [activeTab, setActiveTab] = useState<'files' | 'folders'>('files');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [selectedPrivacy, setSelectedPrivacy] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -647,23 +538,21 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
 
   // Modal States
   const [isUploadModalOpen, setIsUploadModalOpen] = useState<boolean>(!!autoOpenUpload);
-  const [isRequestModalOpen, setIsRequestModalOpen] = useState<boolean>(false);
 
   useEffect(() => {
     if (autoOpenUpload) {
       setIsUploadModalOpen(true);
     }
   }, [autoOpenUpload]);
-  const [selectedFileForRequest, setSelectedFileForRequest] = useState<SchoolFileItem | null>(null);
+
   const [previewFile, setPreviewFile] = useState<SchoolFileItem | null>(null);
-  const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
 
   // Upload Form State
   const [folderChoiceMode, setFolderChoiceMode] = useState<'category' | 'custom'>('category');
   const [uploadCategory, setUploadCategory] = useState<string>('Kurikulum & Pembelajaran');
   const [customFolder, setCustomFolder] = useState<string>('');
-  const [uploadPrivacy, setUploadPrivacy] = useState<'Restricted' | 'Guru Only' | 'Public'>('Restricted');
+  const [uploadPrivacy, setUploadPrivacy] = useState<'Restricted' | 'Guru Only' | 'Public'>('Public');
   const [uploadDescription, setUploadDescription] = useState<string>('');
   const [selectedUploadFiles, setSelectedUploadFiles] = useState<File[]>([]);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
@@ -673,16 +562,8 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
   const uploadCancelledRef = useRef<boolean>(false);
   const multiFileInputRef = useRef<HTMLInputElement>(null);
 
-  // Request Access Form State
-  const [requestName, setRequestName] = useState<string>(currentUser?.nama || '');
-  const [requestRole, setRequestRole] = useState<string>(currentUser?.role || 'Guru Mata Pelajaran');
-  const [requestEmail, setRequestEmail] = useState<string>(currentUser?.email || '');
-  const [requestReason, setRequestReason] = useState<string>('');
-  const [requestSuccessMsg, setRequestSuccessMsg] = useState<string | null>(null);
-
-  // Delete Confirmation States
+  // Delete Confirmation State
   const [deletingFile, setDeletingFile] = useState<SchoolFileItem | null>(null);
-  const [deletingRequest, setDeletingRequest] = useState<FileAccessRequest | null>(null);
 
   const isAdmin = Boolean(
     currentUser && (
@@ -692,186 +573,25 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       (typeof currentUser.role === 'string' && currentUser.role.toLowerCase().includes('admin'))
     )
   );
-  const isOperator = currentUser?.role === 'Operator';
 
-  // Check if current user is an educator / school staff (Guru, Kepsek, Operator, Admin)
-  const isSchoolStaff = Boolean(
-    currentUser && (
-      isAdmin ||
-      currentUser.role === 'Guru' ||
-      currentUser.role === 'Kepala Sekolah' ||
-      currentUser.role === 'Operator' ||
-      (typeof currentUser.role === 'string' && (
-        currentUser.role.toLowerCase().includes('guru') ||
-        currentUser.role.toLowerCase().includes('ptk') ||
-        currentUser.role.toLowerCase().includes('kepsek') ||
-        currentUser.role.toLowerCase().includes('pendidik')
-      ))
-    )
-  );
+  const canDeleteFile = (file: SchoolFileItem) => {
+    if (isAdmin) return true;
+    if (!currentUser) return false;
+    const uploaderName = (file.uploadedBy || '').trim().toLowerCase();
+    const currentName = (currentUser.nama || '').trim().toLowerCase();
+    const currentUsername = (currentUser.username || '').trim().toLowerCase();
+    return Boolean(
+      (currentName && uploaderName === currentName) ||
+      (currentUsername && uploaderName === currentUsername) ||
+      (currentUsername && uploaderName.includes(currentUsername))
+    );
+  };
 
   // Extract all categories including customFolders
   const categories = Array.from(new Set([
     ...files.map(f => f.category),
     ...customFolders
   ])).filter(Boolean);
-
-  // Robust matching to check if a request belongs to current user / current browser session
-  const isUserRequestMatch = (req: FileAccessRequest): boolean => {
-    // 1. Check local request IDs submitted from this browser session
-    try {
-      const savedIds = localStorage.getItem('dapodik_my_request_ids');
-      if (savedIds) {
-        const ids: string[] = JSON.parse(savedIds);
-        if (Array.isArray(ids) && ids.includes(req.id)) return true;
-      }
-    } catch (e) {}
-
-    // 2. Check saved requester profile from previous submissions in this browser
-    try {
-      const savedProfile = localStorage.getItem('dapodik_my_requester_profile');
-      if (savedProfile) {
-        const prof = JSON.parse(savedProfile);
-        if (prof.email && req.requesterEmail && prof.email.toLowerCase().trim() === req.requesterEmail.toLowerCase().trim()) {
-          return true;
-        }
-        if (prof.name && req.requesterName && prof.name.toLowerCase().trim() === req.requesterName.toLowerCase().trim()) {
-          return true;
-        }
-      }
-    } catch (e) {}
-
-    // 3. Match against currentUser
-    const curName = (currentUser?.nama || '').toLowerCase().trim();
-    const curUser = (currentUser?.username || '').toLowerCase().trim();
-    const curEmail = (currentUser?.email || '').toLowerCase().trim();
-    const reqName = (req.requesterName || '').toLowerCase().trim();
-    const reqEmail = (req.requesterEmail || '').toLowerCase().trim();
-
-    // Direct exact matches
-    if (curEmail && reqEmail && curEmail === reqEmail) return true;
-    if (curName && reqName && curName === reqName) return true;
-    if (curUser && reqName && curUser === reqName) return true;
-
-    // Fuzzy clean name matching (handles titles, roles in parentheses, digits, special characters)
-    const cleanCurName = curName.replace(/\(.*?\)/g, '').replace(/[@_0-9]/g, ' ').replace(/\s+/g, ' ').trim();
-    const cleanReqName = reqName.replace(/\(.*?\)/g, '').replace(/[@_0-9]/g, ' ').replace(/\s+/g, ' ').trim();
-    if (cleanCurName && cleanReqName) {
-      if (cleanCurName === cleanReqName) return true;
-      if (cleanCurName.includes(cleanReqName) || cleanReqName.includes(cleanCurName)) return true;
-      const curWords = cleanCurName.split(' ').filter(w => w.length >= 3);
-      const reqWords = cleanReqName.split(' ').filter(w => w.length >= 3);
-      if (curWords.length > 0 && reqWords.length > 0 && curWords.some(w => reqWords.includes(w))) {
-        return true;
-      }
-    }
-
-    // Email username prefix matching (e.g. ahmad.andryanto50 vs ahmadandryanto24)
-    if (curEmail && reqEmail) {
-      const curPrefix = curEmail.split('@')[0].replace(/[^a-z]/g, '');
-      const reqPrefix = reqEmail.split('@')[0].replace(/[^a-z]/g, '');
-      if (curPrefix.length >= 4 && reqPrefix.length >= 4 && (curPrefix.includes(reqPrefix) || reqPrefix.includes(curPrefix))) {
-        return true;
-      }
-    }
-
-    // If requester name words appear in user's email
-    if (cleanReqName && curEmail) {
-      const reqWords = cleanReqName.split(' ').filter(w => w.length >= 4);
-      if (reqWords.length > 0 && reqWords.every(w => curEmail.includes(w))) {
-        return true;
-      }
-    }
-
-    // If current user name words appear in requester email
-    if (cleanCurName && reqEmail) {
-      const curWords = cleanCurName.split(' ').filter(w => w.length >= 4);
-      if (curWords.length > 0 && curWords.every(w => reqEmail.includes(w))) {
-        return true;
-      }
-    }
-
-    // 4. Ahmad Andryanto / school administrator / single requester fallback
-    if (reqName.includes('ahmad') && (curName.includes('ahmad') || curEmail.includes('ahmad') || curUser.includes('ahmad') || !currentUser || curName === 'guru')) {
-      return true;
-    }
-
-    // 5. If viewing in non-admin mode and this is the only request for this file in the database
-    if (!isAdmin) {
-      const requestsForThisFile = accessRequests.filter(r => r.fileId === req.fileId);
-      if (requestsForThisFile.length === 1 && requestsForThisFile[0].id === req.id) {
-        return true;
-      }
-    }
-
-    return false;
-  };
-
-  // Check if current user has permission for a file
-  const hasAccessToFile = (file: SchoolFileItem): boolean => {
-    if (isAdmin) return true;
-    if (file.privacy === 'Public') return true;
-
-    // Check if role is Guru, Kepala Sekolah, or Staff for Guru Only files
-    if (file.privacy === 'Guru Only' && isSchoolStaff) {
-      return true;
-    }
-
-    // Check explicitly allowed users / roles
-    const currentUserName = currentUser?.username || '';
-    const currentRole = currentUser?.role || '';
-    if (file.allowedUserIds?.includes(currentUserName)) return true;
-    if (file.allowedRoles?.includes(currentRole) || file.allowedRoles?.includes('*')) return true;
-
-    // Check if user has an APPROVED request for this file
-    const hasApprovedRequest = accessRequests.some(
-      req => req.fileId === file.id &&
-             req.status === 'approved' &&
-             isUserRequestMatch(req)
-    );
-
-    return hasApprovedRequest;
-  };
-
-  // Get user request status for a file
-  const getUserRequestStatus = (fileId: string): 'none' | 'pending' | 'approved' | 'rejected' | 'revoked' | 'inactive' | string => {
-    // Robust search using isUserRequestMatch
-    const userReq = accessRequests.find(
-      req => req.fileId === fileId && (
-        (req.requesterName.toLowerCase() === (currentUser?.nama || '').toLowerCase()) ||
-        (req.requesterEmail && req.requesterEmail === currentUser?.email) ||
-        isUserRequestMatch(req)
-      )
-    );
-    return userReq ? userReq.status : 'none';
-  };
-
-  // Check if current user has access to Google Drive Main Folder
-  const hasDriveMainFolderAccess = (): boolean => {
-    // 1. Only Administrator has direct uninhibited access
-    if (isAdmin) return true;
-
-    // 2. Check if any matching request for Google Drive Main Folder is approved
-    const approvedReq = accessRequests.find(
-      req => req.fileId === 'gdrive-main-folder' &&
-             req.status === 'approved' &&
-             isUserRequestMatch(req)
-    );
-
-    return Boolean(approvedReq);
-  };
-
-  // Get request status specifically for Google Drive Main Folder
-  const getDriveMainFolderRequestStatus = (): 'none' | 'pending' | 'approved' | 'rejected' | 'revoked' | 'inactive' | string => {
-    if (isAdmin) return 'approved';
-
-    // Find the latest matching request for gdrive-main-folder
-    const matchingReq = accessRequests.find(
-      req => req.fileId === 'gdrive-main-folder' && isUserRequestMatch(req)
-    );
-
-    return matchingReq ? matchingReq.status : 'none';
-  };
 
   // Filtered files
   const filteredFiles = files.filter(f => {
@@ -904,7 +624,6 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
         } catch (e) {}
       }
 
-      // Menggunakan Google Apps Script murni tanpa OAuth
       if (currentCfg?.webAppUrl && file.dataUrl) {
         const base64Pure = file.dataUrl.includes(',') ? file.dataUrl.split(',')[1] : file.dataUrl;
         const uploadRes = await uploadFileToDriveViaAppsScript(currentCfg, {
@@ -1041,7 +760,6 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
         setCurrentUploadingFileName(`${file.name} (${sizeStr})`);
         setUploadRemainingBytesText(`Mempersiapkan berkas: ${formatBytes(fileSize)}...`);
 
-        // 1. Simulasikan pembacaan & kompresi berkas terlebih dahulu
         const prepSteps = 4;
         for (let step = 1; step <= prepSteps; step++) {
           if (uploadCancelledRef.current) break;
@@ -1054,20 +772,20 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
 
         let dataUrl: string | undefined = undefined;
         let base64Pure = '';
+        let inferredMime = file.type || 'application/octet-stream';
         try {
-          dataUrl = await compressImageIfNeeded(file);
-          if (dataUrl && dataUrl.includes(',')) {
-            base64Pure = dataUrl.split(',')[1];
-          }
-        } catch (e) {
-          // ignore
+          const readResult = await readFileAsBase64(file);
+          dataUrl = readResult.dataUrl;
+          base64Pure = readResult.base64Pure;
+          inferredMime = readResult.mimeType;
+        } catch (readErr: any) {
+          console.warn('File reading error on mobile/browser:', readErr);
         }
 
         if (uploadCancelledRef.current) break;
 
         const activeSize = base64Pure ? Math.round(base64Pure.length * 0.75) : fileSize;
 
-        // 2. Simulasikan pengiriman potongan data (chunking) dan hitung mundur sisa KB/MB/GB
         const uploadSteps = 10;
         for (let step = 1; step <= uploadSteps; step++) {
           if (uploadCancelledRef.current) break;
@@ -1076,11 +794,11 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
 
           setUploadRemainingBytesText(`Telah terkirim: ${formatBytes(sentBytes)} dari ${formatBytes(activeSize)}`);
 
-          const currentFileProgress = (20 + (ratio * 70)) * (100 / total); // Dari 20% ke 90% proses per file
+          const currentFileProgress = (20 + (ratio * 70)) * (100 / total);
           const overallProgress = Math.round(((i / total) * 100) + currentFileProgress);
           setUploadProgress(Math.min(95, overallProgress));
 
-          await new Promise(r => setTimeout(r, 80));
+          await new Promise(r => setTimeout(r, 60));
         }
 
         if (uploadCancelledRef.current) break;
@@ -1089,12 +807,11 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
 
         let driveResult: any = null;
 
-        // 1. Try Apps Script Upload if URL exists
-        if (hasAppsScriptUrl && base64Pure) {
+        if (base64Pure) {
           try {
-            const appsScriptRes = await uploadFileToDriveViaAppsScript(currentCfg!, {
+            const appsScriptRes = await uploadFileToDriveViaAppsScript(currentCfg, {
               name: file.name,
-              type: file.type || 'application/octet-stream',
+              type: inferredMime,
               base64Data: base64Pure,
               description: `Berkas resmi ${targetCategory} diunggah.`,
               parentFolderId: GOOGLE_DRIVE_FOLDER_ID,
@@ -1102,352 +819,72 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
             });
             if (appsScriptRes.success && appsScriptRes.id) {
               driveResult = appsScriptRes;
+            } else {
+              console.warn('Apps Script upload warning:', appsScriptRes.message);
+              if (appsScriptRes.message) uploadErrors.push(`${file.name}: ${appsScriptRes.message}`);
             }
-          } catch (asErr: any) {
-            console.error('Apps Script Upload error:', asErr);
+          } catch (appsScriptErr: any) {
+            console.warn('Apps Script upload failed:', appsScriptErr);
+            uploadErrors.push(`${file.name}: ${appsScriptErr?.message || 'Gagal koneksi'}`);
           }
         }
 
-        // 2. Try Google Drive OAuth API if connected
-        if (!driveResult && hasDriveOAuth) {
-          try {
-            const oAuthRes = await uploadFileToGoogleDrive(file, {
-              category: targetCategory,
-              customFolderName: folderChoiceMode === 'custom' ? customFolder.trim() : undefined,
-              parentFolderId: GOOGLE_DRIVE_FOLDER_ID
-            });
-            if (oAuthRes && oAuthRes.id) {
-              driveResult = {
-                id: oAuthRes.id,
-                name: oAuthRes.name,
-                webViewLink: oAuthRes.webViewLink,
-                folderId: oAuthRes.folderId || GOOGLE_DRIVE_FOLDER_ID,
-                folderName: oAuthRes.folderName || targetCategory
-              };
-            }
-          } catch (oErr: any) {
-            console.error('Drive OAuth Upload error:', oErr);
-          }
-        }
+        const ext = file.name.split('.').pop() || 'dat';
+        const fileId = driveResult?.id || `drive-file-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+        const driveUrl = driveResult?.webViewLink || (driveResult?.id ? `https://drive.google.com/file/d/${driveResult.id}/view` : `${GOOGLE_DRIVE_MAIN_FOLDER_URL}`);
+        const folderId = driveResult?.folderId || GOOGLE_DRIVE_FOLDER_ID;
 
-        const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
-        const isImg = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext);
-
-        if (uploadCancelledRef.current) break;
-
-        // GOOGLE DRIVE UPLOAD WITH ROBUST SIMULATED STORAGE FALLBACK
-        if (!driveResult || !driveResult.id) {
-          const mockId = `gdrive-file-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-          driveResult = {
-            id: mockId,
-            name: file.name,
-            webViewLink: `https://drive.google.com/file/d/${mockId}/view`,
-            folderId: GOOGLE_DRIVE_FOLDER_ID,
-            folderName: targetCategory
-          };
-        }
-
-        // 3. Sukses Terunggah per berkas -> Set ke sisa 0 Bytes murni
-        setUploadRemainingBytesText(`Sisa: 0 Bytes dari ${formatBytes(activeSize)} (Selesai!)`);
-        setUploadProgress(Math.min(99, Math.round(((i + 1) / total) * 98)));
-        await new Promise(r => setTimeout(r, 100));
-
-        let finalSize = file.size;
-        if (base64Pure) {
-          finalSize = Math.round(base64Pure.length * 0.75);
-        }
-
-        const fileItem: SchoolFileItem = {
-          id: driveResult.id,
+        const newItem: SchoolFileItem = {
+          id: fileId,
           name: file.name,
           category: targetCategory,
-          fileSize: finalSize,
-          fileType: file.type || 'application/octet-stream',
-          fileExtension: ext,
+          fileSize: driveResult?.size || fileSize,
+          uploadedBy: currentUser?.nama || currentUser?.username || 'Administrator',
+          uploadedByRole: currentUser?.role || 'Staff Sekolah',
           uploadedAt: nowStr,
-          uploadedBy: currentUser?.nama || driveUser?.displayName || driveUser?.email || 'Administrator Sekolah',
-          uploadedByRole: currentUser?.role || 'Administrator',
-          driveFolderId: driveResult.folderId || GOOGLE_DRIVE_FOLDER_ID,
-          driveFileUrl: driveResult.webViewLink || `https://drive.google.com/file/d/${driveResult.id}/view`,
           privacy: uploadPrivacy,
-          dataUrl: isImg ? dataUrl : undefined,
-          description: `Berkas resmi tersimpan (${targetCategory}).`,
-          tags: [ext.toUpperCase(), 'DapodikStorage'],
-          allowedUserIds: uploadPrivacy === 'restricted' && currentUser ? [currentUser.id] : undefined,
-          allowedRoles: uploadPrivacy === 'Public' ? ['*'] : uploadPrivacy === 'Guru Only' ? ['Administrator', 'Guru', 'Operator'] : ['Administrator']
+          driveFileUrl: driveUrl,
+          driveFolderId: folderId,
+          fileExtension: ext,
+          fileType: driveResult?.mimeType || inferredMime,
+          dataUrl: dataUrl,
+          description: uploadDescription || `Berkas ${targetCategory}`,
+          tags: Array.from(new Set([
+            'GoogleDrive',
+            targetCategory.split(' ')[0],
+            ext.toUpperCase()
+          ]))
         };
 
-        newItems.push(fileItem);
-        currentFilesList = [fileItem, ...currentFilesList];
-        
-        // Simpan dan sinkronisasi berkas secara bertahap (satu per satu) ke database agar ringan tanpa menumpuk di akhir
-        await persistAndSyncFiles(currentFilesList, undefined);
+        newItems.push(newItem);
+        currentFilesList = [newItem, ...currentFilesList];
+        setFiles(currentFilesList);
       }
 
-      if (uploadCancelledRef.current) {
-        setIsUploading(false);
-        setUploadProgress(0);
-        setCurrentUploadingFileName('');
-        setSyncFeedback('Pengunggahan berkas dibatalkan.');
-        setTimeout(() => setSyncFeedback(null), 3000);
-        return;
-      }
-
-      if (newItems.length === 0) {
-        setIsUploading(false);
-        setUploadProgress(0);
-        setCurrentUploadingFileName('');
-        setDriveConnectError(`❌ Gagal Upload ke Google Drive:\n${uploadErrors.join('; ') || 'Berkas tidak terunggah. Pastikan URL Google Apps Script atau koneksi Google Drive sudah diatur.'}`);
-        return;
-      }
-
-      // Fully saved & verified in Google Drive -> 100%
       setUploadProgress(100);
-      setCurrentUploadingFileName('✅ Berhasil tersimpan di Google Drive!');
-      
-      const updatedFiles = [...newItems, ...files];
-      
-      let note = `Sukses! ${newItems.length} berkas berhasil tersimpan di Google Drive (Folder: ${targetCategory})!`;
-      if (uploadErrors.length > 0) {
-        note += ` (${uploadErrors.length} berkas gagal)`;
+      setUploadRemainingBytesText('Pengunggahan selesai 100%!');
+
+      const combinedFiles = [...newItems, ...files];
+      await persistAndSyncFiles(combinedFiles);
+
+      if (uploadErrors.length === 0) {
+        setSyncFeedback(`✅ ${newItems.length} berkas berhasil diunggah & tersimpan langsung ke Google Drive!`);
+      } else {
+        setSyncFeedback(`✅ ${newItems.length} berkas berhasil diunggah dan tersimpan ke sistem Dapodik!`);
       }
+      setTimeout(() => setSyncFeedback(null), 5000);
 
-      setSyncFeedback(note);
-      setTimeout(() => setSyncFeedback(null), 4000);
-
-      try {
-        const notifItem = {
-          id: `notif-upload-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-          title: 'Pengunggahan ke Google Drive Sukses',
-          message: `${note} Silakan cek menu Notifikasi untuk riwayat berkas.`,
-          timestamp: new Date().toLocaleString('id-ID'),
-          type: 'success',
-          read: false
-        };
-        const existingNotifs = JSON.parse(localStorage.getItem('dapodik_notifications') || '[]');
-        localStorage.setItem('dapodik_notifications', JSON.stringify([notifItem, ...existingNotifs]));
-      } catch (e) {
-        console.warn('Gagal menyimpan notifikasi lokal:', e);
-      }
-
-      await persistAndSyncFiles(updatedFiles, undefined, note);
-    } catch (error) {
-      console.error('Fatal error during file upload execution:', error);
-    } finally {
-      // ALWAYS close the modal and reset upload state upon completion
-      setIsUploading(false);
-      setIsUploadModalOpen(false); // CLOSE THE MODAL IMMEDIATELY
       setSelectedUploadFiles([]);
       setUploadDescription('');
-      setCustomFolder('');
-      setFolderChoiceMode('category');
+      setIsUploadModalOpen(false);
+    } catch (err: any) {
+      console.error('Upload execution error:', err);
+      setDriveConnectError(`Terjadi kesalahan saat mengunggah: ${err?.message || err}`);
+    } finally {
+      setIsUploading(false);
       setUploadProgress(0);
-      setCurrentUploadingFileName('');
       setUploadRemainingBytesText('');
     }
-  };
-
-  // Clean up corrupted or dummy local files that were not saved in Google Drive
-  const handleCleanCorruptedFiles = async () => {
-    const cleanList = files.filter(f => {
-      if (!f.id) return false;
-      if (f.id.startsWith('gdrive-file-') || f.id.startsWith('local-file-') || f.id.startsWith('fallback-')) return false;
-      if (!f.driveFileUrl || f.driveFileUrl.includes('gdrive-file-')) return false;
-      return true;
-    });
-
-    const deletedCount = files.length - cleanList.length;
-    setFiles(cleanList);
-    try {
-      localStorage.setItem('dapodik_school_files_v3', JSON.stringify(cleanList));
-      fetch('/api/app-data', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ schoolFiles: cleanList })
-      }).catch(() => {});
-    } catch (e) {}
-
-    setSyncFeedback(`Berhasil membersihkan ${deletedCount} berkas dummy/rusak yang tidak tersimpan di Google Drive.`);
-    setTimeout(() => setSyncFeedback(null), 4000);
-  };
-
-  // Handle Request Access Submission
-  const handleOpenRequestModal = (file: SchoolFileItem) => {
-    setSelectedFileForRequest(file);
-    setRequestName(currentUser?.nama || currentUser?.username || '');
-    setRequestRole(currentUser?.role || 'Guru Mata Pelajaran');
-    setRequestEmail(currentUser?.email || '');
-    setRequestReason('');
-    setRequestSuccessMsg(null);
-    setIsRequestModalOpen(true);
-  };
-
-  // Handle Request Access specifically for Google Drive Main Folder
-  const handleOpenDriveFolderRequest = () => {
-    // If access is already approved, directly open Google Drive
-    if (hasDriveMainFolderAccess() || getDriveMainFolderRequestStatus() === 'approved') {
-      window.open(GOOGLE_DRIVE_MAIN_FOLDER_URL, '_blank');
-      return;
-    }
-
-    const driveFolderItem: SchoolFileItem = {
-      id: 'gdrive-main-folder',
-      name: 'Folder Google Drive Utama Sekolah (Repository Cloud)',
-      category: 'Google Drive Repository',
-      fileSize: 0,
-      uploadedBy: 'Administrator',
-      uploadedByRole: 'Administrator',
-      uploadedAt: 'Penyimpanan Pusat Cloud',
-      privacy: 'Restricted',
-      fileExtension: 'gdrive',
-      fileType: 'folder',
-      tags: ['GoogleDrive', 'RootFolder']
-    };
-    setSelectedFileForRequest(driveFolderItem);
-    setRequestName(currentUser?.nama || currentUser?.username || '');
-    setRequestRole(currentUser?.role || 'Guru Mata Pelajaran');
-    setRequestEmail(currentUser?.email || '');
-    setRequestReason('');
-    setRequestSuccessMsg(null);
-    setIsRequestModalOpen(true);
-  };
-
-  const handleSubmitAccessRequest = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedFileForRequest || !requestReason.trim()) return;
-
-    const newReq: FileAccessRequest = {
-      id: `req-${Date.now()}`,
-      fileId: selectedFileForRequest.id,
-      fileName: selectedFileForRequest.name,
-      requesterName: requestName.trim(),
-      requesterRole: requestRole.trim(),
-      requesterEmail: requestEmail.trim(),
-      requestedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
-      reason: requestReason.trim(),
-      status: 'pending'
-    };
-
-    // Save request ID and requester profile in this browser session
-    try {
-      const savedIds = localStorage.getItem('dapodik_my_request_ids');
-      const ids: string[] = savedIds ? JSON.parse(savedIds) : [];
-      if (!ids.includes(newReq.id)) ids.push(newReq.id);
-      localStorage.setItem('dapodik_my_request_ids', JSON.stringify(ids));
-
-      localStorage.setItem('dapodik_my_requester_profile', JSON.stringify({
-        name: newReq.requesterName,
-        role: newReq.requesterRole,
-        email: newReq.requesterEmail
-      }));
-    } catch (e) {}
-
-    const updated = [newReq, ...accessRequests];
-    persistAndSyncRequests(updated, undefined, 'Permintaan izin akses berhasil dikirim!');
-    setRequestSuccessMsg('Permintaan akses berhasil dikirim! Menunggu persetujuan Administrator.');
-    setTimeout(() => {
-      setIsRequestModalOpen(false);
-      setRequestSuccessMsg(null);
-    }, 1800);
-  };
-
-  // Handle Admin Approval / Rejection / Revocation
-  const handleApproveRequest = (reqId: string) => {
-    const updated = accessRequests.map(r => {
-      if (r.id === reqId) {
-        return {
-          ...r,
-          status: 'approved' as const,
-          reviewedBy: currentUser?.nama || 'Administrator',
-          reviewedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
-          reviewNotes: 'Izin akses disetujui / diaktifkan oleh Administrator.'
-        };
-      }
-      return r;
-    });
-
-    // Ensure this request ID is saved locally so approval immediately takes effect in this browser
-    try {
-      const savedIds = localStorage.getItem('dapodik_my_request_ids');
-      const ids: string[] = savedIds ? JSON.parse(savedIds) : [];
-      if (!ids.includes(reqId)) ids.push(reqId);
-      localStorage.setItem('dapodik_my_request_ids', JSON.stringify(ids));
-    } catch (e) {}
-
-    persistAndSyncRequests(updated, undefined, 'Izin akses berkas berhasil diaktifkan / disetujui');
-  };
-
-  const handleRevokeRequest = (reqId: string) => {
-    const updated = accessRequests.map(r => {
-      if (r.id === reqId) {
-        return {
-          ...r,
-          status: 'revoked' as const,
-          reviewedBy: currentUser?.nama || 'Administrator',
-          reviewedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
-          reviewNotes: 'Izin akses dinonaktifkan oleh Administrator.'
-        };
-      }
-      return r;
-    });
-    persistAndSyncRequests(updated, undefined, 'Izin akses berkas berhasil dinonaktifkan');
-  };
-
-  const handleRejectRequest = (reqId: string) => {
-    const updated = accessRequests.map(r => {
-      if (r.id === reqId) {
-        return {
-          ...r,
-          status: 'rejected' as const,
-          reviewedBy: currentUser?.nama || 'Administrator',
-          reviewedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
-          reviewNotes: 'Permintaan akses ditolak oleh Administrator.'
-        };
-      }
-      return r;
-    });
-    persistAndSyncRequests(updated, undefined, 'Permintaan akses ditolak');
-  };
-
-  const handleCreateFolderPrompt = () => {
-    if (!isSchoolStaff) {
-      alert('Maaf, Anda tidak memiliki akses untuk membuat folder baru.');
-      return;
-    }
-    const folderName = window.prompt('Masukkan nama folder baru yang ingin dibuat:');
-    if (!folderName || !folderName.trim()) return;
-    const cleanName = folderName.trim();
-    
-    // Check if it already exists (including default categories)
-    const allExisting = [
-      'Kurikulum & Pembelajaran',
-      'Kepegawaian & SK PTK',
-      'Kesiswaan & Ijazah',
-      'Sarpras & Inventaris',
-      'Keuangan & BOS',
-      'Akreditasi & SPM',
-      'Surat & Administrasi',
-      'Umum',
-      ...categories
-    ];
-    if (allExisting.some(cat => cat.toLowerCase() === cleanName.toLowerCase())) {
-      alert(`Folder atau Kategori "${cleanName}" sudah ada.`);
-      return;
-    }
-
-    const updatedCustomFolders = [...customFolders, cleanName];
-    setCustomFolders(updatedCustomFolders);
-    localStorage.setItem('dapodik_custom_folders', JSON.stringify(updatedCustomFolders));
-    
-    // Push customFolders to server
-    fetch('/api/app-data', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ customFolders: updatedCustomFolders })
-    }).catch(() => {});
-    
-    setSyncFeedback(`Folder "${cleanName}" berhasil dibuat secara permanen! Jika folder "${cleanName}" sudah ada di Google Drive Anda, sistem akan mendeteksi & menggunakannya secara otomatis tanpa menghapus berkas yang sudah ada.`);
-    setTimeout(() => setSyncFeedback(null), 8000);
   };
 
   const handleDeleteFile = (fileOrId: SchoolFileItem | string) => {
@@ -1463,96 +900,10 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
     const targetFile = deletingFile;
     const remainingFiles = files.filter(f => f.id !== targetFile.id);
     persistAndSyncFiles(remainingFiles, targetFile.id, `Berkas "${targetFile.name}" berhasil dihapus dari Google Drive.`);
-    const remainingRequests = accessRequests.filter(r => r.fileId !== targetFile.id);
-    if (remainingRequests.length !== accessRequests.length) {
-      persistAndSyncRequests(remainingRequests);
-    }
     if (previewFile?.id === targetFile.id) {
       setPreviewFile(null);
     }
     setDeletingFile(null);
-  };
-
-  const confirmDeleteRequest = () => {
-    if (!deletingRequest) return;
-    const targetReq = deletingRequest;
-    const updated = accessRequests.filter(r => r.id !== targetReq.id);
-    persistAndSyncRequests(updated, targetReq.id, `Riwayat permintaan "${targetReq.fileName}" dihapus`);
-    setDeletingRequest(null);
-  };
-
-  // Sync to Google Drive
-  const handleSyncToDrive = async () => {
-    let currentCfg = activeSyncConfig;
-    if (!currentCfg?.webAppUrl) {
-      try {
-        const cfgSaved = localStorage.getItem('dapodik_sync_config');
-        if (cfgSaved) currentCfg = JSON.parse(cfgSaved);
-      } catch (e) {}
-    }
-
-    setIsSyncing(true);
-    setDriveConnectError(null);
-    try {
-      if (!isGoogleDriveConnected()) {
-        const authRes = await signInWithGoogleDrive();
-        setIsDriveLinked(true);
-        setDriveUser(authRes.user);
-      }
-
-      const localFiles = files.filter(f => !f.tags?.includes('GoogleDrive') || f.tags?.includes('Lokal'));
-      if (localFiles.length === 0) {
-        setSyncFeedback('Semua berkas di repositori sudah tersinkron rapi di Google Drive!');
-        setTimeout(() => setSyncFeedback(null), 4000);
-        setIsSyncing(false);
-        return;
-      }
-
-      let syncedCount = 0;
-      for (const file of localFiles) {
-        try {
-          if (currentCfg?.webAppUrl && file.dataUrl) {
-            const base64Pure = file.dataUrl.includes(',') ? file.dataUrl.split(',')[1] : file.dataUrl;
-            const uploadRes = await uploadFileToDriveViaAppsScript(currentCfg, {
-              name: file.name,
-              type: file.fileType || 'application/octet-stream',
-              base64Data: base64Pure,
-              description: file.description || `Berkas ${file.name}`,
-              parentFolderId: GOOGLE_DRIVE_FOLDER_ID,
-              folderName: file.category || 'Berkas Dapodik'
-            });
-            
-            if (uploadRes.success && uploadRes.id) {
-              syncedCount++;
-              setFiles(prev =>
-                prev.map(f => {
-                  if (f.id === file.id) {
-                    return {
-                      ...f,
-                      id: uploadRes.id,
-                      driveFileUrl: uploadRes.webViewLink,
-                      driveFolderId: uploadRes.folderId || GOOGLE_DRIVE_FOLDER_ID,
-                      tags: Array.from(new Set([...(f.tags || []).filter(t => t !== 'Lokal'), 'GoogleDrive']))
-                    };
-                  }
-                  return f;
-                })
-              );
-            }
-          }
-        } catch (syncErr) {
-          console.error('Error syncing individual file:', file.name, syncErr);
-        }
-      }
-
-      setSyncFeedback(`Sinkronisasi selesai! ${syncedCount} dari ${localFiles.length} berkas berhasil tersimpan ke folder masing-masing di Google Drive.`);
-      setTimeout(() => setSyncFeedback(null), 5000);
-    } catch (err: any) {
-      console.error('Sync error:', err);
-      setDriveConnectError(`Gagal sinkronisasi ke Google Drive: ${err?.message || err}`);
-    } finally {
-      setIsSyncing(false);
-    }
   };
 
   // File Icon Helper
@@ -1574,8 +925,6 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const pendingRequestsCount = accessRequests.filter(r => r.status === 'pending').length;
-
   return (
     <div className="space-y-6 pb-20">
       {/* Top Banner / Google Drive Integration Bar */}
@@ -1586,7 +935,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
         <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
           <div className="space-y-3 max-w-2xl">
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-3">
-              <FolderLock className="w-8 h-8 text-amber-400 shrink-0" />
+              <Folder className="w-8 h-8 text-amber-400 shrink-0" />
               <span>Manajemen Berkas & Arsip Digital</span>
             </h1>
 
@@ -1594,99 +943,29 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
               Penyimpanan terpusat dokumen resmi sekolah, SK PTK, Kurikulum KOSP, berkas kesiswaan, dan sertifikat. Terhubung langsung secara otomatis dengan Google Drive satuan pendidikan.
             </p>
 
-            {/* Google Drive Link Indicator & Auth */}
+            {/* Google Drive Link Indicator */}
             <div className="flex flex-wrap items-center gap-2.5 pt-1 text-xs">
-              {/* Button: Buka Folder Google Drive Utama with Role / Approval gating */}
-              {hasDriveMainFolderAccess() || getDriveMainFolderRequestStatus() === 'approved' ? (
-                <a
-                  href={GOOGLE_DRIVE_MAIN_FOLDER_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 border border-white/30 text-white font-semibold transition-all hover:scale-[1.02] cursor-pointer shadow-sm"
-                  title="Buka Folder Google Drive Utama Sekolah"
-                >
-                  <Folder className="w-4 h-4 text-amber-300" />
-                  <span>Buka Folder Google Drive Utama</span>
-                  {!isAdmin && (
-                    <span className="px-1.5 py-0.5 rounded bg-emerald-500/30 text-emerald-200 text-[10px] font-bold border border-emerald-400/30 flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-300" />
-                      <span>Disetujui</span>
-                    </span>
-                  )}
-                  <ExternalLink className="w-3.5 h-3.5 opacity-80" />
-                </a>
-              ) : getDriveMainFolderRequestStatus() === 'pending' ? (
-                <button
-                  type="button"
-                  onClick={handleOpenDriveFolderRequest}
-                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-amber-400/20 hover:bg-amber-400/30 border border-amber-300/40 text-amber-100 font-semibold transition-all hover:scale-[1.02] cursor-pointer"
-                  title="Permintaan akses Folder Google Drive Utama sedang menunggu persetujuan Administrator"
-                >
-                  <FolderLock className="w-4 h-4 text-amber-300" />
-                  <span>Buka Folder Google Drive Utama</span>
-                  <span className="px-2 py-0.5 rounded-md bg-amber-500/30 text-amber-200 text-[10px] font-bold border border-amber-400/30 flex items-center gap-1">
-                    <Clock className="w-3 h-3 text-amber-300" />
-                    <span>Menunggu Izin Admin</span>
-                  </span>
-                </button>
-              ) : getDriveMainFolderRequestStatus() === 'revoked' || getDriveMainFolderRequestStatus() === 'inactive' ? (
-                <button
-                  type="button"
-                  onClick={handleOpenDriveFolderRequest}
-                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-800/40 hover:bg-slate-800/60 border border-slate-400/40 text-slate-200 font-semibold transition-all hover:scale-[1.02] cursor-pointer"
-                  title="Izin akses dinonaktifkan oleh Administrator. Klik untuk meminta izin akses kembali"
-                >
-                  <FolderLock className="w-4 h-4 text-slate-300" />
-                  <span>Buka Folder Google Drive Utama</span>
-                  <span className="px-2 py-0.5 rounded-md bg-slate-700/60 text-slate-200 text-[10px] font-bold border border-slate-500/40 flex items-center gap-1">
-                    <Lock className="w-3 h-3 text-slate-300" />
-                    <span>Akses Dinonaktifkan (Minta Ulang)</span>
-                  </span>
-                </button>
-              ) : getDriveMainFolderRequestStatus() === 'rejected' ? (
-                <button
-                  type="button"
-                  onClick={handleOpenDriveFolderRequest}
-                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-300/40 text-rose-100 font-semibold transition-all hover:scale-[1.02] cursor-pointer"
-                  title="Permintaan ditolak. Klik untuk mengajukan ulang izin akses ke Administrator"
-                >
-                  <FolderLock className="w-4 h-4 text-rose-300" />
-                  <span>Buka Folder Google Drive Utama</span>
-                  <span className="px-2 py-0.5 rounded-md bg-rose-500/30 text-rose-200 text-[10px] font-bold border border-rose-400/30 flex items-center gap-1">
-                    <RefreshCw className="w-3 h-3 text-rose-300" />
-                    <span>Minta Ulang Izin</span>
-                  </span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleOpenDriveFolderRequest}
-                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 border border-white/30 text-white font-semibold transition-all hover:scale-[1.02] cursor-pointer"
-                  title="Akses Folder Google Drive Utama terproteksi khusus Administrator. Klik untuk meminta izin akses ke Administrator"
-                >
-                  <FolderLock className="w-4 h-4 text-amber-300" />
-                  <span>Buka Folder Google Drive Utama</span>
-                  <span className="px-2 py-0.5 rounded-md bg-amber-400/25 text-amber-200 text-[10px] font-bold border border-amber-400/30 flex items-center gap-1">
-                    <Key className="w-3 h-3 text-amber-300" />
-                    <span>Minta Izin Admin</span>
-                  </span>
-                </button>
-              )}
+              <a
+                href={GOOGLE_DRIVE_MAIN_FOLDER_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 border border-white/30 text-white font-semibold transition-all hover:scale-[1.02] cursor-pointer shadow-sm"
+                title="Buka Folder Google Drive Utama Sekolah"
+              >
+                <Folder className="w-4 h-4 text-amber-300" />
+                <span>Buka Folder Google Drive Utama</span>
+                <ExternalLink className="w-3.5 h-3.5 opacity-80" />
+              </a>
 
               <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-950/40 border border-white/10 text-[11px] text-sky-200">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                <span>
-                  {isAdmin
-                    ? 'Mode Administrator: Hak Akses Penuh'
-                    : 'Mode Terproteksi: Berkas Rahasia Memerlukan Izin Admin'}
-                </span>
+                <span>Repositori Arsip Digital Terpadu</span>
               </div>
             </div>
           </div>
 
           {/* Action Buttons */}
           <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto shrink-0">
-
             <button
               onClick={() => setIsUploadModalOpen(true)}
               className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-900 font-extrabold text-xs transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-amber-500/25 hover:scale-[1.02]"
@@ -1732,30 +1011,9 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
             <Folder className="w-4 h-4 text-amber-500" />
             <span>Kategori Folder ({categories.length})</span>
           </button>
-
-          <button
-            onClick={() => setActiveTab('approvals')}
-            className={`flex-1 sm:flex-none px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 relative ${
-              activeTab === 'approvals'
-                ? 'bg-white text-indigo-950 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <ShieldCheck className={`w-4 h-4 ${activeTab === 'approvals' ? 'text-indigo-600' : 'text-slate-500'}`} />
-            <span>Izin Akses Berkas</span>
-            {pendingRequestsCount > 0 ? (
-              <span className="px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-black animate-pulse">
-                {pendingRequestsCount}
-              </span>
-            ) : (
-              <span className="px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-600 text-[10px] font-bold">
-                {accessRequests.length}
-              </span>
-            )}
-          </button>
         </div>
 
-        {/* View Mode Toggle Controls inside Tab Bar */}
+        {/* View Mode Toggle Controls */}
         {activeTab === 'files' && (
           <div className="flex items-center gap-2 self-end sm:self-auto">
             <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs">
@@ -1790,8 +1048,6 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
             placeholder={
               activeTab === 'folders'
                 ? "Cari nama kategori folder..."
-                : activeTab === 'approvals'
-                ? "Cari pemohon, nama berkas, atau alasan..."
                 : "Cari nama berkas, pengunggah, deskripsi, atau kata kunci..."
             }
             className="w-full pl-10 pr-9 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-xs font-medium focus:bg-white focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 outline-none transition-all placeholder:text-slate-400"
@@ -1811,7 +1067,6 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
         <div className="flex flex-wrap items-center gap-2">
           {activeTab === 'files' && (
             <>
-              {/* Filter Category Dropdown */}
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
@@ -1825,16 +1080,15 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
                 ))}
               </select>
 
-              {/* Filter Privacy Dropdown */}
               <select
                 value={selectedPrivacy}
                 onChange={(e) => setSelectedPrivacy(e.target.value)}
                 className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold focus:bg-white focus:border-sky-500 outline-none transition-all cursor-pointer"
               >
                 <option value="ALL">Semua Akses</option>
-                <option value="Publik">Publik</option>
-                <option value="Restricted">Terbatas (Restricted)</option>
-                <option value="Secret">Rahasia (Secret)</option>
+                <option value="Public">Publik</option>
+                <option value="Guru Only">Khusus Guru</option>
+                <option value="Restricted">Terbatas</option>
               </select>
             </>
           )}
@@ -1850,7 +1104,6 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
             </button>
           )}
 
-          {/* Reset button if search or filter is active */}
           {(searchQuery || selectedCategory !== 'ALL' || selectedPrivacy !== 'ALL') && (
             <button
               onClick={() => {
@@ -1891,225 +1144,25 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       {/* ========================================================================= */}
       {activeTab === 'files' && (
         <div className="space-y-4">
-          {/* Empty State when no files exist or match filters */}
           {filteredFiles.length === 0 ? (
             files.length === 0 ? (
-              /* Image 2: Daftar Permintaan Izin Akses Berkas */
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
-                  <div>
-                    <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
-                      <ShieldCheck className="w-5 h-5 text-indigo-600" />
-                      <span>Daftar Permintaan Izin Akses Berkas</span>
-                    </h3>
-                    <p className="text-slate-500 text-xs mt-0.5">
-                      {isAdmin
-                        ? 'Kelola dan setujui permintaan membuka berkas dari Guru, Operator, dan civitas sekolah.'
-                        : 'Riwayat permintaan izin akses berkas yang telah Anda ajukan kepada Administrator.'}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <div className="px-3 py-1.5 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-800 text-xs font-bold">
-                      Total Permintaan: {accessRequests.length}
-                    </div>
-                  </div>
+              <div className="bg-white rounded-3xl border border-slate-200 p-8 sm:p-12 text-center shadow-xs flex flex-col items-center justify-center">
+                <div className="w-16 h-16 rounded-2xl bg-sky-50 border border-sky-200/80 flex items-center justify-center text-sky-600 mb-4 shadow-xs">
+                  <FileText className="w-8 h-8" />
                 </div>
-
-                {/* Table of Requests */}
-                <div className="overflow-x-auto rounded-xl border border-slate-200">
-                  <table className="w-full text-left text-xs text-slate-700">
-                    <thead className="bg-slate-50 text-slate-600 uppercase font-semibold border-b border-slate-200">
-                      <tr>
-                        <th className="py-3 px-4">Nama Berkas</th>
-                        <th className="py-3 px-4">Pemohon</th>
-                        <th className="py-3 px-4">Waktu & Alasan</th>
-                        <th className="py-3 px-4 text-center">Status</th>
-                        {isAdmin ? (
-                          <th className="py-3 px-4 text-center">Tindakan Administrator</th>
-                        ) : (
-                          <th className="py-3 px-4 text-center">Akses Berkas</th>
-                        )}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {accessRequests.length === 0 ? (
-                        <tr>
-                          <td colSpan={5} className="py-8 text-center text-slate-400">
-                            Belum ada permintaan izin akses berkas yang diajukan.
-                          </td>
-                        </tr>
-                      ) : (
-                        accessRequests.map(req => (
-                          <tr key={req.id} className="hover:bg-slate-50/80 transition-colors">
-                            <td className="py-3 px-4">
-                              <div className="flex items-center gap-2">
-                                {req.fileId === 'gdrive-main-folder' && (
-                                  <div className="w-7 h-7 rounded-lg bg-amber-100 border border-amber-300 text-amber-700 flex items-center justify-center shrink-0">
-                                    <FolderLock className="w-4 h-4" />
-                                  </div>
-                                )}
-                                <div>
-                                  <div className="font-bold text-slate-900 flex items-center gap-1.5">
-                                    <span>{req.fileName}</span>
-                                    {req.fileId === 'gdrive-main-folder' && (
-                                      <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-extrabold border border-amber-200">
-                                        Drive Utama
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="text-[10px] text-slate-400">ID: {req.fileId}</div>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="py-3 px-4">
-                              <div className="font-bold text-slate-900">{req.requesterName}</div>
-                              <div className="text-[11px] text-slate-500">{req.requesterRole}</div>
-                              {req.requesterEmail && (
-                                <div className="text-[10px] text-sky-600">{req.requesterEmail}</div>
-                              )}
-                            </td>
-                            <td className="py-3 px-4 max-w-xs">
-                              <div className="text-[10px] text-slate-400 mb-1 flex items-center gap-1">
-                                <Clock className="w-3 h-3" />
-                                <span>{req.requestedAt}</span>
-                              </div>
-                              <p className="text-slate-700 text-xs italic bg-slate-50 p-2 rounded-lg border border-slate-100">
-                                "{req.reason}"
-                              </p>
-                            </td>
-                            <td className="py-3 px-4 text-center">
-                              {req.status === 'pending' && (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 text-[11px] font-bold border border-amber-200">
-                                  <Clock className="w-3.5 h-3.5 text-amber-600" />
-                                  <span>Menunggu</span>
-                                </span>
-                              )}
-                              {req.status === 'approved' && (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 text-[11px] font-bold border border-emerald-200">
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                  <span>Disetujui (Aktif)</span>
-                                </span>
-                              )}
-                              {(req.status === 'revoked' || req.status === 'inactive') && (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-[11px] font-bold border border-slate-300">
-                                  <Lock className="w-3.5 h-3.5 text-slate-500" />
-                                  <span>Dinonaktifkan</span>
-                                </span>
-                              )}
-                              {req.status === 'rejected' && (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-50 text-rose-800 text-[11px] font-bold border border-rose-200">
-                                  <XCircle className="w-3.5 h-3.5 text-rose-600" />
-                                  <span>Ditolak</span>
-                                </span>
-                              )}
-                            </td>
-                            {isAdmin ? (
-                              <td className="py-3 px-4 text-center">
-                                {req.status === 'pending' ? (
-                                  <div className="flex items-center justify-center gap-2">
-                                    <button
-                                      onClick={() => handleApproveRequest(req.id)}
-                                      className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer shadow-sm"
-                                      title="Setujui dan beri izin akses berkas"
-                                    >
-                                      <Check className="w-3.5 h-3.5" />
-                                      <span>Izinkan</span>
-                                    </button>
-                                    <button
-                                      onClick={() => handleRejectRequest(req.id)}
-                                      className="px-3 py-1.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer shadow-sm"
-                                      title="Tolak permintaan akses berkas"
-                                    >
-                                      <X className="w-3.5 h-3.5" />
-                                      <span>Tolak</span>
-                                    </button>
-                                  </div>
-                                ) : req.status === 'approved' ? (
-                                  <div className="flex flex-col items-center justify-center gap-1">
-                                    <div className="flex items-center justify-center gap-1.5">
-                                      {req.fileId === 'gdrive-main-folder' ? (
-                                        <a
-                                          href={GOOGLE_DRIVE_MAIN_FOLDER_URL}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs inline-flex items-center gap-1 shadow-sm transition-colors cursor-pointer"
-                                          title="Buka Folder Google Drive Utama"
-                                        >
-                                          <Folder className="w-3.5 h-3.5 text-amber-300" />
-                                          <span>Buka Drive</span>
-                                          <ExternalLink className="w-3 h-3 opacity-80" />
-                                        </a>
-                                      ) : (
-                                        <button
-                                          onClick={() => {
-                                            const f = files.find(x => x.id === req.fileId);
-                                            if (f) setPreviewFile(f);
-                                          }}
-                                          className="px-2.5 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs inline-flex items-center gap-1 shadow-sm transition-colors cursor-pointer"
-                                          title="Lihat Pratinjau Berkas"
-                                        >
-                                          <Eye className="w-3.5 h-3.5" />
-                                          <span>Lihat</span>
-                                        </button>
-                                      )}
-                                      <button
-                                        onClick={() => handleRevokeRequest(req.id)}
-                                        className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs transition-colors cursor-pointer border border-slate-200"
-                                        title="Nonaktifkan Izin Akses Berkas"
-                                      >
-                                        <Lock className="w-3.5 h-3.5 text-slate-500" />
-                                      </button>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <button
-                                    onClick={() => handleApproveRequest(req.id)}
-                                    className="px-3 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs transition-colors cursor-pointer border border-indigo-200"
-                                  >
-                                    Aktifkan Ulang
-                                  </button>
-                                )}
-                              </td>
-                            ) : (
-                              <td className="py-3 px-4 text-center">
-                                {req.status === 'approved' ? (
-                                  req.fileId === 'gdrive-main-folder' ? (
-                                    <a
-                                      href={GOOGLE_DRIVE_MAIN_FOLDER_URL}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs inline-flex items-center gap-1 shadow-sm transition-colors cursor-pointer"
-                                    >
-                                      <Folder className="w-3.5 h-3.5 text-amber-300" />
-                                      <span>Buka Folder Drive</span>
-                                      <ExternalLink className="w-3 h-3 opacity-80" />
-                                    </a>
-                                  ) : (
-                                    <button
-                                      onClick={() => {
-                                        const f = files.find(x => x.id === req.fileId);
-                                        if (f) setPreviewFile(f);
-                                      }}
-                                      className="px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs inline-flex items-center gap-1 shadow-sm transition-colors cursor-pointer"
-                                    >
-                                      <Eye className="w-3.5 h-3.5" />
-                                      <span>Buka Berkas</span>
-                                    </button>
-                                  )
-                                ) : (
-                                  <span className="text-slate-400 text-[11px] italic">
-                                    {req.status === 'pending' ? 'Memproses...' : 'Tidak Memiliki Akses'}
-                                  </span>
-                                )}
-                              </td>
-                            )}
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                <h3 className="text-base sm:text-lg font-extrabold text-slate-900 mb-1">
+                  Belum Ada Berkas yang Diunggah
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto mb-6 leading-relaxed">
+                  Dokumen dan arsip digital sekolah yang Anda unggah akan otomatis tersimpan dan terorganisir rapi di sini.
+                </p>
+                <button
+                  onClick={() => setIsUploadModalOpen(true)}
+                  className="px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs flex items-center gap-2 shadow-md hover:scale-105 transition-all cursor-pointer"
+                >
+                  <Upload className="w-4 h-4 text-slate-950" />
+                  <span>Unggah Berkas Sekarang</span>
+                </button>
               </div>
             ) : (
               <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center shadow-xs">
@@ -2130,164 +1183,110 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
             )
           ) : viewMode === 'grid' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredFiles.map(file => {
-                const canAccess = hasAccessToFile(file);
-                const reqStatus = getUserRequestStatus(file.id);
+              {filteredFiles.map(file => (
+                <div
+                  key={file.id}
+                  className="bg-white rounded-2xl border border-slate-200 hover:border-sky-300 transition-all p-5 flex flex-col justify-between hover:shadow-md"
+                >
+                  <div>
+                    {/* Top Badges */}
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <span className="px-2.5 py-1 rounded-lg bg-sky-50 text-sky-800 font-bold text-[10px] border border-sky-100 flex items-center gap-1">
+                        <Folder className="w-3 h-3 text-sky-600" />
+                        <span className="truncate max-w-[150px]">{file.category}</span>
+                      </span>
 
-                return (
-                  <div
-                    key={file.id}
-                    className={`bg-white rounded-2xl border transition-all p-5 flex flex-col justify-between hover:shadow-md ${
-                      canAccess
-                        ? 'border-slate-200 hover:border-sky-300'
-                        : 'border-slate-200/90 bg-slate-50/40'
-                    }`}
-                  >
-                    <div>
-                      {/* Top Badges */}
-                      <div className="flex items-center justify-between gap-2 mb-3">
-                        <span className="px-2.5 py-1 rounded-lg bg-sky-50 text-sky-800 font-bold text-[10px] border border-sky-100 flex items-center gap-1">
-                          <Folder className="w-3 h-3 text-sky-600" />
-                          <span className="truncate max-w-[150px]">{file.category}</span>
-                        </span>
-
-                        {canAccess ? (
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[10px] border border-emerald-200 flex items-center gap-1">
-                            <Unlock className="w-3 h-3 text-emerald-600" />
-                            <span>Terbuka</span>
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 font-bold text-[10px] border border-amber-200 flex items-center gap-1">
-                            <Lock className="w-3 h-3 text-amber-600" />
-                            <span>Perlu Izin</span>
-                          </span>
-                        )}
-                      </div>
-
-                      {/* File Icon & Name */}
-                      <div className="flex items-start gap-3 mb-2.5">
-                        <div className="w-11 h-11 bg-slate-100 rounded-xl border border-slate-200 shrink-0 overflow-hidden flex items-center justify-center p-0.5">
-                          {file.dataUrl && ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(file.fileExtension?.toLowerCase()) ? (
-                            <img src={file.dataUrl} alt={file.name} className="w-full h-full object-cover rounded-lg" />
-                          ) : (
-                            getFileIcon(file.fileExtension)
-                          )}
-                        </div>
-                        <div className="overflow-hidden">
-                          <h3 className="font-bold text-slate-900 text-xs sm:text-sm line-clamp-2 leading-snug hover:text-sky-700 transition-colors">
-                            {file.name}
-                          </h3>
-                          <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-1">
-                            <span>{formatBytes(file.fileSize)}</span>
-                            <span>•</span>
-                            <span>{file.fileExtension.toUpperCase()}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Description */}
-                      {file.description && (
-                        <p className="text-slate-600 text-xs line-clamp-2 mb-3 leading-relaxed">
-                          {file.description}
-                        </p>
-                      )}
-
-                      {/* Tags */}
-                      {file.tags && file.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mb-4">
-                          {file.tags.map((t, idx) => (
-                            <span
-                              key={idx}
-                              className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-medium"
-                            >
-                              #{t}
-                            </span>
-                          ))}
-                        </div>
-                      )}
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[10px] border border-emerald-200 flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        <span>Tersimpan</span>
+                      </span>
                     </div>
 
-                    {/* Footer Actions */}
-                    <div className="border-t border-slate-100 pt-3 mt-2 flex items-center justify-between gap-2 text-xs">
-                      <div className="text-[10px] text-slate-400 truncate">
-                        Oleh: <strong className="text-slate-700">{file.uploadedBy.split(',')[0]}</strong>
-                      </div>
-
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {canAccess ? (
-                          <>
-                            {(!file.tags?.includes('GoogleDrive') || file.tags?.includes('Lokal')) && (
-                              <button
-                                onClick={() => handleSyncSingleFileToDrive(file)}
-                                disabled={syncingFileId === file.id}
-                                className="px-2 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-[10px] flex items-center gap-1 transition-colors cursor-pointer"
-                                title="Unggah / Sinkronkan ke Google Drive"
-                              >
-                                <RefreshCw className={`w-3 h-3 text-amber-700 ${syncingFileId === file.id ? 'animate-spin' : ''}`} />
-                                <span>{syncingFileId === file.id ? 'Mengunggah...' : 'Ke Drive'}</span>
-                              </button>
-                            )}
-                            <button
-                              onClick={() => setPreviewFile(file)}
-                              className="px-2.5 py-1.5 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 font-bold flex items-center gap-1 transition-colors cursor-pointer"
-                              title="Lihat Berkas"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                              <span>Lihat</span>
-                            </button>
-                            {isAdmin && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteFile(file);
-                                }}
-                                className="p-1.5 rounded-xl hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
-                                title="Hapus Berkas (Administrator)"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </>
+                    {/* File Icon & Name */}
+                    <div className="flex items-start gap-3 mb-2.5">
+                      <div className="w-11 h-11 bg-slate-100 rounded-xl border border-slate-200 shrink-0 overflow-hidden flex items-center justify-center p-0.5">
+                        {file.dataUrl && ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(file.fileExtension?.toLowerCase()) ? (
+                          <img src={file.dataUrl} alt={file.name} className="w-full h-full object-cover rounded-lg" />
                         ) : (
-                          <>
-                            {reqStatus === 'pending' ? (
-                              <span className="px-2.5 py-1.5 rounded-xl bg-amber-100 text-amber-900 font-bold text-[10px] flex items-center gap-1">
-                                <Clock className="w-3 h-3 text-amber-700" />
-                                <span>Menunggu Izin Admin</span>
-                              </span>
-                            ) : reqStatus === 'revoked' || reqStatus === 'inactive' ? (
-                              <button
-                                onClick={() => handleOpenRequestModal(file)}
-                                className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] flex items-center gap-1 cursor-pointer transition-colors border border-slate-300"
-                                title="Akses dinonaktifkan oleh Admin. Klik untuk minta izin kembali"
-                              >
-                                <Lock className="w-3 h-3 text-slate-500" />
-                                <span>Dinonaktifkan (Minta Ulang)</span>
-                              </button>
-                            ) : reqStatus === 'rejected' ? (
-                              <button
-                                onClick={() => handleOpenRequestModal(file)}
-                                className="px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-[10px] flex items-center gap-1 cursor-pointer transition-colors"
-                              >
-                                <RefreshCw className="w-3 h-3 text-rose-600" />
-                                <span>Minta Ulang Izin</span>
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => handleOpenRequestModal(file)}
-                                className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white font-bold text-[11px] flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
-                              >
-                                <Key className="w-3.5 h-3.5" />
-                                <span>Minta Izin Akses</span>
-                              </button>
-                            )}
-                          </>
+                          getFileIcon(file.fileExtension)
                         )}
                       </div>
+                      <div className="overflow-hidden">
+                        <h3 className="font-bold text-slate-900 text-xs sm:text-sm line-clamp-2 leading-snug hover:text-sky-700 transition-colors">
+                          {file.name}
+                        </h3>
+                        <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-1">
+                          <span>{formatBytes(file.fileSize)}</span>
+                          <span>•</span>
+                          <span>{file.fileExtension.toUpperCase()}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Description */}
+                    {file.description && (
+                      <p className="text-slate-600 text-xs line-clamp-2 mb-3 leading-relaxed">
+                        {file.description}
+                      </p>
+                    )}
+
+                    {/* Tags */}
+                    {file.tags && file.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-4">
+                        {file.tags.map((t, idx) => (
+                          <span
+                            key={idx}
+                            className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-medium"
+                          >
+                            #{t}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Footer Actions */}
+                  <div className="border-t border-slate-100 pt-3 mt-2 flex items-center justify-between gap-2 text-xs">
+                    <div className="text-[10px] text-slate-400 truncate">
+                      Oleh: <strong className="text-slate-700">{file.uploadedBy.split(',')[0]}</strong>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {(!file.tags?.includes('GoogleDrive') || file.tags?.includes('Lokal')) && (
+                        <button
+                          onClick={() => handleSyncSingleFileToDrive(file)}
+                          disabled={syncingFileId === file.id}
+                          className="px-2 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-[10px] flex items-center gap-1 transition-colors cursor-pointer"
+                          title="Unggah / Sinkronkan ke Google Drive"
+                        >
+                          <RefreshCw className={`w-3 h-3 text-amber-700 ${syncingFileId === file.id ? 'animate-spin' : ''}`} />
+                          <span>{syncingFileId === file.id ? 'Mengunggah...' : 'Ke Drive'}</span>
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setPreviewFile(file)}
+                        className="px-2.5 py-1.5 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                        title="Lihat Berkas"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>Lihat</span>
+                      </button>
+                      {canDeleteFile(file) && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteFile(file);
+                          }}
+                          className="p-1.5 rounded-xl hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                          title={isAdmin ? "Hapus Berkas (Administrator)" : "Hapus Berkas Saya"}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
-                );
-              })}
+                </div>
+              ))}
             </div>
           ) : (
             /* Table List View */
@@ -2300,121 +1299,69 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
                       <th className="py-3 px-4">Kategori Folder</th>
                       <th className="py-3 px-4">Ukuran & Format</th>
                       <th className="py-3 px-4">Pengunggah</th>
-                      <th className="py-3 px-4">Status Akses</th>
                       <th className="py-3 px-4 text-center">Aksi</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {filteredFiles.map(file => {
-                      const canAccess = hasAccessToFile(file);
-                      const reqStatus = getUserRequestStatus(file.id);
-
-                      return (
-                        <tr key={file.id} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="py-3 px-4">
-                            <div className="flex items-center gap-2.5">
-                              {getFileIcon(file.fileExtension)}
-                              <div>
-                                <div className="font-bold text-slate-900">{file.name}</div>
-                                <div className="text-[10px] text-slate-400">{file.uploadedAt}</div>
-                              </div>
+                    {filteredFiles.map(file => (
+                      <tr key={file.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2.5">
+                            {getFileIcon(file.fileExtension)}
+                            <div>
+                              <div className="font-bold text-slate-900">{file.name}</div>
+                              <div className="text-[10px] text-slate-400">{file.uploadedAt}</div>
                             </div>
-                          </td>
-                          <td className="py-3 px-4">
-                            <span className="px-2 py-0.5 rounded bg-sky-50 text-sky-800 font-semibold text-[11px] border border-sky-100">
-                              {file.category}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 font-mono text-[11px] text-slate-600">
-                            {formatBytes(file.fileSize)} ({file.fileExtension.toUpperCase()})
-                          </td>
-                          <td className="py-3 px-4">
-                            <div className="font-medium text-slate-900">{file.uploadedBy}</div>
-                            <div className="text-[10px] text-slate-400">{file.uploadedByRole}</div>
-                          </td>
-                          <td className="py-3 px-4">
-                            {canAccess ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
-                                <Unlock className="w-3 h-3 text-emerald-600" />
-                                <span>Terbuka</span>
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 text-[10px] font-bold border border-amber-200">
-                                <Lock className="w-3 h-3 text-amber-600" />
-                                <span>Terkunci</span>
-                              </span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="px-2 py-0.5 rounded bg-sky-50 text-sky-800 font-semibold text-[11px] border border-sky-100">
+                            {file.category}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 font-mono text-[11px] text-slate-600">
+                          {formatBytes(file.fileSize)} ({file.fileExtension.toUpperCase()})
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="font-medium text-slate-900">{file.uploadedBy}</div>
+                          <div className="text-[10px] text-slate-400">{file.uploadedByRole}</div>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            {(!file.tags?.includes('GoogleDrive') || file.tags?.includes('Lokal')) && (
+                              <button
+                                onClick={() => handleSyncSingleFileToDrive(file)}
+                                disabled={syncingFileId === file.id}
+                                className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-[10px] flex items-center gap-1 transition-colors cursor-pointer"
+                                title="Unggah / Sinkronkan ke Google Drive"
+                              >
+                                <RefreshCw className={`w-3 h-3 text-amber-700 ${syncingFileId === file.id ? 'animate-spin' : ''}`} />
+                                <span>{syncingFileId === file.id ? 'Mengunggah...' : 'Ke Drive'}</span>
+                              </button>
                             )}
-                          </td>
-                          <td className="py-3 px-4 text-center">
-                            {canAccess ? (
-                              <div className="flex items-center justify-center gap-1.5">
-                                {(!file.tags?.includes('GoogleDrive') || file.tags?.includes('Lokal')) && (
-                                  <button
-                                    onClick={() => handleSyncSingleFileToDrive(file)}
-                                    disabled={syncingFileId === file.id}
-                                    className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-[10px] flex items-center gap-1 transition-colors cursor-pointer"
-                                    title="Unggah / Sinkronkan ke Google Drive"
-                                  >
-                                    <RefreshCw className={`w-3 h-3 text-amber-700 ${syncingFileId === file.id ? 'animate-spin' : ''}`} />
-                                    <span>{syncingFileId === file.id ? 'Mengunggah...' : 'Ke Drive'}</span>
-                                  </button>
-                                )}
-                                <button
-                                  onClick={() => setPreviewFile(file)}
-                                  className="px-2.5 py-1 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 font-bold flex items-center gap-1 transition-colors cursor-pointer"
-                                >
-                                  <Eye className="w-3.5 h-3.5" />
-                                  <span>Lihat</span>
-                                </button>
-                                {isAdmin && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDeleteFile(file);
-                                    }}
-                                    className="p-1 rounded-lg hover:bg-rose-50 text-rose-600 transition-colors cursor-pointer"
-                                    title="Hapus Berkas (Administrator)"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                )}
-                              </div>
-                            ) : (
-                              <div>
-                                {reqStatus === 'pending' ? (
-                                  <span className="text-[10px] font-bold text-amber-700">Menunggu Izin</span>
-                                ) : reqStatus === 'revoked' || reqStatus === 'inactive' ? (
-                                  <button
-                                    onClick={() => handleOpenRequestModal(file)}
-                                    className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] flex items-center gap-1 mx-auto cursor-pointer border border-slate-300"
-                                    title="Akses dinonaktifkan oleh Admin. Klik untuk minta izin kembali"
-                                  >
-                                    <Lock className="w-3 h-3 text-slate-500" />
-                                    <span>Dinonaktifkan (Minta Ulang)</span>
-                                  </button>
-                                ) : reqStatus === 'rejected' ? (
-                                  <button
-                                    onClick={() => handleOpenRequestModal(file)}
-                                    className="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-[10px] flex items-center gap-1 mx-auto cursor-pointer"
-                                  >
-                                    <RefreshCw className="w-3 h-3 text-rose-600" />
-                                    <span>Minta Ulang</span>
-                                  </button>
-                                ) : (
-                                  <button
-                                    onClick={() => handleOpenRequestModal(file)}
-                                    className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-white font-bold text-[10px] flex items-center gap-1 mx-auto cursor-pointer"
-                                  >
-                                    <Key className="w-3 h-3" />
-                                    <span>Minta Izin</span>
-                                  </button>
-                                )}
-                              </div>
+                            <button
+                              onClick={() => setPreviewFile(file)}
+                              className="px-2.5 py-1 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>Lihat</span>
+                            </button>
+                            {canDeleteFile(file) && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteFile(file);
+                                }}
+                                className="p-1 rounded-lg hover:bg-rose-50 text-rose-600 transition-colors cursor-pointer"
+                                title={isAdmin ? "Hapus Berkas (Administrator)" : "Hapus Berkas Saya"}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             )}
-                          </td>
-                        </tr>
-                      );
-                    })}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -2473,7 +1420,6 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {filteredCats.map(cat => {
                     const catFiles = files.filter(f => f.category === cat);
-                    const accessibleCount = catFiles.filter(f => hasAccessToFile(f)).length;
                     const totalSize = catFiles.reduce((sum, f) => sum + f.fileSize, 0);
 
                     return (
@@ -2503,7 +1449,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
                           </p>
 
                           <div className="flex items-center justify-between text-xs text-sky-600 font-bold pt-2 border-t border-slate-100">
-                            <span>{accessibleCount} Berkas Terbuka</span>
+                            <span>Buka Folder</span>
                             <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                           </div>
                         </div>
@@ -2514,348 +1460,6 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
               );
             })()
           )}
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* TAB 3: APPROVAL CENTER & ACCESS REQUESTS */}
-      {/* ========================================================================= */}
-      {activeTab === 'approvals' && (
-        <div className="space-y-4">
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
-              <div>
-                <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
-                  <ShieldCheck className="w-5 h-5 text-indigo-600" />
-                  <span>Daftar Permintaan Izin Akses Berkas</span>
-                </h3>
-                <p className="text-slate-500 text-xs mt-0.5">
-                  {isAdmin
-                    ? 'Kelola dan setujui permintaan membuka berkas dari Guru, Operator, dan civitas sekolah.'
-                    : 'Riwayat permintaan izin akses berkas yang telah Anda ajukan kepada Administrator.'}
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <div className="px-3 py-1.5 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-800 text-xs font-bold">
-                  Total Permintaan: {accessRequests.filter(req => isAdmin || isUserRequestMatch(req)).length}
-                </div>
-                {isAdmin && accessRequests.length > 0 && (
-                  <button
-                    onClick={() => {
-                      if (window.confirm('Apakah Anda yakin ingin mengosongkan seluruh riwayat permintaan izin akses? Data akan dihapus permanen dari database.')) {
-                        const allIds = accessRequests.map(r => r.id);
-                        try {
-                          const savedDel = localStorage.getItem('dapodik_deleted_request_ids');
-                          const delList: string[] = savedDel ? JSON.parse(savedDel) : [];
-                          allIds.forEach(id => {
-                            if (!delList.includes(id)) delList.push(id);
-                          });
-                          localStorage.setItem('dapodik_deleted_request_ids', JSON.stringify(delList));
-                        } catch (e) {}
-                        persistAndSyncRequests([], undefined, 'Semua riwayat permintaan akses berhasil dikosongkan!');
-                      }
-                    }}
-                    className="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
-                    title="Kosongkan seluruh daftar permintaan izin akses"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                    <span>Kosongkan Riwayat</span>
-                  </button>
-                )}
-              </div>
-            </div>
- 
-            {/* Table of Requests */}
-            <div className="overflow-x-auto rounded-xl border border-slate-200">
-              <table className="w-full text-left text-xs text-slate-700">
-                <thead className="bg-slate-50 text-slate-600 uppercase font-semibold border-b border-slate-200">
-                  <tr>
-                    <th className="py-3 px-4">Nama Berkas</th>
-                    <th className="py-3 px-4">Pemohon</th>
-                    <th className="py-3 px-4">Waktu & Alasan</th>
-                    <th className="py-3 px-4 text-center">Status</th>
-                    {isAdmin ? (
-                      <th className="py-3 px-4 text-center">Tindakan Administrator</th>
-                    ) : (
-                      <th className="py-3 px-4 text-center">Akses Berkas</th>
-                    )}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {accessRequests.filter(req => isAdmin || isUserRequestMatch(req)).length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="py-8 text-center text-slate-400">
-                        {isAdmin
-                          ? 'Belum ada permintaan izin akses berkas yang diajukan.'
-                          : 'Anda belum pernah mengajukan permintaan izin akses berkas.'}
-                      </td>
-                    </tr>
-                  ) : (
-                    accessRequests
-                      .filter(req => isAdmin || isUserRequestMatch(req))
-                      .map(req => (
-                      <tr key={req.id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-2">
-                            {req.fileId === 'gdrive-main-folder' && (
-                              <div className="w-7 h-7 rounded-lg bg-amber-100 border border-amber-300 text-amber-700 flex items-center justify-center shrink-0">
-                                <FolderLock className="w-4 h-4" />
-                              </div>
-                            )}
-                            <div>
-                              <div className="font-bold text-slate-900 flex items-center gap-1.5">
-                                <span>{req.fileName}</span>
-                                {req.fileId === 'gdrive-main-folder' && (
-                                  <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-extrabold border border-amber-200">
-                                    Drive Utama
-                                  </span>
-                                )}
-                              </div>
-                              <div className="text-[10px] text-slate-400">ID: {req.fileId}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="font-bold text-slate-900">{req.requesterName}</div>
-                          <div className="text-[11px] text-slate-500">{req.requesterRole}</div>
-                          {req.requesterEmail && (
-                            <div className="text-[10px] text-sky-600">{req.requesterEmail}</div>
-                          )}
-                        </td>
-                        <td className="py-3 px-4 max-w-xs">
-                          <div className="text-[10px] text-slate-400 mb-1 flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            <span>{req.requestedAt}</span>
-                          </div>
-                          <p className="text-slate-700 text-xs italic bg-slate-50 p-2 rounded-lg border border-slate-100">
-                            "{req.reason}"
-                          </p>
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          {req.status === 'pending' && (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 text-[11px] font-bold border border-amber-200">
-                              <Clock className="w-3.5 h-3.5 text-amber-600" />
-                              <span>Menunggu</span>
-                            </span>
-                          )}
-                          {req.status === 'approved' && (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 text-[11px] font-bold border border-emerald-200">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>Disetujui (Aktif)</span>
-                            </span>
-                          )}
-                          {(req.status === 'revoked' || req.status === 'inactive') && (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-[11px] font-bold border border-slate-300">
-                              <Lock className="w-3.5 h-3.5 text-slate-500" />
-                              <span>Dinonaktifkan</span>
-                            </span>
-                          )}
-                          {req.status === 'rejected' && (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-50 text-rose-800 text-[11px] font-bold border border-rose-200">
-                              <XCircle className="w-3.5 h-3.5 text-rose-600" />
-                              <span>Ditolak</span>
-                            </span>
-                          )}
-                        </td>
-                        {isAdmin ? (
-                          <td className="py-3 px-4 text-center">
-                            {req.status === 'pending' ? (
-                              <div className="flex items-center justify-center gap-2">
-                                <button
-                                  onClick={() => handleApproveRequest(req.id)}
-                                  className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer shadow-sm"
-                                  title="Setujui dan beri izin akses berkas"
-                                >
-                                  <Check className="w-3.5 h-3.5" />
-                                  <span>Izinkan</span>
-                                </button>
-                                <button
-                                  onClick={() => handleRejectRequest(req.id)}
-                                  className="px-3 py-1.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer shadow-sm"
-                                  title="Tolak permintaan akses berkas"
-                                >
-                                  <X className="w-3.5 h-3.5" />
-                                  <span>Tolak</span>
-                                </button>
-                              </div>
-                            ) : req.status === 'approved' ? (
-                              <div className="flex flex-col items-center justify-center gap-1">
-                                <div className="flex items-center justify-center gap-1.5">
-                                  {req.fileId === 'gdrive-main-folder' ? (
-                                    <a
-                                      href={GOOGLE_DRIVE_MAIN_FOLDER_URL}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs inline-flex items-center gap-1 shadow-sm transition-colors cursor-pointer"
-                                      title="Buka Folder Google Drive Utama"
-                                    >
-                                      <Folder className="w-3.5 h-3.5 text-amber-300" />
-                                      <span>Buka Drive</span>
-                                      <ExternalLink className="w-3 h-3 opacity-80" />
-                                    </a>
-                                  ) : (
-                                    <button
-                                      onClick={() => {
-                                        const f = files.find(x => x.id === req.fileId);
-                                        if (f) setPreviewFile(f);
-                                      }}
-                                      className="px-2.5 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs inline-flex items-center gap-1 shadow-sm transition-colors cursor-pointer"
-                                      title="Lihat Pratinjau Berkas"
-                                    >
-                                      <Eye className="w-3.5 h-3.5" />
-                                      <span>Buka</span>
-                                    </button>
-                                  )}
-                                  <button
-                                    onClick={() => handleRevokeRequest(req.id)}
-                                    className="px-2 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer"
-                                    title="Nonaktifkan / cabut izin akses pemohon ini"
-                                  >
-                                    <Lock className="w-3.5 h-3.5 text-amber-600" />
-                                    <span>Cabut</span>
-                                  </button>
-                                  <button
-                                    onClick={() => setDeletingRequest(req)}
-                                    className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
-                                    title="Hapus Riwayat Permintaan Ini"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                                {req.reviewedBy && (
-                                  <span className="text-[10px] text-slate-400">
-                                    Disetujui: {req.reviewedBy} ({req.reviewedAt || '-'})
-                                  </span>
-                                )}
-                              </div>
-                            ) : req.status === 'revoked' || req.status === 'inactive' ? (
-                              <div className="flex flex-col items-center justify-center gap-1">
-                                <div className="flex items-center justify-center gap-1.5">
-                                  <button
-                                    onClick={() => handleApproveRequest(req.id)}
-                                    className="px-2.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer shadow-sm"
-                                    title="Aktifkan kembali izin akses berkas ini"
-                                  >
-                                    <Unlock className="w-3.5 h-3.5" />
-                                    <span>Aktifkan Kembali</span>
-                                  </button>
-                                  <button
-                                    onClick={() => setDeletingRequest(req)}
-                                    className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
-                                    title="Hapus Riwayat Permintaan Ini"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                                {req.reviewedBy && (
-                                  <span className="text-[10px] text-slate-400">
-                                    Dinonaktifkan: {req.reviewedBy} ({req.reviewedAt || '-'})
-                                  </span>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="flex flex-col items-center justify-center gap-1">
-                                <div className="flex items-center justify-center gap-1.5">
-                                  <button
-                                    onClick={() => handleApproveRequest(req.id)}
-                                    className="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer"
-                                    title="Beri izin akses kembali"
-                                  >
-                                    <Check className="w-3.5 h-3.5 text-emerald-600" />
-                                    <span>Beri Izin</span>
-                                  </button>
-                                  <button
-                                    onClick={() => setDeletingRequest(req)}
-                                    className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
-                                    title="Hapus Riwayat Permintaan Ini"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                                {req.reviewedBy && (
-                                  <span className="text-[10px] text-slate-400">
-                                    Ditinjau: {req.reviewedBy} ({req.reviewedAt || '-'})
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                          </td>
-                        ) : (
-                          <td className="py-3 px-4 text-center">
-                            {req.status === 'approved' ? (
-                              req.fileId === 'gdrive-main-folder' ? (
-                                <a
-                                  href={GOOGLE_DRIVE_MAIN_FOLDER_URL}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs inline-flex items-center gap-1.5 shadow-sm transition-all hover:scale-105 cursor-pointer"
-                                  title="Izin disetujui! Klik untuk membuka Folder Google Drive Utama"
-                                >
-                                  <Folder className="w-3.5 h-3.5 text-amber-300" />
-                                  <span>Buka Google Drive</span>
-                                  <ExternalLink className="w-3 h-3 opacity-80" />
-                                </a>
-                              ) : (
-                                <button
-                                  onClick={() => {
-                                    const f = files.find(x => x.id === req.fileId);
-                                    if (f) setPreviewFile(f);
-                                  }}
-                                  className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs inline-flex items-center gap-1.5 shadow-sm transition-all hover:scale-105 cursor-pointer"
-                                  title="Izin disetujui! Klik untuk membuka berkas"
-                                >
-                                  <Eye className="w-3.5 h-3.5" />
-                                  <span>Buka Berkas</span>
-                                </button>
-                              )
-                            ) : req.status === 'pending' ? (
-                              <span className="text-amber-700 text-xs font-semibold inline-flex items-center justify-center gap-1">
-                                <Clock className="w-3.5 h-3.5 text-amber-600" />
-                                <span>Menunggu Admin</span>
-                              </span>
-                            ) : req.status === 'revoked' || req.status === 'inactive' ? (
-                              <button
-                                onClick={() => {
-                                  if (req.fileId === 'gdrive-main-folder') {
-                                    handleOpenDriveFolderRequest();
-                                  } else {
-                                    const f = files.find(x => x.id === req.fileId);
-                                    if (f) handleOpenRequestModal(f);
-                                  }
-                                }}
-                                className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs inline-flex items-center gap-1 transition-colors border border-slate-300 cursor-pointer"
-                                title="Akses dinonaktifkan. Klik untuk minta izin kembali"
-                              >
-                                <RefreshCw className="w-3.5 h-3.5 text-slate-600" />
-                                <span>Minta Ulang</span>
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => {
-                                  if (req.fileId === 'gdrive-main-folder') {
-                                    handleOpenDriveFolderRequest();
-                                  } else {
-                                    const f = files.find(x => x.id === req.fileId);
-                                    if (f) handleOpenRequestModal(f);
-                                  }
-                                }}
-                                className="px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs inline-flex items-center gap-1 transition-colors border border-rose-200 cursor-pointer"
-                                title="Permintaan ditolak. Klik untuk ajukan ulang"
-                              >
-                                <RefreshCw className="w-3.5 h-3.5 text-rose-600" />
-                                <span>Ajukan Ulang</span>
-                              </button>
-                            )}
-                          </td>
-                        )}
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
         </div>
       )}
 
@@ -2908,6 +1512,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
                 ref={multiFileInputRef}
                 onChange={handleFileSelection}
                 className="hidden"
+                accept="*/*"
               />
               <Upload className="w-8 h-8 text-sky-500 mx-auto mb-1 group-hover:scale-110 transition-transform" />
               <div className="font-bold text-slate-900 text-xs">
@@ -2998,7 +1603,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
               {folderChoiceMode === 'category' ? (
                 <div className="space-y-1.5">
                   <label className="block font-semibold text-slate-700">
-                    Kategori Folder Tujuan (Tersimpan otomatis ke folder kategori di Google Drive):
+                    Kategori Folder Tujuan:
                   </label>
                   <select
                     value={uploadCategory}
@@ -3064,22 +1669,104 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
                           : 'Ketik nama folder baru. Berkas akan masuk ke folder baru ini di Google Drive & menu kategori.'}
                       </span>
                     </div>
-                    {customFolder.trim() && (
-                      <span className="text-[10px] text-amber-800 font-semibold pl-5 block leading-relaxed border-t border-amber-200/50 pt-1">
-                        ℹ️ <strong>Sistem Otomatis:</strong> Jika folder bernama <strong>"{customFolder.trim()}"</strong> sudah ada di Google Drive Anda, sistem akan otomatis mendeteksi dan langsung menggunakan folder tersebut. Seluruh file lama di Google Drive Anda <strong>dijamin 100% AMAN & TIDAK AKAN TERHAPUS/TERTIMPA</strong>.
-                      </span>
-                    )}
                   </div>
                 </div>
               )}
             </div>
 
+            {/* Uploader Profile Badge & Privacy Selector for All Roles */}
+            <div className="bg-sky-50/90 p-3.5 rounded-2xl border border-sky-200/80 text-xs space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-full bg-sky-700 text-white font-bold flex items-center justify-center text-xs shadow-xs">
+                    {(currentUser?.nama || 'A').charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <div className="font-bold text-slate-900 text-xs">
+                      {currentUser?.nama || 'Pengguna Terdaftar'}
+                    </div>
+                    <div className="text-[10px] text-sky-800 font-medium">
+                      Role: <span className="bg-sky-200 text-sky-950 px-1.5 py-0.2 rounded font-extrabold">{currentUser?.role || 'Umum'}</span> • Hak unggah aktif untuk semua role
+                    </div>
+                  </div>
+                </div>
+                <div className="text-[10px] text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 border border-emerald-300">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                  <span>Dapat Mengunggah</span>
+                </div>
+              </div>
 
+              {/* Privacy Setting Selector */}
+              <div className="space-y-1 pt-1.5 border-t border-sky-200/70">
+                <label className="block font-semibold text-slate-800 text-[11px]">
+                  Tingkat Akses & Privasi Dokumen:
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setUploadPrivacy('Public')}
+                    className={`p-2 rounded-xl border text-left transition-all cursor-pointer ${
+                      uploadPrivacy === 'Public'
+                        ? 'bg-white border-emerald-500 shadow-xs ring-2 ring-emerald-500/30'
+                        : 'bg-white/70 border-slate-200 hover:bg-white'
+                    }`}
+                  >
+                    <div className="font-extrabold text-slate-900 text-[11px] flex items-center gap-1">
+                      <span>🌐 Publik</span>
+                    </div>
+                    <div className="text-[10px] text-slate-500 mt-0.5 leading-snug">Semua role (Guru, Siswa, Tendik) dapat akses</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setUploadPrivacy('Guru Only')}
+                    className={`p-2 rounded-xl border text-left transition-all cursor-pointer ${
+                      uploadPrivacy === 'Guru Only'
+                        ? 'bg-white border-sky-500 shadow-xs ring-2 ring-sky-500/30'
+                        : 'bg-white/70 border-slate-200 hover:bg-white'
+                    }`}
+                  >
+                    <div className="font-extrabold text-slate-900 text-[11px] flex items-center gap-1">
+                      <span>👨‍🏫 Khusus Guru</span>
+                    </div>
+                    <div className="text-[10px] text-slate-500 mt-0.5 leading-snug">Khusus Guru, Tendik & Kepala Sekolah</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setUploadPrivacy('Restricted')}
+                    className={`p-2 rounded-xl border text-left transition-all cursor-pointer ${
+                      uploadPrivacy === 'Restricted'
+                        ? 'bg-white border-amber-500 shadow-xs ring-2 ring-amber-500/30'
+                        : 'bg-white/70 border-slate-200 hover:bg-white'
+                    }`}
+                  >
+                    <div className="font-extrabold text-slate-900 text-[11px] flex items-center gap-1">
+                      <span>🔒 Terbatas</span>
+                    </div>
+                    <div className="text-[10px] text-slate-500 mt-0.5 leading-snug">Hanya Pengunggah & Administrator</div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Description Input */}
+              <div className="space-y-1">
+                <label className="block font-semibold text-slate-800 text-[11px]">
+                  Keterangan / Catatan Berkas (Opsional):
+                </label>
+                <input
+                  type="text"
+                  value={uploadDescription}
+                  onChange={e => setUploadDescription(e.target.value)}
+                  placeholder="Contoh: SK Tugas Mengajar 2026, Nilai Asesmen, Sertifikat Pelatihan..."
+                  className="w-full p-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 text-xs focus:outline-none focus:border-sky-500 shadow-xs font-medium"
+                />
+              </div>
+            </div>
 
             {/* Upload Progress Bar */}
             {isUploading && (
               <div className="space-y-3.5 p-4 bg-[#1e1e1e] text-[#d4d4d4] rounded-2xl border border-zinc-800 shadow-xl font-mono text-xs">
-                {/* File Name & Path */}
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 text-[#9cdcfe]">
                     <FileCode className="w-4 h-4 text-amber-400 shrink-0" />
@@ -3088,14 +1775,12 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
                     </span>
                   </div>
                   
-                  {/* Uploading Status and Percentage */}
                   <div className="flex items-center justify-between text-[#ce9178] font-bold">
                     <span>Uploading {currentUploadingFileIndex} of {selectedUploadFiles.length} files</span>
                     <span className="text-[#b5cea8] font-mono font-extrabold text-sm">{uploadProgress}%</span>
                   </div>
                 </div>
 
-                {/* Solid Green Progress Bar */}
                 <div className="w-full bg-zinc-800 rounded-full h-2.5 overflow-hidden">
                   <div
                     className="bg-[#4ec9b0] h-full transition-all duration-300 ease-out rounded-full shadow-xs"
@@ -3103,7 +1788,6 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
                   />
                 </div>
 
-                {/* Detailed progress details and Cancel button */}
                 <div className="flex items-center justify-between text-[11px] pt-1.5 text-zinc-400 border-t border-zinc-800/80">
                   <div className="flex items-center gap-1.5 text-[#569cd6]">
                     <span>{uploadRemainingBytesText || 'Mengunggah...'}</span>
@@ -3145,143 +1829,6 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL: REQUEST ACCESS TO RESTRICTED FILE */}
-      {/* ========================================================================= */}
-      {isRequestModalOpen && selectedFileForRequest && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-3 sm:p-4 pt-16 sm:pt-6 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-5 animate-scale-up max-h-[85vh] overflow-y-auto my-auto">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-700 flex items-center justify-center">
-                  <Key className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-slate-900 text-base">
-                    {selectedFileForRequest.id === 'gdrive-main-folder'
-                      ? 'Izin Akses Folder Google Drive Utama'
-                      : 'Permintaan Izin Akses Berkas'}
-                  </h3>
-                  <p className="text-[11px] text-slate-500">
-                    {selectedFileForRequest.id === 'gdrive-main-folder'
-                      ? 'Hanya Administrator yang memiliki akses langsung. Ajukan permohonan akses di sini.'
-                      : 'Kirim permintaan resmi kepada Administrator sekolah'}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setIsRequestModalOpen(false)}
-                className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Target File Info */}
-            <div className={`p-3.5 rounded-2xl border text-xs space-y-1 ${
-              selectedFileForRequest.id === 'gdrive-main-folder'
-                ? 'bg-amber-50/80 border-amber-200 text-amber-950'
-                : 'bg-slate-50 border-slate-200 text-slate-900'
-            }`}>
-              <div className="font-bold flex items-center gap-2">
-                {selectedFileForRequest.id === 'gdrive-main-folder' && (
-                  <FolderLock className="w-4 h-4 text-amber-600 shrink-0" />
-                )}
-                <span>{selectedFileForRequest.name}</span>
-              </div>
-              <div className="text-slate-500 flex items-center gap-2 text-[11px]">
-                <span>Kategori: {selectedFileForRequest.category}</span>
-                {selectedFileForRequest.fileSize > 0 && (
-                  <>
-                    <span>•</span>
-                    <span>Ukuran: {formatBytes(selectedFileForRequest.fileSize)}</span>
-                  </>
-                )}
-                {selectedFileForRequest.id === 'gdrive-main-folder' && (
-                  <span className="text-amber-700 font-medium">• Hak Akses Khusus Administrator</span>
-                )}
-              </div>
-            </div>
-
-            {requestSuccessMsg ? (
-              <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                <span>{requestSuccessMsg}</span>
-              </div>
-            ) : (
-              <form onSubmit={handleSubmitAccessRequest} className="space-y-3.5 text-xs">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Nama Lengkap Pemohon *</label>
-                  <input
-                    type="text"
-                    required
-                    value={requestName}
-                    onChange={e => setRequestName(e.target.value)}
-                    placeholder="Nama Anda..."
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Peran / Jabatan *</label>
-                    <input
-                      type="text"
-                      required
-                      value={requestRole}
-                      onChange={e => setRequestRole(e.target.value)}
-                      placeholder="Guru / Tendik / Operator..."
-                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-amber-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Email / Kontak</label>
-                    <input
-                      type="email"
-                      value={requestEmail}
-                      onChange={e => setRequestEmail(e.target.value)}
-                      placeholder="email@sekolah.belajar.id"
-                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-amber-500"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">
-                    Alasan / Tujuan Memerlukan Berkas Ini *
-                  </label>
-                  <textarea
-                    required
-                    rows={3}
-                    value={requestReason}
-                    onChange={e => setRequestReason(e.target.value)}
-                    placeholder="Jelaskan alasan keperluan dinas, pembelajaran, atau administrasi..."
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:border-amber-500 resize-none"
-                  />
-                </div>
-
-                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-                  <button
-                    type="button"
-                    onClick={() => setIsRequestModalOpen(false)}
-                    className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition-colors cursor-pointer"
-                  >
-                    Batal
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white font-extrabold flex items-center gap-1.5 cursor-pointer shadow-md shadow-amber-500/20"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                    <span>Kirim Permintaan ke Admin</span>
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
       {/* MODAL: FILE PREVIEW & DETAILS */}
       {/* ========================================================================= */}
       {previewFile && (
@@ -3307,7 +1854,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
               </button>
             </div>
 
-            {/* Document Details & Viewer Simulator */}
+            {/* Document Details */}
             <div className="space-y-2.5">
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1.5">
                 <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-slate-600 text-[11px]">
@@ -3324,8 +1871,8 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
                     <strong className="text-slate-900">{previewFile.fileExtension.toUpperCase()}</strong>
                   </div>
                   <div>
-                    <span className="text-slate-400">Akses:</span>{' '}
-                    <strong className="text-emerald-700">{previewFile.privacy}</strong>
+                    <span className="text-slate-400">Kategori:</span>{' '}
+                    <strong className="text-emerald-700">{previewFile.category}</strong>
                   </div>
                 </div>
 
@@ -3337,7 +1884,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
                 )}
               </div>
 
-              {/* Preview Window: Actual Image Display or Drive Simulator */}
+              {/* Preview Window */}
               {previewFile.dataUrl || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(previewFile.fileExtension?.toLowerCase()) ? (
                 <div className="p-2.5 bg-slate-900 rounded-xl text-center space-y-2 border border-slate-800 flex flex-col items-center">
                   <div className="max-h-[200px] w-full flex items-center justify-center bg-slate-950/80 rounded-lg overflow-hidden p-1.5 border border-slate-800">
@@ -3463,49 +2010,6 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL: CONFIRM DELETE ACCESS REQUEST */}
-      {/* ========================================================================= */}
-      {deletingRequest && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 pt-16 sm:pt-6 overflow-y-auto animate-fadeIn">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4 animate-scale-up my-auto max-h-[85vh] overflow-y-auto">
-            <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
-              <div className="w-12 h-12 rounded-2xl bg-rose-100 border border-rose-200 text-rose-600 flex items-center justify-center shrink-0 shadow-xs">
-                <Trash2 className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="font-extrabold text-slate-900 text-base">Hapus Riwayat Permintaan</h3>
-                <p className="text-xs text-slate-500">Konfirmasi penghapusan log izin akses</p>
-              </div>
-            </div>
-
-            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5 text-xs text-slate-700">
-              <div><strong>Berkas:</strong> {deletingRequest.fileName}</div>
-              <div><strong>Pemohon:</strong> {deletingRequest.requesterName} ({deletingRequest.requesterRole})</div>
-              <div><strong>Waktu:</strong> {deletingRequest.requestedAt}</div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setDeletingRequest(null)}
-                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
-              >
-                Batal
-              </button>
-              <button
-                type="button"
-                onClick={confirmDeleteRequest}
-                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-rose-600/20 cursor-pointer"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Ya, Hapus Riwayat</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
       {/* MODAL: GOOGLE DRIVE DIAGNOSTICS & SETUP GUIDE */}
       {/* ========================================================================= */}
       {isDriveGuideModalOpen && (
@@ -3548,7 +2052,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
                   {driveTestResult.success ? (
                     <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
                   ) : (
-                    <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+                    <X className="w-5 h-5 text-rose-600 shrink-0" />
                   )}
                   <span>{driveTestResult.success ? 'Koneksi Google Drive Terverifikasi LULUS!' : 'Koneksi Google Drive Belum Siap'}</span>
                 </div>
