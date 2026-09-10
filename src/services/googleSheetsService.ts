@@ -885,9 +885,13 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
             ptk: cache.teachers || [],
             sarpras: cache.sarpras || [],
             rapor: cache.reports || [],
-            pengaturan: [],
+            pengaturan: cache.displayConfig 
+              ? Object.entries(cache.displayConfig).map(([k, v]) => ({ key: k, value: v !== undefined && v !== null ? String(v) : '' }))
+              : [],
             administrator: cache.administrators || [],
-            profilSekolah: [],
+            profilSekolah: cache.schoolProfile 
+              ? Object.entries(cache.schoolProfile).map(([k, v]) => ({ key: k, value: v !== undefined && v !== null ? String(v) : '' }))
+              : [],
             aplikasi: cache.aplikasiLinks || [],
             notifikasi: cache.notifications || [],
             permintaanAkses: cache.permintaanAkses || [],

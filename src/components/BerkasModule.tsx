@@ -445,12 +445,22 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
     }).catch(() => {});
 
     // Sync to Google Sheets
-    const syncCfg = activeSyncConfig || syncConfig;
-    if (syncCfg && syncCfg.webAppUrl) {
-      syncBerkasToGoogleSheets(syncCfg, cleanFiles).catch(err => {
-        console.error('Failed to sync berkas to Google Sheets:', err);
-      });
+    let syncCfg = activeSyncConfig || syncConfig;
+    if (!syncCfg || !syncCfg.webAppUrl) {
+      try {
+        const cfgSaved = localStorage.getItem('dapodik_sync_config');
+        if (cfgSaved) syncCfg = JSON.parse(cfgSaved);
+      } catch (e) {}
     }
+    const finalWebAppUrl = syncCfg?.webAppUrl || 'https://script.google.com/macros/s/AKfycbyhC26e6a4a0ORdBvnMCz7c1pDR0rQsGkcO_LfVKhxAZGYtBMGle4qbjZoNx6D_uT79/exec';
+    const effectiveCfg: SyncConfig = {
+      ...(syncCfg || {}),
+      webAppUrl: finalWebAppUrl
+    } as SyncConfig;
+
+    syncBerkasToGoogleSheets(effectiveCfg, cleanFiles).catch(err => {
+      console.error('Failed to sync berkas to Google Sheets:', err);
+    });
 
     if (successNote) {
       setSyncFeedback(successNote);

@@ -657,9 +657,29 @@ export default function App() {
     localStorage.setItem('dapodik_aplikasi_links', JSON.stringify(aplikasiLinks));
     if (!isSyncingFromServerRef.current) {
       lastLocalMutationRef.current = Date.now();
-      saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks);
+      saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks, getDeletedNotifIds(), schoolFiles, accessRequests);
     }
   }, [aplikasiLinks, isInitialized]);
+
+  useEffect(() => {
+    if (!isInitialized) return;
+    localStorage.setItem('dapodik_school_files_v3', JSON.stringify(schoolFiles));
+    if (!isSyncingFromServerRef.current) {
+      lastLocalMutationRef.current = Date.now();
+      saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks, getDeletedNotifIds(), schoolFiles, accessRequests);
+      triggerAutoSync(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, false, notificationsRef.current, undefined, schoolFiles, accessRequests);
+    }
+  }, [schoolFiles, isInitialized]);
+
+  useEffect(() => {
+    if (!isInitialized) return;
+    localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(accessRequests));
+    if (!isSyncingFromServerRef.current) {
+      lastLocalMutationRef.current = Date.now();
+      saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks, getDeletedNotifIds(), schoolFiles, accessRequests);
+      triggerAutoSync(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, false, notificationsRef.current, undefined, schoolFiles, accessRequests);
+    }
+  }, [accessRequests, isInitialized]);
 
   // Auth Handlers
   const handleLogin = (user: AdminUser) => {
@@ -730,7 +750,7 @@ export default function App() {
         const result = await loadFromGoogleSheets(currentCfg);
         if (result && result.success && result.data) {
           const {
-            siswa, ptk, sarpras, rapor, administrator, profilSekolah, aplikasi, notifikasi, permintaanAkses, berkas
+            siswa, ptk, sarpras, rapor, administrator, pengaturan, profilSekolah, aplikasi, notifikasi, permintaanAkses, berkas
           } = result.data;
 
           if (Array.isArray(siswa) && siswa.length > 0) {
@@ -767,14 +787,44 @@ export default function App() {
             setAccessRequests(permintaanAkses);
             localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(permintaanAkses));
           }
-          if (Array.isArray(berkas)) {
-            setSchoolFiles(berkas);
-            localStorage.setItem('dapodik_school_files_v3', JSON.stringify(berkas));
+          let pulledFiles = schoolFiles;
+          if (Array.isArray(berkas) && berkas.length > 0) {
+            const fileMap = new Map<string, SchoolFileItem>();
+            (schoolFiles || []).forEach(f => {
+              if (f && f.id) fileMap.set(String(f.id), f);
+            });
+            berkas.forEach(f => {
+              if (f && f.id) {
+                const existing = fileMap.get(String(f.id));
+                fileMap.set(String(f.id), {
+                  ...existing,
+                  ...f,
+                  dataUrl: f.dataUrl || existing?.dataUrl
+                });
+              }
+            });
+            pulledFiles = Array.from(fileMap.values());
+            setSchoolFiles(pulledFiles);
+            localStorage.setItem('dapodik_school_files_v3', JSON.stringify(pulledFiles));
           }
           if (Array.isArray(aplikasi) && aplikasi.length > 0) {
             setAplikasiLinks(aplikasi);
             localStorage.setItem('dapodik_aplikasi_links', JSON.stringify(aplikasi));
           }
+          let pulledDisplayConfig = displayConfig;
+          if (Array.isArray(pengaturan) && pengaturan.length > 0) {
+            const newCfgObj: any = { ...displayConfig };
+            pengaturan.forEach((item: any) => {
+              if (item && item.key && item.value !== undefined && item.value !== '') {
+                newCfgObj[item.key] = item.value;
+              }
+            });
+            pulledDisplayConfig = newCfgObj;
+            setDisplayConfig(newCfgObj);
+            localStorage.setItem('dapodik_display_config', JSON.stringify(newCfgObj));
+          }
+
+          let pulledSchoolProfile = schoolProfile;
           if (Array.isArray(profilSekolah) && profilSekolah.length > 0) {
             const newProf: any = { ...schoolProfile };
             profilSekolah.forEach((item: any) => {
@@ -783,23 +833,24 @@ export default function App() {
               }
             });
             const cleanProf = sanitizeSchoolProfileDates(newProf);
+            pulledSchoolProfile = cleanProf;
             setSchoolProfile(cleanProf);
             localStorage.setItem('dapodik_school_profile', JSON.stringify(cleanProf));
           }
 
-          // Update server cache
+          // Update server cache with updated displayConfig & schoolProfile
           saveCacheToServer(
             siswa || students,
             ptk || teachers,
             sarpras || sarpras,
             rapor || reports,
-            displayConfig,
-            schoolProfile,
+            pulledDisplayConfig,
+            pulledSchoolProfile,
             administrator || administrators,
             notifikasi || notificationsRef.current,
             aplikasi || aplikasiLinks,
             getDeletedNotifIds(),
-            berkas || schoolFiles,
+            pulledFiles,
             permintaanAkses || accessRequests
           );
 
@@ -1490,11 +1541,22 @@ export default function App() {
     // Otomatis simpan & sync perubahan ke Google Spreadsheet
     const currentCfg = syncConfigRef.current || syncConfig;
     if (currentCfg && currentCfg.webAppUrl && currentCfg.autoSync !== false) {
+      const pengaturanArray = Object.entries(customDisplayConfig || {}).map(([key, value]) => ({
+        key,
+        value: value !== undefined && value !== null ? String(value) : ''
+      }));
+      const profilSekolahArray = Object.entries(customSchoolProfile || {}).map(([key, value]) => ({
+        key,
+        value: value !== undefined && value !== null ? String(value) : ''
+      }));
+
       syncToGoogleSheets(currentCfg, {
         siswa: customStudents,
         ptk: customTeachers,
         sarpras: customSarpras,
         rapor: customReports,
+        pengaturan: pengaturanArray,
+        profilSekolah: profilSekolahArray,
         administrator: customAdministrators,
         notifikasi: activeNotifs,
         aplikasi: aplikasiLinks,
