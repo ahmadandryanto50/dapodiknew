@@ -45,6 +45,17 @@ import { SafeImage } from './components/SafeImage';
 import { formatDateIndonesian, cleanLeadingZerosCode } from './utils/dateUtils';
 import { loadFromGoogleSheets, syncToGoogleSheets } from './services/googleSheetsService';
 import { 
+  subscribeCollection, 
+  subscribeDocument, 
+  saveDocument, 
+  removeDocument, 
+  saveBatchItems, 
+  seedFirebaseIfEmpty, 
+  forceSeedFirebase, 
+  COLLECTIONS 
+} from './services/firebaseService';
+import { initialSchoolFiles, initialAccessRequests } from './data/mockFiles';
+import { 
   Home, 
   School,
   Users, 
@@ -944,391 +955,155 @@ export default function App() {
 
 
 
-  // Auto-pull on mount if configured & fetch shared configurations from the server
+  // Firebase Firestore Database Real-time Initialization & Subscription
   useEffect(() => {
-    const fetchSharedServerData = async () => {
+    let isMounted = true;
+
+    const initFirebase = async () => {
       try {
-        let serverConfig = null;
-        let serverData = null;
-
-        // 1. Fetch sync configuration from server with cache-busting
-        try {
-          const configRes = await fetch(`/api/sync-config?t=${Date.now()}`);
-          if (configRes.ok && configRes.headers.get('content-type')?.includes('application/json')) {
-            serverConfig = await configRes.json();
-          }
-        } catch (e) {
-          console.log('Using pre-baked sync config defaults (Vercel/GitHub static hosting environment detected)');
-        }
-        
-        // 2. Fetch data cache from server with cache-busting
-        try {
-          const dataRes = await fetch(`/api/app-data?t=${Date.now()}`);
-          if (dataRes.ok && dataRes.headers.get('content-type')?.includes('application/json')) {
-            serverData = await dataRes.json();
-          }
-        } catch (e) {
-          console.log('Using cached data from Google Sheets API directly (Vercel/GitHub static hosting environment detected)');
-        }
-        
-        // Apply sync configuration from server if valid
-        let activeConfig = syncConfig;
-        if (serverConfig && serverConfig.webAppUrl) {
-          const OLD_APP_SCRIPT_URL_1 = 'https://script.google.com/macros/s/AKfycbwHOEkfJ7iJVAlTKUVboM7ZHd13dX9Z6adJBH6N2UwA-LbDmTrJvxPHuBB8T4kePUmJAQ/exec';
-          const OLD_APP_SCRIPT_URL_2 = 'https://script.google.com/macros/s/AKfycbwCjNbFmpToPA9JATA4FlFJPESoWbqS9JzIhbF2TS7FNsTlK2ZIUMtfsPBE5ln3Q7eO/exec';
-          const ACTIVE_APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyhC26e6a4a0ORdBvnMCz7c1pDR0rQsGkcO_LfVKhxAZGYtBMGle4qbjZoNx6D_uT79/exec';
-          if (serverConfig.webAppUrl === OLD_APP_SCRIPT_URL_1 || serverConfig.webAppUrl === OLD_APP_SCRIPT_URL_2) {
-            serverConfig.webAppUrl = ACTIVE_APP_SCRIPT_URL;
-          }
-          setSyncConfig(serverConfig);
-          activeConfig = serverConfig;
-          localStorage.setItem('dapodik_sync_config', JSON.stringify(serverConfig));
-        }
-        
-        // Apply cached data from server if valid
-        if (serverData && Object.keys(serverData).length > 0) {
-          if (serverData.students && Array.isArray(serverData.students)) {
-            const clean = sanitizeStudentDates(serverData.students);
-            setStudents(clean);
-            localStorage.setItem('dapodik_students', JSON.stringify(clean));
-          }
-          if (serverData.teachers && Array.isArray(serverData.teachers)) {
-            const clean = sanitizeTeacherDates(serverData.teachers);
-            setTeachers(clean);
-            localStorage.setItem('dapodik_teachers', JSON.stringify(clean));
-          }
-          if (serverData.sarpras && Array.isArray(serverData.sarpras)) {
-            setSarpras(serverData.sarpras);
-            localStorage.setItem('dapodik_sarpras', JSON.stringify(serverData.sarpras));
-          }
-          if (serverData.reports && Array.isArray(serverData.reports)) {
-            const clean = sanitizeReports(serverData.reports);
-            setReports(clean);
-            localStorage.setItem('dapodik_reports', JSON.stringify(clean));
-          }
-          if (serverData.displayConfig) {
-            setDisplayConfig(serverData.displayConfig);
-            localStorage.setItem('dapodik_display_config', JSON.stringify(serverData.displayConfig));
-          }
-          if (serverData.schoolProfile) {
-            const clean = sanitizeSchoolProfileDates(serverData.schoolProfile);
-            setSchoolProfile(clean);
-            localStorage.setItem('dapodik_school_profile', JSON.stringify(clean));
-          }
-          if (serverData.administrators && Array.isArray(serverData.administrators) && serverData.administrators.length > 0) {
-            const cleanAdmins = getCleanAdministrators(serverData.administrators);
-            setAdministrators(cleanAdmins);
-            localStorage.setItem('dapodik_administrators', JSON.stringify(cleanAdmins));
-
-            // Update logged-in user if password or profile changed on another device
-            const savedUserStr = localStorage.getItem('dapodik_current_user');
-            if (savedUserStr) {
-              try {
-                const currentSaved = JSON.parse(savedUserStr);
-                const matched = cleanAdmins.find((a: AdminUser) => a.username.toLowerCase() === currentSaved.username.toLowerCase());
-                if (matched) {
-                  setCurrentUser(matched);
-                  localStorage.setItem('dapodik_current_user', JSON.stringify(matched));
-                }
-              } catch (e) {}
-            }
-          }
-          if (serverData.deletedNotifIds && Array.isArray(serverData.deletedNotifIds)) {
-            saveDeletedNotifIds(serverData.deletedNotifIds);
-          }
-          if (serverData.notifications && Array.isArray(serverData.notifications)) {
-            const merged = mergeNotifications(notificationsRef.current, serverData.notifications, serverData.deletedNotifIds || []);
-            setNotifications(merged);
-            notificationsRef.current = merged;
-            localStorage.setItem('dapodik_notifications', JSON.stringify(merged));
-          }
-          if (serverData.aplikasiLinks && Array.isArray(serverData.aplikasiLinks) && serverData.aplikasiLinks.length > 0) {
-            setAplikasiLinks(serverData.aplikasiLinks);
-            localStorage.setItem('dapodik_aplikasi_links', JSON.stringify(serverData.aplikasiLinks));
-          }
-          if (serverData.permintaanAkses && Array.isArray(serverData.permintaanAkses)) {
-            setAccessRequests(serverData.permintaanAkses);
-            localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(serverData.permintaanAkses));
-          }
-          if (serverData.customFolders && Array.isArray(serverData.customFolders)) {
-            setCustomFolders(serverData.customFolders);
-            localStorage.setItem('dapodik_custom_folders', JSON.stringify(serverData.customFolders));
-          }
-          const serverFiles = serverData.schoolFiles || serverData.files;
-          if (serverFiles && Array.isArray(serverFiles)) {
-            setSchoolFiles(serverFiles);
-            localStorage.setItem('dapodik_school_files_v3', JSON.stringify(serverFiles));
-          }
-        }
-        setIsInitialized(true);
-
-        // Auto-pull fresh data directly from Google Spreadsheet so that new browsers and devices automatically sync on first open!
-        if (activeConfig && activeConfig.webAppUrl) {
-          handlePullFromSheets(true);
-        }
+        await seedFirebaseIfEmpty({
+          students: initialStudents,
+          teachers: initialTeachers,
+          sarpras: initialSarpras,
+          reports: initialReports,
+          schoolProfile: schoolProfile,
+          displayConfig: displayConfig,
+          administrators: initialAdministrators,
+          notifications: initialNotifications,
+          aplikasiLinks: [
+            { id: '1', nama: 'Login Dapodik', url: 'https://sp.datadik.kemdikbud.go.id/', deskripsi: 'Aplikasi utama Dapodik Kemendikbud', icon: 'Laptop', kategori: 'Utama' },
+            { id: '2', nama: 'PTK Datadik', url: 'https://ptk.datadik.kemdikbud.go.id/', deskripsi: 'Portal Data Guru & Tenaga Kependidikan', icon: 'Database', kategori: 'Kepegawaian' },
+            { id: '3', nama: 'Info GTK', url: 'https://info.gtk.kemdikbud.go.id/', deskripsi: 'Cek Tunjangan & Sertifikasi PTK', icon: 'Info', kategori: 'Kepegawaian' },
+            { id: '4', nama: 'Verval PD', url: 'https://vervalpd.data.kemdikbud.go.id/', deskripsi: 'Verifikasi & Validasi Peserta Didik', icon: 'Users', kategori: 'Kesiswaan' },
+            { id: '5', nama: 'Verval PTK', url: 'https://vervalptk.data.kemdikbud.go.id/', deskripsi: 'Verifikasi & Validasi Guru', icon: 'UserCheck', kategori: 'Kepegawaian' },
+            { id: '6', nama: 'Rapor Pendidikan', url: 'https://raporpendidikan.kemdikbud.go.id/', deskripsi: 'Evaluasi Mutu Satuan Pendidikan', icon: 'BarChart', kategori: 'Kurikulum' },
+            { id: '7', nama: 'BOSP Salur', url: 'https://bos.kemdikbud.go.id/', deskripsi: 'Laporan Bantuan Operasional Sekolah', icon: 'Wallet', kategori: 'Keuangan' }
+          ],
+          schoolFiles: initialSchoolFiles,
+          accessRequests: initialAccessRequests
+        });
       } catch (err) {
-        console.error('Error fetching shared server data:', err);
-        setIsInitialized(true);
-      }
-    };
-    
-    fetchSharedServerData();
-  }, []);
-
-  // Synchronize data in real-time across preview, browser, and mobile tabs
-  useEffect(() => {
-    if (!isInitialized) return;
-
-    let isPolling = false;
-
-    const revalidateData = async () => {
-      if (isPolling) return;
-      isPolling = true;
-      try {
-        let serverConfig = null;
-        try {
-          const configRes = await fetch(`/api/sync-config?t=${Date.now()}`);
-          if (configRes.ok && configRes.headers.get('content-type')?.includes('application/json')) {
-            serverConfig = await configRes.json();
-          }
-        } catch (e) {
-          // Backend offline or non-existent (Vercel/GitHub Pages)
-        }
-
-        if (serverConfig && serverConfig.webAppUrl) {
-          setSyncConfig(prev => {
-            if (JSON.stringify(prev) !== JSON.stringify(serverConfig)) {
-              localStorage.setItem('dapodik_sync_config', JSON.stringify(serverConfig));
-              return serverConfig;
-            }
-            return prev;
-          });
-        }
-
-        let serverData = null;
-        try {
-          const dataRes = await fetch(`/api/app-data?t=${Date.now()}`);
-          if (dataRes.ok && dataRes.headers.get('content-type')?.includes('application/json')) {
-            serverData = await dataRes.json();
-          }
-        } catch (e) {
-          // Backend offline or non-existent
-        }
-
-        if (serverData && Object.keys(serverData).length > 0) {
-          // If a local mutation occurred in the last 2 seconds, skip overwriting local state with server data
-          if (Date.now() - lastLocalMutationRef.current < 2000) {
-            return;
-          }
-          isSyncingFromServerRef.current = true;
-          try {
-          // Compare and update only if different to prevent redundant writes or feedback loops
-          if (serverData.students && Array.isArray(serverData.students)) {
-            setStudents(prev => {
-              const incoming = sanitizeStudentDates(serverData.students);
-              if (JSON.stringify(prev) !== JSON.stringify(incoming)) {
-                localStorage.setItem('dapodik_students', JSON.stringify(incoming));
-                return incoming;
-              }
-              return prev;
-            });
-          }
-          if (serverData.teachers && Array.isArray(serverData.teachers)) {
-            setTeachers(prev => {
-              const incoming = sanitizeTeacherDates(serverData.teachers);
-              if (JSON.stringify(prev) !== JSON.stringify(incoming)) {
-                localStorage.setItem('dapodik_teachers', JSON.stringify(incoming));
-                return incoming;
-              }
-              return prev;
-            });
-          }
-          if (serverData.sarpras && Array.isArray(serverData.sarpras)) {
-            setSarpras(prev => {
-              if (JSON.stringify(prev) !== JSON.stringify(serverData.sarpras)) {
-                localStorage.setItem('dapodik_sarpras', JSON.stringify(serverData.sarpras));
-                return serverData.sarpras;
-              }
-              return prev;
-            });
-          }
-          if (serverData.reports && Array.isArray(serverData.reports)) {
-            setReports(prev => {
-              const incoming = sanitizeReports(serverData.reports);
-              if (JSON.stringify(prev) !== JSON.stringify(incoming)) {
-                localStorage.setItem('dapodik_reports', JSON.stringify(incoming));
-                return incoming;
-              }
-              return prev;
-            });
-          }
-          if (serverData.displayConfig) {
-            setDisplayConfig(prev => {
-              if (JSON.stringify(prev) !== JSON.stringify(serverData.displayConfig)) {
-                localStorage.setItem('dapodik_display_config', JSON.stringify(serverData.displayConfig));
-                return serverData.displayConfig;
-              }
-              return prev;
-            });
-          }
-          if (serverData.schoolProfile) {
-            setSchoolProfile(prev => {
-              const incoming = sanitizeSchoolProfileDates(serverData.schoolProfile);
-              if (JSON.stringify(prev) !== JSON.stringify(incoming)) {
-                localStorage.setItem('dapodik_school_profile', JSON.stringify(incoming));
-                return incoming;
-              }
-              return prev;
-            });
-          }
-          if (serverData.administrators && Array.isArray(serverData.administrators)) {
-            setAdministrators(prev => {
-              const cleanAdmins = getCleanAdministrators(serverData.administrators);
-              if (JSON.stringify(prev) !== JSON.stringify(cleanAdmins)) {
-                localStorage.setItem('dapodik_administrators', JSON.stringify(cleanAdmins));
-
-                // Update current user session if password or profile changed or status disabled on another device
-                const savedUserStr = localStorage.getItem('dapodik_current_user');
-                if (savedUserStr) {
-                  try {
-                    const currentSaved = JSON.parse(savedUserStr);
-                    const matched = cleanAdmins.find((a: AdminUser) => a.username.toLowerCase() === currentSaved.username.toLowerCase());
-                    if (matched) {
-                      if (matched.status === 'Nonaktif' || matched.status === 'Tidak Aktif' || (matched.status as string) === 'Tidak-Aktif') {
-                        handleLogout();
-                        showToast('Akun Anda telah dinonaktifkan oleh Administrator.');
-                      } else if (matched.password !== currentSaved.password || matched.nama !== currentSaved.nama || matched.role !== currentSaved.role || matched.status !== currentSaved.status) {
-                        setCurrentUser(matched);
-                        localStorage.setItem('dapodik_current_user', JSON.stringify(matched));
-                      }
-                    }
-                  } catch (e) {}
-                }
-
-                return cleanAdmins;
-              }
-              return prev;
-            });
-          }
-          if (serverData.deletedNotifIds && Array.isArray(serverData.deletedNotifIds)) {
-            saveDeletedNotifIds(serverData.deletedNotifIds);
-          }
-          if (serverData.notifications && Array.isArray(serverData.notifications)) {
-            setNotifications(prev => {
-              const merged = mergeNotifications(notificationsRef.current, serverData.notifications, serverData.deletedNotifIds || []);
-              if (JSON.stringify(prev) !== JSON.stringify(merged)) {
-                notificationsRef.current = merged;
-                localStorage.setItem('dapodik_notifications', JSON.stringify(merged));
-                return merged;
-              }
-              return prev;
-            });
-          }
-          if (serverData.aplikasiLinks && Array.isArray(serverData.aplikasiLinks)) {
-            setAplikasiLinks(prev => {
-              if (JSON.stringify(prev) !== JSON.stringify(serverData.aplikasiLinks)) {
-                localStorage.setItem('dapodik_aplikasi_links', JSON.stringify(serverData.aplikasiLinks));
-                return serverData.aplikasiLinks;
-              }
-              return prev;
-            });
-          }
-          const serverFiles = serverData.schoolFiles || serverData.files;
-          if (serverFiles && Array.isArray(serverFiles) && serverFiles.length > 0) {
-            setSchoolFiles(prev => {
-              const merged = serverFiles.map((sf: any) => {
-                const existing = prev.find(p => p.id === sf.id);
-                if (existing?.dataUrl && !sf.dataUrl) {
-                  return { ...sf, dataUrl: existing.dataUrl };
-                }
-                return sf;
-              });
-              prev.forEach(p => {
-                if (!merged.some(m => m.id === p.id)) {
-                  merged.unshift(p);
-                }
-              });
-              if (JSON.stringify(prev) !== JSON.stringify(merged)) {
-                localStorage.setItem('dapodik_school_files_v3', JSON.stringify(merged));
-                return merged;
-              }
-              return prev;
-            });
-          }
-          if (serverData.permintaanAkses && Array.isArray(serverData.permintaanAkses)) {
-            setAccessRequests(prev => {
-              const map = new Map<string, FileAccessRequest>();
-              if (Array.isArray(prev)) {
-                prev.forEach(req => {
-                  if (req && req.id) map.set(req.id, req);
-                });
-              }
-              serverData.permintaanAkses.forEach((req: FileAccessRequest) => {
-                if (req && req.id) {
-                  const existing = map.get(req.id);
-                  if (existing) {
-                    map.set(req.id, { ...existing, ...req });
-                  } else {
-                    map.set(req.id, req);
-                  }
-                }
-              });
-              const merged = Array.from(map.values()).sort((a, b) => {
-                const timeA = a.requestedAt ? new Date(a.requestedAt).getTime() : 0;
-                const timeB = b.requestedAt ? new Date(b.requestedAt).getTime() : 0;
-                return timeB - timeA;
-              });
-
-              if (JSON.stringify(prev) !== JSON.stringify(merged)) {
-                localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(merged));
-                return merged;
-              }
-              return prev;
-            });
-          }
-          if (serverData.customFolders && Array.isArray(serverData.customFolders)) {
-            setCustomFolders(prev => {
-              if (JSON.stringify(prev) !== JSON.stringify(serverData.customFolders)) {
-                localStorage.setItem('dapodik_custom_folders', JSON.stringify(serverData.customFolders));
-                return serverData.customFolders;
-              }
-              return prev;
-            });
-          }
-          } finally {
-            setTimeout(() => {
-              isSyncingFromServerRef.current = false;
-            }, 200);
-          }
-        }
-      } catch (err) {
-        // Silently handle polling errors
+        console.error('Firebase seed check error:', err);
       } finally {
-        isPolling = false;
+        if (isMounted) setIsInitialized(true);
       }
     };
 
-    // Poll every 2 seconds for ultra-fast cross-device synchronization
-    const pollInterval = setInterval(revalidateData, 2000);
+    initFirebase();
 
-    // Refresh immediately on window focus or visibility change (switching back to browser or unlocking device)
-    const handleSyncTrigger = () => {
-      if (document.visibilityState === 'visible') {
-        revalidateData();
-        if (syncConfigRef.current && syncConfigRef.current.webAppUrl) {
-          handlePullFromSheets(true);
+    // Set up real-time Firebase listeners across all collections
+    const unsubs: Array<() => void> = [];
+
+    unsubs.push(
+      subscribeCollection<Student>(COLLECTIONS.STUDENTS, (data) => {
+        if (data && data.length > 0) {
+          const clean = sanitizeStudentDates(data);
+          setStudents(clean);
+          localStorage.setItem('dapodik_students', JSON.stringify(clean));
         }
-      }
-    };
-    window.addEventListener('focus', handleSyncTrigger);
-    document.addEventListener('visibilitychange', handleSyncTrigger);
+      })
+    );
+
+    unsubs.push(
+      subscribeCollection<TeacherStaff>(COLLECTIONS.TEACHERS, (data) => {
+        if (data && data.length > 0) {
+          const clean = sanitizeTeacherDates(data);
+          setTeachers(clean);
+          localStorage.setItem('dapodik_teachers', JSON.stringify(clean));
+        }
+      })
+    );
+
+    unsubs.push(
+      subscribeCollection<SarprasItem>(COLLECTIONS.SARPRAS, (data) => {
+        if (data && data.length > 0) {
+          setSarpras(data);
+          localStorage.setItem('dapodik_sarpras', JSON.stringify(data));
+        }
+      })
+    );
+
+    unsubs.push(
+      subscribeCollection<StudentReport>(COLLECTIONS.REPORTS, (data) => {
+        if (data && data.length > 0) {
+          const clean = sanitizeReports(data);
+          setReports(clean);
+          localStorage.setItem('dapodik_reports', JSON.stringify(clean));
+        }
+      })
+    );
+
+    unsubs.push(
+      subscribeCollection<AdminUser>(COLLECTIONS.ADMINISTRATORS, (data) => {
+        if (data && data.length > 0) {
+          const cleanAdmins = getCleanAdministrators(data);
+          setAdministrators(cleanAdmins);
+          localStorage.setItem('dapodik_administrators', JSON.stringify(cleanAdmins));
+        }
+      })
+    );
+
+    unsubs.push(
+      subscribeCollection<NotificationItem>(COLLECTIONS.NOTIFICATIONS, (data) => {
+        if (data) {
+          setNotifications(data);
+          notificationsRef.current = data;
+          localStorage.setItem('dapodik_notifications', JSON.stringify(data));
+        }
+      })
+    );
+
+    unsubs.push(
+      subscribeCollection<any>(COLLECTIONS.APLIKASI_LINKS, (data) => {
+        if (data && data.length > 0) {
+          setAplikasiLinks(data);
+          localStorage.setItem('dapodik_aplikasi_links', JSON.stringify(data));
+        }
+      })
+    );
+
+    unsubs.push(
+      subscribeCollection<SchoolFileItem>(COLLECTIONS.SCHOOL_FILES, (data) => {
+        if (data) {
+          setSchoolFiles(data);
+          localStorage.setItem('dapodik_school_files_v3', JSON.stringify(data));
+        }
+      })
+    );
+
+    unsubs.push(
+      subscribeCollection<FileAccessRequest>(COLLECTIONS.ACCESS_REQUESTS, (data) => {
+        if (data) {
+          setAccessRequests(data);
+          localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(data));
+        }
+      })
+    );
+
+    unsubs.push(
+      subscribeDocument<SchoolProfile>(COLLECTIONS.SCHOOL_PROFILE, 'main', (data) => {
+        if (data) {
+          const clean = sanitizeSchoolProfileDates(data);
+          setSchoolProfile(clean);
+          localStorage.setItem('dapodik_school_profile', JSON.stringify(clean));
+        }
+      })
+    );
+
+    unsubs.push(
+      subscribeDocument<AppDisplayConfig>(COLLECTIONS.DISPLAY_CONFIG, 'main', (data) => {
+        if (data) {
+          setDisplayConfig(data);
+          localStorage.setItem('dapodik_display_config', JSON.stringify(data));
+        }
+      })
+    );
 
     return () => {
-      clearInterval(pollInterval);
-      window.removeEventListener('focus', handleSyncTrigger);
-      document.removeEventListener('visibilitychange', handleSyncTrigger);
+      isMounted = false;
+      unsubs.forEach(unsub => unsub());
     };
-  }, [isInitialized]);
+  }, []);
 
   // Keyboard shortcut ⌘K for search
   useEffect(() => {
@@ -2449,6 +2224,11 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2">
+            <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/20 text-amber-100 border border-amber-400/30 text-xs font-bold backdrop-blur-md" title="Google Firebase Firestore Database Connected">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>🔥 Firebase Realtime</span>
+            </div>
+
             <button
               onClick={() => handlePullFromSheets(false)}
               disabled={isSyncing}

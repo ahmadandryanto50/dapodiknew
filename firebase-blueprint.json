@@ -1,0 +1,87 @@
+{
+  "entities": {
+    "students": {
+      "securityModel": "open",
+      "fields": {
+        "id": "string",
+        "nisn": "string",
+        "nama": "string"
+      }
+    },
+    "teachers": {
+      "securityModel": "open",
+      "fields": {
+        "id": "string",
+        "nuptk": "string",
+        "nama": "string"
+      }
+    },
+    "sarpras": {
+      "securityModel": "open",
+      "fields": {
+        "id": "string",
+        "kodeBarang": "string",
+        "namaBarang": "string"
+      }
+    },
+    "reports": {
+      "securityModel": "open",
+      "fields": {
+        "id": "string",
+        "studentId": "string",
+        "studentName": "string"
+      }
+    },
+    "schoolProfile": {
+      "securityModel": "open",
+      "fields": {
+        "id": "string",
+        "npsn": "string",
+        "namaSekolah": "string"
+      }
+    },
+    "displayConfig": {
+      "securityModel": "open",
+      "fields": {
+        "id": "string",
+        "appName": "string"
+      }
+    },
+    "administrators": {
+      "securityModel": "open",
+      "fields": {
+        "id": "string",
+        "username": "string",
+        "role": "string"
+      }
+    },
+    "notifications": {
+      "securityModel": "open",
+      "fields": {
+        "id": "string",
+        "title": "string"
+      }
+    },
+    "aplikasiLinks": {
+      "securityModel": "open",
+      "fields": {
+        "id": "string",
+        "nama": "string"
+      }
+    },
+    "schoolFiles": {
+      "securityModel": "open",
+      "fields": {
+        "id": "string",
+        "name": "string"
+      }
+    },
+    "accessRequests": {
+      "securityModel": "open",
+      "fields": {
+        "id": "string",
+        "fileName": "string"
+      }
+    }
+  }
+}
