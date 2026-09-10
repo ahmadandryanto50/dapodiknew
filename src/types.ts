@@ -156,28 +156,57 @@ export interface SarprasItem {
 
 export interface SubjectScore {
   mapel: string;
-  nilaiPengetahuan: number;
-  nilaiKeterampilan: number;
-  predikat: 'A' | 'B' | 'C' | 'D';
-  catatan: string;
+  kelompok?: 'Kelompok A' | 'Kelompok B' | string;
+  nilaiAkhir?: number;
+  nilaiPengetahuan?: number;
+  nilaiKeterampilan?: number;
+  predikat?: 'A' | 'B' | 'C' | 'D' | string;
+  catatan?: string; // Capaian Kompetensi
+}
+
+export interface ExtraScore {
+  id?: string;
+  namaEkstra: string;
+  keterangan: string;
+}
+
+export interface CustomDataField {
+  id: string;
+  judul: string;
+  isi: string;
 }
 
 export interface StudentReport {
   id: string;
   studentId: string;
   nisn: string;
+  nis?: string;
   studentName: string;
   rombel: string;
-  semester: 'Ganjil' | 'Genap';
+  fase?: string;
+  alamat?: string;
+  namaSekolah?: string;
+  semester: 'Ganjil' | 'Genap' | string;
   tahunAjaran: string;
   scores: SubjectScore[];
+  kokurikuler?: string;
+  ekstrakurikuler?: ExtraScore[];
   kehadiran: {
     sakit: number;
     izin: number;
     alpa: number;
   };
   catatanWaliKelas: string;
-  statusKenaikan: 'Naik Kelas' | 'Tinggal Kelas' | 'Lulus' | 'Dalam Proses';
+  statusKenaikan: string;
+  tanggapanOrangTua?: string;
+  customFields?: CustomDataField[];
+  
+  // Signature & Print Metadata
+  tempatTanggalCetak?: string;
+  namaWaliKelas?: string;
+  nipWaliKelas?: string;
+  namaKepalaSekolah?: string;
+  nipKepalaSekolah?: string;
 }
 
 export interface AppDisplayConfig {

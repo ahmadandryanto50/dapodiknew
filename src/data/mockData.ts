@@ -704,25 +704,106 @@ export const initialSarpras: SarprasItem[] = [
 
 export const initialReports: StudentReport[] = [
   {
-    id: 'rep-001',
-    studentId: 'std-001',
-    nisn: '0089123456',
-    studentName: 'Ahmad Fauzi Pratama',
-    rombel: 'Kelas 8A',
-    semester: 'Genap',
+    id: 'rep-abdulah',
+    studentId: 'std-abdulah',
+    nis: '3899',
+    nisn: '3124628953',
+    studentName: 'ABDULAH',
+    rombel: '7 A',
+    fase: 'D',
+    namaSekolah: 'SMP NEGERI 11 PALU',
+    alamat: 'Jl. Keramik',
+    semester: '2',
     tahunAjaran: '2025/2026',
     scores: [
-      { mapel: 'Pendidikan Agama & Budi Pekerti', nilaiPengetahuan: 88, nilaiKeterampilan: 90, predikat: 'A', catatan: 'Sangat baik dalam pemahaman ibadah dan budi pekerti.' },
-      { mapel: 'Pancasila & Kewarganegaraan', nilaiPengetahuan: 85, nilaiKeterampilan: 86, predikat: 'B', catatan: 'Mampu menjelaskan nilai-nilai konstitusi dengan runtut.' },
-      { mapel: 'Bahasa Indonesia', nilaiPengetahuan: 91, nilaiKeterampilan: 92, predikat: 'A', catatan: 'Sangat terampil dalam menulis teks eksposisi dan ulasan.' },
-      { mapel: 'Matematika', nilaiPengetahuan: 84, nilaiKeterampilan: 85, predikat: 'B', catatan: 'Baik dalam operasi aljabar dan geometri bidang.' },
-      { mapel: 'Ilmu Pengetahuan Alam (IPA)', nilaiPengetahuan: 89, nilaiKeterampilan: 90, predikat: 'A', catatan: 'Aktif dan kritis dalam praktikum sains dan ekosistem.' },
-      { mapel: 'Bahasa Inggris', nilaiPengetahuan: 87, nilaiKeterampilan: 88, predikat: 'B', catatan: 'Percaya diri dalam percakapan sehari-hari.' },
-      { mapel: 'Informatika', nilaiPengetahuan: 95, nilaiKeterampilan: 96, predikat: 'A', catatan: 'Unggul dalam algoritma berpikir komputasional dan spreadsheet.' }
+      {
+        mapel: 'Pendidikan Agama Islam dan Budi Pekerti',
+        kelompok: 'Kelompok A',
+        nilaiAkhir: 80,
+        predikat: 'B',
+        catatan: 'Mencapai Kompetensi dengan sangat baik dalam hal memahami makna iman kepada malaikat dan menghindari gibah dalam kehidupan sehari-hari.\n\nPerlu peningkatan dalam hal membaca, menulis, mengartikan dan menghafalkan Q.S Al-Anbiya/21:30 dan Q.S Al a\'araf/7:54 beserta hadist terkait, memahami makna rukhsah dan cara rukhsah dalam salat, puasa, zakat dan haji, menjelaskan perkembangan ilmu pengetahuan pada masa Bani Umayyah di Andalusia.'
+      },
+      {
+        mapel: 'Pendidikan Pancasila',
+        kelompok: 'Kelompok A',
+        nilaiAkhir: 75,
+        predikat: 'B',
+        catatan: 'Perlu peningkatan dalam hal Mengindentifikasi keberagaman suku, agama, ras, dan antargolongan dalam bingkai bhineka tunggal ika , Menjelaskan jenis-jenis dan faktor penyebab keberagaman bangsa indonesia.'
+      },
+      {
+        mapel: 'Bahasa Indonesia',
+        kelompok: 'Kelompok A',
+        nilaiAkhir: 75,
+        predikat: 'B',
+        catatan: 'Mencapai Kompetensi dengan sangat baik dalam hal peserta didik mampu mengidentifikasi ide pokokargumen pendukung dan pesan dari teks lisam.\n\nPerlu peningkatan dalam hal Peserta didik terampil menyajikan atu mendemonstrasikan langkah langkah suatu prosessecara runtut dan komunikatif.'
+      },
+      {
+        mapel: 'Bahasa Inggris',
+        kelompok: 'Kelompok A',
+        nilaiAkhir: 70,
+        predikat: 'C',
+        catatan: 'Mencapai Kompetensi dengan sangat baik dalam hal mengenal dan menyebutkan benda benda sekitarnya.\n\nPerlu peningkatan dalam hal menggunakan preposiotion dalam kalimat, mendeskripsikan benda secara sederhana dalam bahasa inggris lisan dan tulisan.'
+      },
+      {
+        mapel: 'Matematika (Umum)',
+        kelompok: 'Kelompok A',
+        nilaiAkhir: 70,
+        predikat: 'C',
+        catatan: 'Mencapai Kompetensi dengan sangat baik dalam hal Mengidentifikasi konstanta, koefisien, variabel dan suku pada bentuk aljabar.\n\nPerlu peningkatan dalam hal Mengubah bentuk aljabar ke bentuk aljabar ekuivalen dengan menggunakan sifat-sifat, operasi aljabar dan memfaktorkan , Memodelkan suatu permasalahan menjadi suatu bentuk aljabar dan penyelesaiaannya, Menentukan kedudukan dua garis dan hubungkan antar sudut pada dua garis sejajar yang di potong oleh sebuah garis transversal.'
+      },
+      {
+        mapel: 'Ilmu Pengetahuan Alam (IPA)',
+        kelompok: 'Kelompok A',
+        nilaiAkhir: 81,
+        predikat: 'B',
+        catatan: 'Mencapai Kompetensi dengan sangat baik dalam hal Mengidentifikasi tingkatan organisasi kehidupan, Menganalisis jenis-jenis dan dampak dari pencemaran lingkungan.'
+      },
+      {
+        mapel: 'Ilmu Pengetahuan Sosial (IPS)',
+        kelompok: 'Kelompok A',
+        nilaiAkhir: 75,
+        predikat: 'B',
+        catatan: 'Mencapai Kompetensi dengan sangat baik dalam hal mengenali konsep dasar ilmu sejarah yaitu manusia,ruang waktu kronologi perubahan, memahami keberagaman kondisi geografis indonesia.\n\nPerlu peningkatan dalam hal Merujuk pada kompetensi dan keterampilan spesifik yang berfokus pada ekonomi,interaksi sosial dan lingkungan.'
+      },
+      {
+        mapel: 'Pendidikan Jasmani, Olahraga, dan Kesehatan',
+        kelompok: 'Kelompok B',
+        nilaiAkhir: 85,
+        predikat: 'A',
+        catatan: 'Mencapai Kompetensi dengan sangat baik dalam hal Menganalisis dan memahami pola makan sehat, bergizi, seimbang, dan pengaruhnya terhadap kesehatan.\n\nPerlu peningkatan dalam hal merancang serta mempraktikkan program latihan kebungaran jasmani terkait kesehatan..'
+      },
+      {
+        mapel: 'Informatika',
+        kelompok: 'Kelompok B',
+        nilaiAkhir: 76,
+        predikat: 'B',
+        catatan: 'Mencapai Kompetensi dengan sangat baik dalam hal Memahami Konsep Dasar Informatika dan Teknologi.\n\nPerlu peningkatan dalam hal Memahami Konsep Algoritma dan Pemecahan Masalah, Mengembangkan Keterampilan Berpikir Komputasional.'
+      },
+      {
+        mapel: 'Seni Rupa',
+        kelompok: 'Kelompok B',
+        nilaiAkhir: 78,
+        predikat: 'B',
+        catatan: 'Mencapai Kompetensi dengan sangat baik dalam hal peserta didik mampu membuat karya rupa dengan menggunakan dan menggabungkan pengetahuan dalam bentuk logo dan tipografi.\n\nPerlu peningkatan dalam hal peserta didik mampu membuat karya dengan tujuan mengubah lingkuangan sekitar sekolah.'
+      }
     ],
-    kehadiran: { sakit: 1, izin: 2, alpa: 0 },
-    catatanWaliKelas: 'Pertahankan prestasi akademik dan kepemimpinan di kelas.',
-    statusKenaikan: 'Naik Kelas'
+    kokurikuler: 'Pada semester ini, ananda menunjukkan capaian yang cukup baik dalam penguatan profil lulusan, yang ditunjukkan melalui kegiatan kokurikuler Literasi dan Numerasi.\n\nPada dimensi penalaran kritis, ananda berkembang dalam subdimensi penyampaian argumentasi.',
+    ekstrakurikuler: [
+      {
+        id: 'ex-1',
+        namaEkstra: 'Pramuka',
+        keterangan: 'Mampu dalam menerapkan nilai-nilai Dasa Darma dan Trisatya, selalu hadir tepat waktu, aktif membantu teman dalam regu, serta menunjukkan perkembangan yang baik dalam memahami pengetahuan kepramukaan.'
+      }
+    ],
+    kehadiran: { sakit: 1, izin: 1, alpa: 1 },
+    catatanWaliKelas: 'Perlu meningkatkan motivasi belajar, kedisiplinan, dan tanggung jawab dalam mengikuti pembelajaran, Partisipasi dalam kegiatan belajar masih perlu ditingkatkan.',
+    statusKenaikan: 'Naik ke kelas VIII',
+    tanggapanOrangTua: '',
+    tempatTanggalCetak: 'Palu, 22 Juni 2026',
+    namaWaliKelas: 'RINA, S.Pd., M.Pd',
+    nipWaliKelas: 'NIP 9740817200932003',
+    namaKepalaSekolah: 'Martha Taewa, S.Pd',
+    nipKepalaSekolah: 'NIP 197103192007012011'
   },
   {
     id: 'rep-002',

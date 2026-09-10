@@ -252,6 +252,7 @@ export default function App() {
 
   // Ref to prevent background polling from overwriting local state right after user operations
   const lastLocalMutationRef = useRef<number>(0);
+  const isSyncingFromServerRef = useRef<boolean>(false);
 
   // State Initialization from LocalStorage
   const [activeTab, setActiveTab] = useState<ActiveTab>('home');
@@ -557,7 +558,8 @@ export default function App() {
   useEffect(() => {
     if (!isInitialized) return;
     localStorage.setItem('dapodik_students', JSON.stringify(students));
-    if (Date.now() - lastLocalMutationRef.current < 4000) {
+    if (!isSyncingFromServerRef.current) {
+      lastLocalMutationRef.current = Date.now();
       saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks);
     }
   }, [students, isInitialized]);
@@ -565,7 +567,8 @@ export default function App() {
   useEffect(() => {
     if (!isInitialized) return;
     localStorage.setItem('dapodik_teachers', JSON.stringify(teachers));
-    if (Date.now() - lastLocalMutationRef.current < 4000) {
+    if (!isSyncingFromServerRef.current) {
+      lastLocalMutationRef.current = Date.now();
       saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks);
     }
   }, [teachers, isInitialized]);
@@ -573,7 +576,8 @@ export default function App() {
   useEffect(() => {
     if (!isInitialized) return;
     localStorage.setItem('dapodik_sarpras', JSON.stringify(sarpras));
-    if (Date.now() - lastLocalMutationRef.current < 4000) {
+    if (!isSyncingFromServerRef.current) {
+      lastLocalMutationRef.current = Date.now();
       saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks);
     }
   }, [sarpras, isInitialized]);
@@ -581,7 +585,8 @@ export default function App() {
   useEffect(() => {
     if (!isInitialized) return;
     localStorage.setItem('dapodik_reports', JSON.stringify(reports));
-    if (Date.now() - lastLocalMutationRef.current < 4000) {
+    if (!isSyncingFromServerRef.current) {
+      lastLocalMutationRef.current = Date.now();
       saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks);
     }
   }, [reports, isInitialized]);
@@ -589,7 +594,8 @@ export default function App() {
   useEffect(() => {
     if (!isInitialized) return;
     localStorage.setItem('dapodik_display_config', JSON.stringify(displayConfig));
-    if (Date.now() - lastLocalMutationRef.current < 4000) {
+    if (!isSyncingFromServerRef.current) {
+      lastLocalMutationRef.current = Date.now();
       saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks);
     }
   }, [displayConfig, isInitialized]);
@@ -597,7 +603,8 @@ export default function App() {
   useEffect(() => {
     if (!isInitialized) return;
     localStorage.setItem('dapodik_administrators', JSON.stringify(administrators));
-    if (Date.now() - lastLocalMutationRef.current < 4000) {
+    if (!isSyncingFromServerRef.current) {
+      lastLocalMutationRef.current = Date.now();
       saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks);
     }
   }, [administrators, isInitialized]);
@@ -605,7 +612,8 @@ export default function App() {
   useEffect(() => {
     if (!isInitialized) return;
     localStorage.setItem('dapodik_school_profile', JSON.stringify(schoolProfile));
-    if (Date.now() - lastLocalMutationRef.current < 4000) {
+    if (!isSyncingFromServerRef.current) {
+      lastLocalMutationRef.current = Date.now();
       saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks);
     }
   }, [schoolProfile, isInitialized]);
@@ -619,7 +627,8 @@ export default function App() {
   useEffect(() => {
     if (!isInitialized) return;
     localStorage.setItem('dapodik_notifications', JSON.stringify(notifications));
-    if (Date.now() - lastLocalMutationRef.current < 4000) {
+    if (!isSyncingFromServerRef.current) {
+      lastLocalMutationRef.current = Date.now();
       saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notifications, aplikasiLinks);
     }
   }, [notifications, isInitialized]);
@@ -627,7 +636,8 @@ export default function App() {
   useEffect(() => {
     if (!isInitialized) return;
     localStorage.setItem('dapodik_aplikasi_links', JSON.stringify(aplikasiLinks));
-    if (Date.now() - lastLocalMutationRef.current < 4000) {
+    if (!isSyncingFromServerRef.current) {
+      lastLocalMutationRef.current = Date.now();
       saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks);
     }
   }, [aplikasiLinks, isInitialized]);
@@ -933,10 +943,12 @@ export default function App() {
         }
 
         if (serverData && Object.keys(serverData).length > 0) {
-          // If a local mutation occurred in the last 3 seconds, skip overwriting local state with server data
-          if (Date.now() - lastLocalMutationRef.current < 3000) {
+          // If a local mutation occurred in the last 2 seconds, skip overwriting local state with server data
+          if (Date.now() - lastLocalMutationRef.current < 2000) {
             return;
           }
+          isSyncingFromServerRef.current = true;
+          try {
           // Compare and update only if different to prevent redundant writes or feedback loops
           if (serverData.students && Array.isArray(serverData.students)) {
             setStudents(prev => {
@@ -1072,9 +1084,31 @@ export default function App() {
           }
           if (serverData.permintaanAkses && Array.isArray(serverData.permintaanAkses)) {
             setAccessRequests(prev => {
-              if (JSON.stringify(prev) !== JSON.stringify(serverData.permintaanAkses)) {
-                localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(serverData.permintaanAkses));
-                return serverData.permintaanAkses;
+              const map = new Map<string, FileAccessRequest>();
+              if (Array.isArray(prev)) {
+                prev.forEach(req => {
+                  if (req && req.id) map.set(req.id, req);
+                });
+              }
+              serverData.permintaanAkses.forEach((req: FileAccessRequest) => {
+                if (req && req.id) {
+                  const existing = map.get(req.id);
+                  if (existing) {
+                    map.set(req.id, { ...existing, ...req });
+                  } else {
+                    map.set(req.id, req);
+                  }
+                }
+              });
+              const merged = Array.from(map.values()).sort((a, b) => {
+                const timeA = a.requestedAt ? new Date(a.requestedAt).getTime() : 0;
+                const timeB = b.requestedAt ? new Date(b.requestedAt).getTime() : 0;
+                return timeB - timeA;
+              });
+
+              if (JSON.stringify(prev) !== JSON.stringify(merged)) {
+                localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(merged));
+                return merged;
               }
               return prev;
             });
@@ -1088,6 +1122,11 @@ export default function App() {
               return prev;
             });
           }
+          } finally {
+            setTimeout(() => {
+              isSyncingFromServerRef.current = false;
+            }, 200);
+          }
         }
       } catch (err) {
         // Silently handle polling errors
@@ -1096,8 +1135,8 @@ export default function App() {
       }
     };
 
-    // Poll every 3 seconds for fast cross-tab and device synchronization
-    const pollInterval = setInterval(revalidateData, 3000);
+    // Poll every 2 seconds for ultra-fast cross-device synchronization
+    const pollInterval = setInterval(revalidateData, 2000);
 
     // Refresh immediately on window focus or visibility change (switching back to browser or unlocking device)
     const handleSyncTrigger = () => {

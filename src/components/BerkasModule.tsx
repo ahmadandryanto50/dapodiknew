@@ -275,9 +275,36 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
         const cacheRes = await fetch(`/api/app-data?t=${Date.now()}`);
         if (cacheRes.ok) {
           const cacheData = await cacheRes.json();
-          if (Array.isArray(cacheData.permintaanAkses) && cacheData.permintaanAkses.length > 0) {
-            setAccessRequests(cacheData.permintaanAkses);
-            localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(cacheData.permintaanAkses));
+          if (Array.isArray(cacheData.permintaanAkses)) {
+            setAccessRequests(prev => {
+              const map = new Map<string, FileAccessRequest>();
+              if (Array.isArray(prev)) {
+                prev.forEach(req => {
+                  if (req && req.id) map.set(req.id, req);
+                });
+              }
+              cacheData.permintaanAkses.forEach((req: FileAccessRequest) => {
+                if (req && req.id) {
+                  const existing = map.get(req.id);
+                  if (existing) {
+                    map.set(req.id, { ...existing, ...req });
+                  } else {
+                    map.set(req.id, req);
+                  }
+                }
+              });
+              const merged = Array.from(map.values()).sort((a, b) => {
+                const timeA = a.requestedAt ? new Date(a.requestedAt).getTime() : 0;
+                const timeB = b.requestedAt ? new Date(b.requestedAt).getTime() : 0;
+                return timeB - timeA;
+              });
+
+              if (JSON.stringify(prev) !== JSON.stringify(merged)) {
+                localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(merged));
+                return merged;
+              }
+              return prev;
+            });
             updatedAny = true;
           }
           if (Array.isArray(cacheData.schoolFiles) && cacheData.schoolFiles.length > 0) {
@@ -546,7 +573,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
   }, [accessRequests]);
 
   // Tab & Filters
-  const [activeTab, setActiveTab] = useState<'files' | 'folders' | 'approvals'>('approvals');
+  const [activeTab, setActiveTab] = useState<'files' | 'folders' | 'approvals'>('files');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [selectedPrivacy, setSelectedPrivacy] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -1621,59 +1648,93 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
         )}
       </div>
 
-      {/* Permanent Information Banner replacing tab bar */}
-      <div className="bg-gradient-to-r from-sky-500/10 via-blue-500/10 to-indigo-500/10 border border-sky-300/50 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      {/* Dynamic Tab Bar */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-b border-slate-200 pb-2">
+        <div className="flex flex-wrap items-center bg-slate-100 p-1 rounded-2xl border border-slate-200 text-xs font-bold text-slate-700 w-full sm:w-auto">
+          <button
+            onClick={() => setActiveTab('files')}
+            className={`flex-1 sm:flex-none px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+              activeTab === 'files'
+                ? 'bg-white text-sky-950 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <FileText className="w-4 h-4 text-sky-600" />
+            <span>Semua Berkas ({files.length})</span>
+          </button>
+          
+          <button
+            onClick={() => setActiveTab('folders')}
+            className={`flex-1 sm:flex-none px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+              activeTab === 'folders'
+                ? 'bg-white text-sky-950 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Folder className="w-4 h-4 text-amber-500" />
+            <span>Kategori Folder ({categories.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('approvals')}
+            className={`flex-1 sm:flex-none px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 relative ${
+              activeTab === 'approvals'
+                ? 'bg-white text-indigo-950 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <ShieldCheck className={`w-4 h-4 ${activeTab === 'approvals' ? 'text-indigo-600' : 'text-slate-500'}`} />
+            <span>Izin Akses Berkas</span>
+            {pendingRequestsCount > 0 ? (
+              <span className="px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-black animate-pulse">
+                {pendingRequestsCount}
+              </span>
+            ) : (
+              <span className="px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-600 text-[10px] font-bold">
+                {accessRequests.length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* View Mode Toggle Controls inside Tab Bar */}
+        {activeTab === 'files' && (
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs">
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${viewMode === 'grid' ? 'bg-white text-slate-900 shadow-xs font-bold' : 'text-slate-500 hover:text-slate-800'}`}
+                title="Tampilan Grid"
+              >
+                Grid
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${viewMode === 'list' ? 'bg-white text-slate-900 shadow-xs font-bold' : 'text-slate-500 hover:text-slate-800'}`}
+                title="Tampilan List"
+              >
+                List
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Permanent Information Banner */}
+      <div className="bg-gradient-to-r from-sky-500/5 via-blue-500/5 to-indigo-500/5 border border-sky-200/50 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-start gap-3">
-          <div className="p-2.5 rounded-xl bg-sky-600 text-white shrink-0 shadow-md">
-            <Bell className="w-5 h-5 animate-pulse" />
+          <div className="p-2.5 rounded-xl bg-sky-100 text-sky-700 shrink-0">
+            <Bell className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center gap-2 mb-0.5">
               <h4 className="font-bold text-sky-950 text-sm">Pemberitahuan Status Pengunggahan Berkas</h4>
-              <span className="px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold">Otomatis Aktif</span>
+              <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold border border-emerald-200">Otomatis Aktif</span>
             </div>
             <p className="text-slate-700 text-xs leading-relaxed">
               Setiap berkas yang diunggah secara otomatis tersimpan ke <strong>Google Drive</strong>. Riwayat & status sukses pengunggahan akan langsung tercatat dan masuk ke menu <strong>Notifikasi (Ikon Lonceng)</strong>.
             </p>
           </div>
-        </div>
-
-        <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-          <button
-            onClick={() => setActiveTab(activeTab === 'approvals' ? 'files' : 'approvals')}
-            className={`px-4 py-2 rounded-xl flex items-center gap-2 transition-all cursor-pointer font-bold text-xs ${
-              activeTab === 'approvals'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'bg-white text-slate-800 hover:bg-slate-50 border border-slate-200 shadow-sm'
-            }`}
-          >
-            <ShieldCheck className="w-4 h-4 text-indigo-500" />
-            <span>Izinkan Akses</span>
-            {pendingRequestsCount > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-black animate-pulse">
-                {pendingRequestsCount}
-              </span>
-            )}
-          </button>
-          {/* View mode toggle */}
-          {activeTab === 'files' && (
-            <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs">
-              <button
-                onClick={() => setViewMode('grid')}
-                className={`p-1.5 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
-                title="Tampilan Grid"
-              >
-                <Layers className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`p-1.5 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
-                title="Tampilan Tabel"
-              >
-                <FileText className="w-4 h-4" />
-              </button>
-            </div>
-          )}
         </div>
       </div>
 
@@ -2321,11 +2382,11 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
 
               <div className="flex items-center gap-2">
                 <div className="px-3 py-1.5 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-800 text-xs font-bold">
-                  Total Permintaan: {accessRequests.length}
+                  Total Permintaan: {accessRequests.filter(req => isAdmin || isUserRequestMatch(req)).length}
                 </div>
               </div>
             </div>
-
+ 
             {/* Table of Requests */}
             <div className="overflow-x-auto rounded-xl border border-slate-200">
               <table className="w-full text-left text-xs text-slate-700">
@@ -2343,14 +2404,18 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {accessRequests.length === 0 ? (
+                  {accessRequests.filter(req => isAdmin || isUserRequestMatch(req)).length === 0 ? (
                     <tr>
                       <td colSpan={5} className="py-8 text-center text-slate-400">
-                        Belum ada permintaan izin akses berkas yang diajukan.
+                        {isAdmin
+                          ? 'Belum ada permintaan izin akses berkas yang diajukan.'
+                          : 'Anda belum pernah mengajukan permintaan izin akses berkas.'}
                       </td>
                     </tr>
                   ) : (
-                    accessRequests.map(req => (
+                    accessRequests
+                      .filter(req => isAdmin || isUserRequestMatch(req))
+                      .map(req => (
                       <tr key={req.id} className="hover:bg-slate-50/80 transition-colors">
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
