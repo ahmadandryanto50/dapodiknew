@@ -986,6 +986,11 @@ export default function App() {
           }
         }
         setIsInitialized(true);
+
+        // Auto-pull fresh data directly from Google Spreadsheet so that new browsers and devices automatically sync on first open!
+        if (activeConfig && activeConfig.webAppUrl) {
+          handlePullFromSheets(true);
+        }
       } catch (err) {
         console.error('Error fetching shared server data:', err);
         setIsInitialized(true);

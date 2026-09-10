@@ -18,7 +18,8 @@ import {
   GraduationCap,
   Globe,
   Settings,
-  Database
+  Database,
+  RefreshCw
 } from 'lucide-react';
 import { AdminUser, AppDisplayConfig, SyncConfig, TeacherStaff, Student } from '../types';
 
@@ -29,6 +30,8 @@ interface LoginScreenProps {
   schoolProfile?: any;
   teachers?: TeacherStaff[];
   students?: Student[];
+  syncConfig?: SyncConfig;
+  onPullData?: () => Promise<boolean>;
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({
@@ -37,17 +40,42 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   displayConfig,
   schoolProfile,
   teachers,
-  students
+  students,
+  syncConfig,
+  onPullData
 }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [selectedLang, setSelectedLang] = useState<'ID' | 'EN'>('ID');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleManualSync = async () => {
+    if (!onPullData || isSyncing) return;
+    setIsSyncing(true);
+    setSyncStatusMsg('Menyinkronkan dengan Database Spreadsheet...');
+    try {
+      const ok = await onPullData();
+      if (ok) {
+        setSyncStatusMsg('✅ Data Database Spreadsheet berhasil ditarik!');
+        setTimeout(() => setSyncStatusMsg(null), 3500);
+      } else {
+        setSyncStatusMsg('Gagal terhubung ke Database Spreadsheet.');
+        setTimeout(() => setSyncStatusMsg(null), 3500);
+      }
+    } catch (e) {
+      setSyncStatusMsg('Terjadi kesalahan saat menyinkronkan.');
+      setTimeout(() => setSyncStatusMsg(null), 3500);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
@@ -62,21 +90,22 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
 
     setIsLoading(true);
 
-    setTimeout(() => {
-      try {
-        const trimmedUser = String(username || '').trim().toLowerCase();
-        const trimmedPass = String(password || '').trim();
+    try {
+      const trimmedUser = String(username || '').trim().toLowerCase();
+      const trimmedPass = String(password || '').trim();
 
+      const runMatching = (
+        adminList: AdminUser[],
+        studentList: Student[],
+        teacherList: TeacherStaff[]
+      ): AdminUser | undefined => {
         let deletedUsernames: string[] = [];
         try {
           const delStr = localStorage.getItem('dapodik_deleted_admins');
           if (delStr) deletedUsernames = JSON.parse(delStr);
-        } catch (e) {
-          console.error(e);
-        }
+        } catch (e) {}
 
-        // Collect all available administrators from props and localStorage, excluding deleted ones
-        let combinedAdmins: AdminUser[] = (Array.isArray(administrators) ? [...administrators] : [])
+        let combinedAdmins: AdminUser[] = (Array.isArray(adminList) ? [...adminList] : [])
           .filter(a => a && a.username && !deletedUsernames.includes(String(a.username).trim().toLowerCase()));
 
         try {
@@ -96,11 +125,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               });
             }
           }
-        } catch (err) {
-          console.error('Error parsing saved administrators:', err);
-        }
+        } catch (err) {}
 
-        // 1. Look for user in combinedAdmins (supports Administrator, Operator, Kepala Sekolah, Guru, Siswa, or any custom role)
+        // 1. Look for user in combinedAdmins
         let matched: AdminUser | undefined = combinedAdmins.find((a) => {
           if (!a || !a.username) return false;
           const u = String(a.username).trim().toLowerCase();
@@ -110,7 +137,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           if (!matchesUser) return false;
 
           const p = String(a.password || '').trim();
-          // STRICT PASSWORD CHECK: If password is set in DB, exact password is required (standard fallback passwords do NOT bypass custom password!)
           if (p !== '') {
             return p === password || p === trimmedPass;
           } else {
@@ -119,8 +145,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         });
 
         // 2. Look in students (Data Siswa) if not matched yet
-        if (!matched && Array.isArray(students) && students.length > 0) {
-          const matchedStudent = students.find((s) => {
+        if (!matched && Array.isArray(studentList) && studentList.length > 0) {
+          const matchedStudent = studentList.find((s) => {
             if (!s) return false;
             const sName = String(s.nama || '').trim().toLowerCase();
             const sNisn = String(s.nisn || '').trim().toLowerCase();
@@ -170,8 +196,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         }
 
         // 3. Look for teacher match in teachers (Data PTK) if not matched yet
-        if (!matched && Array.isArray(teachers) && teachers.length > 0) {
-          const matchedTeacher = teachers.find((t) => {
+        if (!matched && Array.isArray(teacherList) && teacherList.length > 0) {
+          const matchedTeacher = teacherList.find((t) => {
             if (!t) return false;
             const tName = String(t.nama || '').trim().toLowerCase();
             const tNip = String(t.nip || '').trim().toLowerCase();
@@ -211,14 +237,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               nama: String(matchedTeacher.nama || 'Guru Pengajar'),
               role: 'Guru',
               email: tEmailStr || `${trimmedUser}@dapodik.belajar.id`,
-              noHp: String(matchedTeacher.hp || matchedTeacher.telepon || ''),
+              noHp: String(matchedTeacher.noHp || (matchedTeacher as any).hp || (matchedTeacher as any).telepon || ''),
               status: 'Aktif',
               lastLogin: new Date().toLocaleString('id-ID')
             };
           }
         }
 
-        // 4. Fallback demo users & role-based shortcuts (ONLY if no match found in DB or PTK/Siswa lists)
+        // 4. Fallback shortcuts
         if (!matched) {
           const isSiswaShortcut = trimmedUser === 'siswa' || trimmedUser.includes('siswa') || trimmedUser === 'murid';
           const isGuruShortcut = trimmedUser === 'guru' || trimmedUser.includes('guru') || trimmedUser === 'ptk';
@@ -297,36 +323,73 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           }
         }
 
-        if (matched) {
-          if (matched.status === 'Nonaktif' || matched.status === 'Tidak Aktif' || (matched.status as string) === 'Tidak-Aktif') {
-            setErrorMsg('Akun pengguna ini berstatus Tidak Aktif / Nonaktif. Silakan hubungi Administrator Utama untuk mengaktifkan kembali.');
-            setIsLoading(false);
-            return;
-          }
+        return matched;
+      };
 
-          const updatedUser: AdminUser = {
-            ...matched,
-            lastLogin: new Date().toLocaleString('id-ID', {
-              day: '2-digit',
-              month: '2-digit',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit'
-            })
-          };
+      // Initial check
+      let matched = runMatching(administrators, students || [], teachers || []);
 
+      // If no match found, try pulling latest data from Google Spreadsheet database on demand!
+      if (!matched && onPullData) {
+        setIsSyncing(true);
+        await onPullData();
+        setIsSyncing(false);
+
+        // Fetch fresh lists from localStorage or updated props
+        let freshAdmins: AdminUser[] = [];
+        try {
+          const sa = localStorage.getItem('dapodik_administrators');
+          if (sa) freshAdmins = JSON.parse(sa);
+        } catch (e) {}
+
+        let freshStudents: Student[] = students || [];
+        try {
+          const ss = localStorage.getItem('dapodik_students');
+          if (ss) freshStudents = JSON.parse(ss);
+        } catch (e) {}
+
+        let freshTeachers: TeacherStaff[] = teachers || [];
+        try {
+          const st = localStorage.getItem('dapodik_teachers');
+          if (st) freshTeachers = JSON.parse(st);
+        } catch (e) {}
+
+        matched = runMatching(
+          freshAdmins.length > 0 ? freshAdmins : administrators,
+          freshStudents,
+          freshTeachers
+        );
+      }
+
+      if (matched) {
+        if (matched.status === 'Nonaktif' || matched.status === 'Tidak Aktif' || (matched.status as string) === 'Tidak-Aktif') {
+          setErrorMsg('Akun pengguna ini berstatus Tidak Aktif / Nonaktif. Silakan hubungi Administrator Utama untuk mengaktifkan kembali.');
           setIsLoading(false);
-          onLogin(updatedUser);
-        } else {
-          setErrorMsg('Gagal Login: Username atau Kata Sandi tidak ditemukan. Silakan gunakan Username/NIP/Email dan Kata Sandi terdaftar.');
-          setIsLoading(false);
+          return;
         }
-      } catch (err) {
-        console.error('Login process error:', err);
-        setErrorMsg('Terjadi kesalahan saat memproses login. Silakan coba lagi.');
+
+        const updatedUser: AdminUser = {
+          ...matched,
+          lastLogin: new Date().toLocaleString('id-ID', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          })
+        };
+
+        setIsLoading(false);
+        onLogin(updatedUser);
+      } else {
+        setErrorMsg('Gagal Login: Username atau Kata Sandi tidak ditemukan di Database. Silakan periksa kembali Username/Email/NIP Anda.');
         setIsLoading(false);
       }
-    }, 200);
+    } catch (err) {
+      console.error('Login process error:', err);
+      setErrorMsg('Terjadi kesalahan saat memproses login. Silakan coba lagi.');
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -402,6 +465,39 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 Masukkan Akun Administrator / Operator Sekolah
               </p>
             </div>
+
+            {/* Database Connection Status & Tarik Data Button */}
+            <div className="mb-5 p-3 rounded-2xl bg-sky-50/80 border border-sky-100 text-sky-900 text-xs flex items-center justify-between shadow-sm">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-2.5 w-2.5 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                </span>
+                <span className="text-[11px] font-semibold text-slate-700">
+                  Database
+                </span>
+              </div>
+              {onPullData && (
+                <button
+                  type="button"
+                  onClick={handleManualSync}
+                  disabled={isSyncing || isLoading}
+                  className="px-2.5 py-1 rounded-xl bg-sky-600 hover:bg-sky-500 active:scale-95 text-white font-bold text-[10px] tracking-wide flex items-center gap-1.5 transition-all cursor-pointer shadow-sm disabled:opacity-50"
+                  title="Tarik data terbaru dari Spreadsheet"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
+                  <span>{isSyncing ? 'Menarik...' : 'Tarik Data'}</span>
+                </button>
+              )}
+            </div>
+
+            {/* Sync Status Toast Notification */}
+            {syncStatusMsg && (
+              <div className="mb-4 p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2 font-medium animate-fade-in">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{syncStatusMsg}</span>
+              </div>
+            )}
 
             {/* Error Message Alert */}
             {errorMsg && (
