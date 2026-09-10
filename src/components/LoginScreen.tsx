@@ -26,9 +26,6 @@ interface LoginScreenProps {
   onLogin: (user: AdminUser) => void;
   administrators: AdminUser[];
   displayConfig: AppDisplayConfig;
-  onOpenSheetsModal?: () => void;
-  syncConfig: SyncConfig;
-  onPullData?: () => void;
   schoolProfile?: any;
   teachers?: TeacherStaff[];
   students?: Student[];
@@ -38,9 +35,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   onLogin,
   administrators,
   displayConfig,
-  onOpenSheetsModal,
-  syncConfig,
-  onPullData,
   schoolProfile,
   teachers,
   students
@@ -389,16 +383,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
 
         {/* Database & Quick Demo Login Link */}
         <div className="flex items-center gap-2">
-          {onOpenSheetsModal && (
-            <button
-              onClick={onOpenSheetsModal}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/20 hover:bg-white/30 text-white text-xs font-bold backdrop-blur-md border border-white/30 transition-all shadow-md"
-              title="Konfigurasi Database Cloud"
-            >
-              <Database className="w-3.5 h-3.5 text-amber-300" />
-              <span>Database Cloud</span>
-            </button>
-          )}
         </div>
       </header>
 

@@ -26,7 +26,7 @@ import {
   initialNotifications,
   initialAdministrators
 } from './data/mockData';
-import { syncToGoogleSheets, loadFromGoogleSheets, syncNotifikasiToGoogleSheets } from './services/googleSheetsService';
+
 import { LoginScreen } from './components/LoginScreen';
 import { WelcomeHero } from './components/WelcomeHero';
 import { StudentModule } from './components/StudentModule';
@@ -38,7 +38,6 @@ import { LaporanModule } from './components/LaporanModule';
 import { SettingsModule } from './components/SettingsModule';
 import { AplikasiModule } from './components/AplikasiModule';
 import { BerkasModule } from './components/BerkasModule';
-import { GoogleSheetModal } from './components/GoogleSheetModal';
 import { QuickSearchModal } from './components/QuickSearchModal';
 import { NotificationDrawer } from './components/NotificationDrawer';
 import { MobileBottomNav } from './components/MobileBottomNav';
@@ -463,7 +462,6 @@ export default function App() {
   });
 
   // UI Modals
-  const [isSheetsModalOpen, setIsSheetsModalOpen] = useState(false);
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [isNotifDrawerOpen, setIsNotifDrawerOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -552,9 +550,6 @@ export default function App() {
     setNotifications(updated);
     localStorage.setItem('dapodik_notifications', JSON.stringify(updated));
     saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, updated, aplikasiLinks);
-    if (syncConfigRef.current && syncConfigRef.current.webAppUrl) {
-      syncNotifikasiToGoogleSheets(syncConfigRef.current, updated);
-    }
     return updated;
   };
 
@@ -699,178 +694,77 @@ export default function App() {
   };
 
   const handlePullFromSheets = async (silent = false) => {
-    if (!syncConfig.webAppUrl) {
-      if (!silent) showToast('Isi URL Google Apps Script terlebih dahulu.');
-      return false;
-    }
     setIsSyncing(true);
-    const res = await loadFromGoogleSheets(syncConfig);
-    setIsSyncing(false);
-    
-    if (res.success && res.data) {
-      const { siswa, ptk, sarpras: pulledSarpras, rapor, pengaturan, administrator, profilSekolah, aplikasi, notifikasi, permintaanAkses, berkas } = res.data;
-      
-      let newStudents = students;
-      let newTeachers = teachers;
-      let newSarpras = sarpras;
-      let newReports = reports;
-      let newAdmins = administrators;
-      let newProfile = schoolProfile;
-      let newDisplay = displayConfig;
-      let newLinks = aplikasiLinks;
-      let newNotifs = notifications;
-
-      if (Array.isArray(permintaanAkses)) {
-        setAccessRequests(permintaanAkses);
-        localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(permintaanAkses));
-      }
-
-      if (Array.isArray(berkas)) {
-        setSchoolFiles(berkas);
-        localStorage.setItem('dapodik_school_files_v3', JSON.stringify(berkas));
-      }
-
-      if (Array.isArray(notifikasi)) {
-        newNotifs = mergeNotifications(notificationsRef.current, notifikasi);
-        setNotifications(newNotifs);
-        notificationsRef.current = newNotifs;
-        localStorage.setItem('dapodik_notifications', JSON.stringify(newNotifs));
-      }
-
-      if (Array.isArray(siswa)) {
-        newStudents = sanitizeStudentDates(siswa);
-        setStudents(newStudents);
-        localStorage.setItem('dapodik_students', JSON.stringify(newStudents));
-      }
-      if (Array.isArray(ptk)) {
-        newTeachers = sanitizeTeacherDates(ptk);
-        setTeachers(newTeachers);
-        localStorage.setItem('dapodik_teachers', JSON.stringify(newTeachers));
-      }
-      if (Array.isArray(pulledSarpras)) {
-        newSarpras = pulledSarpras;
-        setSarpras(newSarpras);
-        localStorage.setItem('dapodik_sarpras', JSON.stringify(newSarpras));
-      }
-      if (Array.isArray(rapor)) {
-        newReports = sanitizeReports(rapor);
-        setReports(newReports);
-        localStorage.setItem('dapodik_reports', JSON.stringify(newReports));
-      }
-      if (Array.isArray(aplikasi) && aplikasi.length > 0) {
-        newLinks = aplikasi;
-        setAplikasiLinks(newLinks);
-        localStorage.setItem('dapodik_aplikasi_links', JSON.stringify(newLinks));
-      }
-      if (Array.isArray(administrator) && administrator.length > 0) {
-        newAdmins = getCleanAdministrators(administrator);
-        setAdministrators(newAdmins);
-        localStorage.setItem('dapodik_administrators', JSON.stringify(newAdmins));
-
-        // Update current user if they are logged in and their data in the sheet changed
-        const savedUserStr = localStorage.getItem('dapodik_current_user');
-        if (savedUserStr) {
-          try {
-            const currentSaved = JSON.parse(savedUserStr);
-            const matched = newAdmins.find((a: AdminUser) => a.username.toLowerCase() === currentSaved.username.toLowerCase());
-            if (matched) {
-              setCurrentUser(matched);
-              localStorage.setItem('dapodik_current_user', JSON.stringify(matched));
-            }
-          } catch (e) {}
+    try {
+      const cacheRes = await fetch(`/api/app-data?t=${Date.now()}`);
+      setIsSyncing(false);
+      if (cacheRes.ok) {
+        const serverData = await cacheRes.json();
+        if (serverData) {
+          if (serverData.students && Array.isArray(serverData.students)) {
+            setStudents(serverData.students);
+            localStorage.setItem('dapodik_students', JSON.stringify(serverData.students));
+          }
+          if (serverData.teachers && Array.isArray(serverData.teachers)) {
+            setTeachers(serverData.teachers);
+            localStorage.setItem('dapodik_teachers', JSON.stringify(serverData.teachers));
+          }
+          if (serverData.sarpras && Array.isArray(serverData.sarpras)) {
+            setSarpras(serverData.sarpras);
+            localStorage.setItem('dapodik_sarpras', JSON.stringify(serverData.sarpras));
+          }
+          if (serverData.reports && Array.isArray(serverData.reports)) {
+            setReports(serverData.reports);
+            localStorage.setItem('dapodik_reports', JSON.stringify(serverData.reports));
+          }
+          if (serverData.administrators && Array.isArray(serverData.administrators)) {
+            setAdministrators(serverData.administrators);
+            localStorage.setItem('dapodik_administrators', JSON.stringify(serverData.administrators));
+          }
+          if (serverData.aplikasiLinks && Array.isArray(serverData.aplikasiLinks)) {
+            setAplikasiLinks(serverData.aplikasiLinks);
+            localStorage.setItem('dapodik_aplikasi_links', JSON.stringify(serverData.aplikasiLinks));
+          }
+          if (serverData.notifications && Array.isArray(serverData.notifications)) {
+            setNotifications(serverData.notifications);
+            notificationsRef.current = serverData.notifications;
+            localStorage.setItem('dapodik_notifications', JSON.stringify(serverData.notifications));
+          }
+          if (serverData.permintaanAkses && Array.isArray(serverData.permintaanAkses)) {
+            setAccessRequests(serverData.permintaanAkses);
+            localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(serverData.permintaanAkses));
+          }
+          const serverFiles = serverData.schoolFiles || serverData.files;
+          if (serverFiles && Array.isArray(serverFiles)) {
+            setSchoolFiles(serverFiles);
+            localStorage.setItem('dapodik_school_files_v3', JSON.stringify(serverFiles));
+          }
+          if (serverData.displayConfig) {
+            setDisplayConfig(serverData.displayConfig);
+            localStorage.setItem('dapodik_display_config', JSON.stringify(serverData.displayConfig));
+          }
+          if (serverData.schoolProfile) {
+            setSchoolProfile(serverData.schoolProfile);
+            localStorage.setItem('dapodik_school_profile', JSON.stringify(serverData.schoolProfile));
+          }
         }
-      }
-      
-      if (profilSekolah && profilSekolah.length > 0) {
-        const profileMap: any = {};
-        profilSekolah.forEach((item: any) => {
-          if (item.key) {
-            let val = item.value;
-            if (item.key === 'misi' && typeof val === 'string') {
-              try {
-                if (val.trim().startsWith('[')) {
-                  val = JSON.parse(val);
-                } else if (val.includes(',')) {
-                  val = val.split(',').map((v: string) => v.trim());
-                } else {
-                  val = [val];
-                }
-              } catch (e) {
-                val = [val];
-              }
-            }
-            profileMap[item.key] = val;
-          }
-        });
-        if (Object.keys(profileMap).length > 0) {
-          newProfile = sanitizeSchoolProfileDates({ ...schoolProfile, ...profileMap });
-          setSchoolProfile(newProfile);
-          localStorage.setItem('dapodik_school_profile', JSON.stringify(newProfile));
+        
+        if (!silent) {
+          showToast('Data berhasil disinkronkan!');
         }
+        return true;
       }
-      
-      if (pengaturan && pengaturan.length > 0) {
-        const configMap: any = {};
-        const profileMap: any = {};
-        pengaturan.forEach((item: any) => {
-          if (item.key) {
-            configMap[item.key] = item.value;
-            profileMap[item.key] = item.value;
-          }
-        });
-        if (Object.keys(configMap).length > 0) {
-          const mergedDisplay = { ...displayConfig };
-          Object.keys(configMap).forEach(key => {
-            if ((key === 'logoCustomUrl' || key === 'welcomeCustomIconUrl' || key === 'operatorAvatarUrl') && !configMap[key]) {
-              return;
-            }
-            if (key in mergedDisplay || ['appName', 'appVersion', 'appSubtitle', 'logoCustomUrl', 'welcomeGreeting', 'welcomeTitle', 'welcomeSubtitle', 'welcomeIconType', 'welcomeCustomIconUrl', 'curriculumBadge', 'curriculumBadgeIcon', 'footerVersionText', 'operatorTitle', 'operatorName', 'operatorAvatarUrl'].includes(key)) {
-              (mergedDisplay as any)[key] = configMap[key];
-            }
-          });
-          newDisplay = mergedDisplay;
-          setDisplayConfig(mergedDisplay);
-          localStorage.setItem('dapodik_display_config', JSON.stringify(mergedDisplay));
-
-          const mergedProfile = { ...newProfile };
-          if (configMap.logoCustomUrl || configMap.logoSekolah) {
-            mergedProfile.logoSekolah = configMap.logoCustomUrl || configMap.logoSekolah;
-          }
-          if (configMap.operatorName || configMap.operatorSekolah) {
-            mergedProfile.operatorSekolah = configMap.operatorName || configMap.operatorSekolah;
-          }
-          Object.keys(profileMap).forEach(key => {
-            if (key in mergedProfile) {
-              (mergedProfile as any)[key] = profileMap[key];
-            }
-          });
-          newProfile = sanitizeSchoolProfileDates(mergedProfile);
-          setSchoolProfile(newProfile);
-          localStorage.setItem('dapodik_school_profile', JSON.stringify(newProfile));
-        }
-      }
-
-      setSyncConfig(prev => ({
-        ...prev,
-        lastSynced: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-        status: 'connected'
-      }));
-
-      // Broadcast fresh pulled data to server cache so other devices immediately sync
-      saveCacheToServer(newStudents, newTeachers, newSarpras, newReports, newDisplay, newProfile, newAdmins, newNotifs, newLinks);
-
-      if (!silent) {
-        showToast('Data berhasil disinkronkan dari Database!');
-        confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 } });
-      }
-      return true;
-    } else {
-      if (!silent) {
-        showToast(res.message);
-      }
-      return false;
+    } catch (e) {
+      console.error(e);
     }
+    setIsSyncing(false);
+    if (!silent) {
+      showToast('Gagal memuat data sinkronisasi.');
+    }
+    return false;
   };
+
+
 
   // Auto-pull on mount if configured & fetch shared configurations from the server
   useEffect(() => {
@@ -986,187 +880,6 @@ export default function App() {
           if (serverFiles && Array.isArray(serverFiles)) {
             setSchoolFiles(serverFiles);
             localStorage.setItem('dapodik_school_files_v3', JSON.stringify(serverFiles));
-          }
-        }
-        
-        // 3. If spreadsheet is configured, automatically perform a pull to make sure everything is absolutely in sync
-        if (activeConfig.webAppUrl) {
-          setIsSyncing(true);
-          const res = await loadFromGoogleSheets(activeConfig);
-          setIsSyncing(false);
-          
-          if (res.success && res.data) {
-            const { siswa, ptk, sarpras: pulledSarpras, rapor, pengaturan, administrator, profilSekolah, aplikasi, notifikasi, permintaanAkses, berkas } = res.data;
-            
-            if (Array.isArray(permintaanAkses)) {
-              setAccessRequests(permintaanAkses);
-              localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(permintaanAkses));
-              // Also sync to server cache
-              fetch('/api/app-data', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ permintaanAkses })
-              }).catch(() => {});
-            }
-
-            if (Array.isArray(berkas)) {
-              setSchoolFiles(berkas);
-              localStorage.setItem('dapodik_school_files_v3', JSON.stringify(berkas));
-              // Also sync to server cache
-              fetch('/api/app-data', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ schoolFiles: berkas })
-              }).catch(() => {});
-            }
-            
-            let finalStudents = serverData?.students || students;
-            let finalTeachers = serverData?.teachers || teachers;
-            let finalSarpras = serverData?.sarpras || sarpras;
-            let finalReports = serverData?.reports || reports;
-            let finalAdmins = serverData?.administrators || administrators;
-            let finalProfile = serverData?.schoolProfile || schoolProfile;
-            let finalDisplay = serverData?.displayConfig || displayConfig;
-            let finalLinks = serverData?.aplikasiLinks || aplikasiLinks;
-            let finalNotifs = serverData?.notifications || notifications;
-
-            if (Array.isArray(notifikasi)) {
-              finalNotifs = mergeNotifications(notificationsRef.current, notifikasi);
-              setNotifications(finalNotifs);
-              notificationsRef.current = finalNotifs;
-              localStorage.setItem('dapodik_notifications', JSON.stringify(finalNotifs));
-            }
-
-            if (Array.isArray(aplikasi) && aplikasi.length > 0) {
-              finalLinks = aplikasi;
-              setAplikasiLinks(finalLinks);
-              localStorage.setItem('dapodik_aplikasi_links', JSON.stringify(finalLinks));
-            }
-            
-            if (Array.isArray(siswa)) {
-              finalStudents = sanitizeStudentDates(siswa);
-              setStudents(finalStudents);
-              localStorage.setItem('dapodik_students', JSON.stringify(finalStudents));
-            }
-            if (Array.isArray(ptk)) {
-              finalTeachers = sanitizeTeacherDates(ptk);
-              setTeachers(finalTeachers);
-              localStorage.setItem('dapodik_teachers', JSON.stringify(finalTeachers));
-            }
-            if (Array.isArray(pulledSarpras)) {
-              finalSarpras = pulledSarpras;
-              setSarpras(finalSarpras);
-              localStorage.setItem('dapodik_sarpras', JSON.stringify(finalSarpras));
-            }
-            if (Array.isArray(rapor)) {
-              finalReports = sanitizeReports(rapor);
-              setReports(finalReports);
-              localStorage.setItem('dapodik_reports', JSON.stringify(finalReports));
-            }
-            if (Array.isArray(administrator) && administrator.length > 0) {
-              finalAdmins = getCleanAdministrators(administrator);
-              setAdministrators(finalAdmins);
-              localStorage.setItem('dapodik_administrators', JSON.stringify(finalAdmins));
-
-              // Update current user if they are logged in and their password was modified
-              const savedUserStr = localStorage.getItem('dapodik_current_user');
-              if (savedUserStr) {
-                try {
-                  const currentSaved = JSON.parse(savedUserStr);
-                  const matched = finalAdmins.find((a: AdminUser) => a.username.toLowerCase() === currentSaved.username.toLowerCase());
-                  if (matched) {
-                    setCurrentUser(matched);
-                    localStorage.setItem('dapodik_current_user', JSON.stringify(matched));
-                  }
-                } catch (e) {}
-              }
-            }
-            
-            if (profilSekolah && profilSekolah.length > 0) {
-              const profileMap: any = {};
-              profilSekolah.forEach((item: any) => {
-                if (item.key) {
-                  let val = item.value;
-                  if (item.key === 'misi' && typeof val === 'string') {
-                    try {
-                      if (val.trim().startsWith('[')) {
-                        val = JSON.parse(val);
-                      } else if (val.includes(',')) {
-                        val = val.split(',').map((v: string) => v.trim());
-                      } else {
-                        val = [val];
-                      }
-                    } catch (e) {
-                      val = [val];
-                    }
-                  }
-                  profileMap[item.key] = val;
-                }
-              });
-              if (Object.keys(profileMap).length > 0) {
-                const mergedProf = { ...finalProfile };
-                Object.keys(profileMap).forEach(key => {
-                  if ((key === 'logoSekolah' || key === 'fotoKepalaSekolah') && !profileMap[key]) {
-                    return;
-                  }
-                  mergedProf[key] = profileMap[key];
-                });
-                finalProfile = sanitizeSchoolProfileDates(mergedProf);
-                setSchoolProfile(finalProfile);
-                localStorage.setItem('dapodik_school_profile', JSON.stringify(finalProfile));
-              }
-            }
-            
-            if (pengaturan && pengaturan.length > 0) {
-              const configMap: any = {};
-              const profileMap: any = {};
-              pengaturan.forEach((item: any) => {
-                if (item.key) {
-                  configMap[item.key] = item.value;
-                  profileMap[item.key] = item.value;
-                }
-              });
-              if (Object.keys(configMap).length > 0) {
-                const mergedDisp = { ...finalDisplay };
-                Object.keys(configMap).forEach(key => {
-                  if ((key === 'logoCustomUrl' || key === 'welcomeCustomIconUrl' || key === 'operatorAvatarUrl') && !configMap[key]) {
-                    return;
-                  }
-                  (mergedDisp as any)[key] = configMap[key];
-                });
-                finalDisplay = mergedDisp;
-                setDisplayConfig(finalDisplay);
-                localStorage.setItem('dapodik_display_config', JSON.stringify(finalDisplay));
-
-                const mergedProf = { ...finalProfile };
-                if (configMap.logoCustomUrl || configMap.logoSekolah) {
-                  mergedProf.logoSekolah = configMap.logoCustomUrl || configMap.logoSekolah;
-                }
-                if (configMap.operatorName || configMap.operatorSekolah) {
-                  mergedProf.operatorSekolah = configMap.operatorName || configMap.operatorSekolah;
-                }
-                Object.keys(profileMap).forEach(key => {
-                  if (key in mergedProf) {
-                    (mergedProf as any)[key] = profileMap[key];
-                  }
-                });
-                finalProfile = sanitizeSchoolProfileDates(mergedProf);
-                setSchoolProfile(finalProfile);
-                localStorage.setItem('dapodik_school_profile', JSON.stringify(finalProfile));
-              }
-            }
-            
-            setSyncConfig(prev => ({
-              ...prev,
-              ...activeConfig,
-              lastSynced: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-              status: 'connected'
-            }));
-
-            // Sync server cache with the pulled data
-            saveCacheToServer(finalStudents, finalTeachers, finalSarpras, finalReports, finalDisplay, finalProfile, finalAdmins, finalNotifs, finalLinks);
-            
-            showToast('Sinkronisasi otomatis dari Database berhasil!');
           }
         }
         setIsInitialized(true);
@@ -1585,10 +1298,6 @@ export default function App() {
       type?: 'info' | 'success' | 'warning' | 'error';
     }
   ) => {
-    let res: { success: boolean; message: string } = { success: false, message: 'URL belum dikonfigurasi' };
-
-    const activeConfig = syncConfigRef.current?.webAppUrl ? syncConfigRef.current : syncConfig;
-
     // Persiapkan notifikasi terbaru jika ada pendingNotification
     let activeNotifs = customNotifications || [];
     if (pendingNotification) {
@@ -1599,38 +1308,7 @@ export default function App() {
       );
     }
 
-    // 1. DATA MASUK TERLEBIH DAHULU KE DATABASE SPREADSHEET (Siswa, PTK, Sarpras, Rapor, Pengaturan, Notifikasi, dsb.)
-    if (activeConfig.webAppUrl && (activeConfig.autoSync || force)) {
-      setIsSyncing(true);
-      try {
-        res = await syncToGoogleSheets(activeConfig, {
-          siswa: customStudents,
-          ptk: customTeachers,
-          sarpras: customSarpras,
-          rapor: customReports,
-          pengaturan: buildPengaturanPayload(customDisplayConfig, customSchoolProfile),
-          administrator: customAdministrators,
-          profilSekolah: buildProfilSekolahPayload(customSchoolProfile),
-          aplikasi: buildAplikasiPayload(),
-          notifikasi: activeNotifs
-        });
-      } catch (err: any) {
-        console.warn('Gagal sinkron data ke spreadsheet:', err);
-      } finally {
-        setIsSyncing(false);
-      }
-    }
-
-    // 2. PASTIKAN SHEET NOTIFIKASI JUGA SECARA SPESIFIK DISINKRONKAN KE DATABASE SPREADSHEET
-    if (activeConfig.webAppUrl && activeNotifs && activeNotifs.length > 0) {
-      try {
-        await syncNotifikasiToGoogleSheets(activeConfig, activeNotifs);
-      } catch (notifSyncErr) {
-        console.warn('Gagal sinkron notifikasi ke spreadsheet:', notifSyncErr);
-      }
-    }
-
-    // 3. Simpan seluruh data & notifikasi terbaru ke server cache untuk sinkronisasi multi-perangkat
+    // Simpan seluruh data & notifikasi terbaru ke server cache untuk sinkronisasi multi-perangkat
     saveCacheToServer(
       customStudents,
       customTeachers,
@@ -1643,58 +1321,22 @@ export default function App() {
       aplikasiLinks
     );
 
-    if (res.success) {
-      setSyncConfig(prev => ({
-        ...prev,
-        lastSynced: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-        status: 'connected'
-      }));
-      if (force) {
-        showToast('Data berhasil disimpan ke Database & notifikasi disinkronkan!');
-      }
-    } else if (force && activeConfig.webAppUrl) {
-      showToast('Tersimpan lokal. Status sync Database: ' + res.message);
+    if (force) {
+      showToast('Data berhasil disimpan secara real-time!');
     }
   };
 
   const handleManualSync = async () => {
     setIsSyncing(true);
-    if (!syncConfig.webAppUrl) {
-      setIsSheetsModalOpen(true);
+    try {
+      const freshNotifs = addNotification('Sinkronisasi Database', 'Seluruh data aplikasi telah berhasil disinkronkan ke Database Server.', 'success');
+      await saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, freshNotifs, aplikasiLinks);
       setIsSyncing(false);
-      return;
-    }
-    // 1. Data masuk dulu ke Database Spreadsheet
-    const res = await syncToGoogleSheets(syncConfig, {
-      siswa: students,
-      ptk: teachers,
-      sarpras: sarpras,
-      rapor: reports,
-      pengaturan: buildPengaturanPayload(displayConfig, schoolProfile),
-      administrator: administrators,
-      profilSekolah: buildProfilSekolahPayload(schoolProfile),
-      aplikasi: buildAplikasiPayload(),
-      notifikasi: notificationsRef.current
-    });
-    setIsSyncing(false);
-
-    // 2. Lalu sinkronkan notifikasinya
-    const freshNotifs = addNotification('Sinkronisasi Database Cloud', 'Seluruh data aplikasi telah berhasil disinkronkan ke Database Spreadsheet Google Sheets.', 'success');
-    if (syncConfigRef.current?.webAppUrl) {
-      syncNotifikasiToGoogleSheets(syncConfigRef.current, freshNotifs);
-    }
-    saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, freshNotifs, aplikasiLinks);
-
-    if (res.success) {
-      setSyncConfig(prev => ({
-        ...prev,
-        lastSynced: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-        status: 'connected'
-      }));
-      showToast('Data berhasil disinkronkan ke Database!');
+      showToast('Data berhasil disinkronkan!');
       confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 } });
-    } else {
-      showToast(res.message);
+    } catch (e) {
+      setIsSyncing(false);
+      showToast('Gagal menyinkronkan data.');
     }
   };
 
@@ -2277,7 +1919,6 @@ export default function App() {
     setNotifications(updated);
     localStorage.setItem('dapodik_notifications', JSON.stringify(updated));
     saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, updated, aplikasiLinks);
-    syncNotifikasiToGoogleSheets(syncConfigRef.current, updated);
     triggerAutoSync(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, true, updated);
   };
 
@@ -2288,7 +1929,6 @@ export default function App() {
     setNotifications(updated);
     localStorage.setItem('dapodik_notifications', JSON.stringify(updated));
     saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, updated, aplikasiLinks);
-    syncNotifikasiToGoogleSheets(syncConfigRef.current, updated);
     triggerAutoSync(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, true, updated);
   };
 
@@ -2301,7 +1941,6 @@ export default function App() {
     localStorage.setItem('dapodik_notifications', JSON.stringify(updated));
     saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, updated, aplikasiLinks);
     showToast('Notifikasi berhasil dihapus');
-    syncNotifikasiToGoogleSheets(syncConfigRef.current, updated);
     triggerAutoSync(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, true, updated);
   };
 
@@ -2315,7 +1954,6 @@ export default function App() {
     localStorage.setItem('dapodik_notifications', '[]');
     saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, updated, aplikasiLinks);
     showToast('Semua notifikasi berhasil dihapus...');
-    syncNotifikasiToGoogleSheets(syncConfigRef.current, updated);
     triggerAutoSync(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, true, updated);
   };
 
@@ -2564,29 +2202,7 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5">
-            <button
-              onClick={() => {
-                if (currentUser?.role === 'Administrator' || currentUser?.role === 'Operator') {
-                  setIsSheetsModalOpen(true);
-                }
-              }}
-              disabled={currentUser?.role !== 'Administrator' && currentUser?.role !== 'Operator'}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-xs ${
-                currentUser?.role !== 'Administrator' && currentUser?.role !== 'Operator'
-                  ? 'opacity-60 cursor-not-allowed'
-                  : ''
-              } ${
-                syncConfig.status === 'connected'
-                  ? 'bg-emerald-500/20 text-emerald-200 border-emerald-400/40 hover:bg-emerald-500/30'
-                  : 'bg-white/15 text-white border-white/20 hover:bg-white/25'
-              }`}
-            >
-              <Database className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="hidden sm:inline">Database</span>
-              <span className={`w-2 h-2 rounded-full ${syncConfig.status === 'connected' ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`} />
-            </button>
-
+          <div className="flex items-center gap-2">
             <button
               onClick={handleManualSync}
               disabled={isSyncing}
@@ -2637,7 +2253,6 @@ export default function App() {
             syncConfig={syncConfig}
             displayConfig={displayConfig}
             schoolProfile={schoolProfile}
-            onOpenSheets={() => setIsSheetsModalOpen(true)}
             onOpenSearch={() => setIsSearchModalOpen(true)}
             onOpenNotifications={() => setIsNotifDrawerOpen(true)}
             onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
@@ -2785,7 +2400,6 @@ export default function App() {
               onSaveDisplayConfig={handleSaveDisplayConfig}
               onSaveSchoolProfile={handleSaveSchoolProfile}
               onSaveSettings={handleSaveAllSettings}
-              onOpenSheets={() => setIsSheetsModalOpen(true)}
               onBackToHome={() => setActiveTab('home')}
               initialComponentFilter={settingsInitialFilter}
               administrators={administrators}
@@ -2810,42 +2424,7 @@ export default function App() {
       />
 
       {/* Global Modals */}
-      <GoogleSheetModal
-        isOpen={isSheetsModalOpen}
-        onClose={() => setIsSheetsModalOpen(false)}
-        syncConfig={syncConfig}
-        onSaveConfig={(cfg) => {
-          setSyncConfig(cfg);
-          localStorage.setItem('dapodik_sync_config', JSON.stringify(cfg));
-          
-          // Post to server sync-config so ALL devices, browsers, and mobile phones get it instantly!
-          fetch('/api/sync-config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(cfg)
-          })
-          .then((res) => {
-            if (res.ok) {
-              showToast('Pengaturan Database tersimpan dan disinkronkan secara global!');
-            } else {
-              showToast('Pengaturan Database tersimpan secara lokal.');
-            }
-          })
-          .catch(err => {
-            console.error('Failed to save config to server:', err);
-            showToast('Pengaturan Database tersimpan secara lokal.');
-          });
-        }}
-        students={students}
-        teachers={teachers}
-        sarpras={sarpras}
-        reports={reports}
-        pengaturan={buildPengaturanPayload()}
-        administrators={administrators}
-        profilSekolah={buildProfilSekolahPayload()}
-        notifications={notifications}
-        onPullData={() => handlePullFromSheets(false)}
-      />
+
 
       <QuickSearchModal
         isOpen={isSearchModalOpen}

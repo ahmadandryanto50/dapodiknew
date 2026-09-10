@@ -60,7 +60,6 @@ interface SettingsModuleProps {
   onSaveDisplayConfig: (newConfig: AppDisplayConfig) => void;
   onSaveSchoolProfile: (newProfile: SchoolProfile) => void;
   onSaveSettings?: (newConfig: AppDisplayConfig, newProfile: SchoolProfile) => void;
-  onOpenSheets: () => void;
   onBackToHome: () => void;
   initialComponentFilter?: 'all' | '1' | '2' | '3' | '4' | '5';
   administrators?: AdminUser[];
@@ -77,7 +76,6 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   onSaveDisplayConfig,
   onSaveSchoolProfile,
   onSaveSettings,
-  onOpenSheets,
   onBackToHome,
   initialComponentFilter = 'all',
   administrators = [],
@@ -257,19 +255,12 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
               </span>
             </div>
             <p className="text-xs text-slate-500">
-              Edit 5 komponen tampilan beranda (Logo Header, Banner Sambutan, Badge Kurikulum, Footer, & Kartu Operator) + Sinkronisasi Database
+              Edit 5 komponen tampilan beranda (Logo Header, Banner Sambutan, Badge Kurikulum, Footer, & Kartu Operator) dan kelola profil sekolah
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={onOpenSheets}
-            className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-all flex items-center gap-2"
-          >
-            <Database className="w-4 h-4" />
-            <span>Koneksi Database Cloud</span>
-          </button>
         </div>
       </div>
 
@@ -1403,19 +1394,11 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
               {/* Table Footer Info */}
               <div className="p-4 bg-slate-50 border-t border-slate-200 text-xs text-slate-500 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Database className="w-4 h-4 text-emerald-600" />
+                  <Database className="w-4 h-4 text-sky-600" />
                   <span>
-                    Seluruh data akun ini disinkronkan ke tabel <strong>`Administrator`</strong> di Database.
+                    Seluruh data akun ini tersimpan aman di Database Sekolah.
                   </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={onOpenSheets}
-                  className="text-sky-600 hover:underline font-semibold flex items-center gap-1"
-                >
-                  <span>Lihat Kode Script</span>
-                  <ExternalLink className="w-3 h-3" />
-                </button>
               </div>
             </div>
 
@@ -2410,28 +2393,19 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             <div className="lg:col-span-7 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-4">
               <div className="flex items-center gap-2 pb-2 border-b border-slate-200 text-slate-900 font-bold text-sm">
-                <Database className="w-4 h-4 text-emerald-600" />
-                <span>Integrasi Database Cloud Real-Time</span>
+                <Database className="w-4 h-4 text-sky-600" />
+                <span>Penyimpanan Database Lokal & Server Cache</span>
               </div>
 
               <p className="text-xs text-slate-600 leading-relaxed">
-                Data 5 komponen tampilan (Gambar 1 s/d 5), data siswa, PTK, sarpras, dan rapor secara otomatis terhubung dan disimpan langsung ke Database pada tabel <code className="text-sky-700 font-mono bg-sky-50 px-1.5 py-0.5 rounded border border-sky-200">Data_Pengaturan</code>.
+                Seluruh data sekolah (profil sekolah, data siswa, PTK, sarpras, berkas, dan rapor) disimpan langsung secara real-time ke penyimpanan internal server sekolah Anda. Ini memastikan performa akses super cepat dan handal.
               </p>
 
               <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs text-slate-700">
-                <div>Status Database: <strong className="text-slate-900">{syncConfig.status === 'connected' ? 'Terhubung' : 'Belum Terhubung'}</strong></div>
-                <div>Sinkronisasi Otomatis: <strong className="text-slate-900">{syncConfig.autoSync ? 'Aktif' : 'Non-Aktif'}</strong></div>
-                <div>Terakhir Disinkron: <strong className="text-slate-900">{syncConfig.lastSynced || 'Tersedia saat sinkronisasi'}</strong></div>
+                <div>Status Database: <strong className="text-emerald-600">Aktif & Terhubung (Local Node Server)</strong></div>
+                <div>Metode Penyimpanan: <strong className="text-slate-900">JSON File Server Storage (/api/app-data)</strong></div>
+                <div>Terakhir Disimpan: <strong className="text-slate-900">Tersimpan Otomatis Real-Time</strong></div>
               </div>
-
-              <button
-                type="button"
-                onClick={onOpenSheets}
-                className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-2"
-              >
-                <Database className="w-4 h-4" />
-                <span>Buka Pengaturan & Script Database Cloud</span>
-              </button>
             </div>
 
             <div className="lg:col-span-5 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-3">

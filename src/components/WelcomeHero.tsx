@@ -47,7 +47,6 @@ interface WelcomeHeroProps {
   syncConfig: SyncConfig;
   displayConfig: AppDisplayConfig;
   schoolProfile: SchoolProfile;
-  onOpenSheets: () => void;
   onOpenSearch: () => void;
   onOpenNotifications: () => void;
   onOpenMobileMenu?: () => void;
@@ -69,7 +68,6 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
   syncConfig,
   displayConfig,
   schoolProfile,
-  onOpenSheets,
   onOpenSearch,
   onOpenNotifications,
   onOpenMobileMenu,
