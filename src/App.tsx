@@ -264,9 +264,9 @@ export default function App() {
   });
 
   const [teachers, setTeachers] = useState<TeacherStaff[]>(() => {
-    localStorage.setItem('dapodik_teachers_ver', 'v6_25guru_9tendik_clean');
-    localStorage.setItem('dapodik_teachers', JSON.stringify(initialTeachers));
-    return sanitizeTeacherDates(initialTeachers);
+    const saved = localStorage.getItem('dapodik_teachers');
+    const data = saved ? JSON.parse(saved) : initialTeachers;
+    return sanitizeTeacherDates(data);
   });
 
   const [sarpras, setSarpras] = useState<SarprasItem[]>(() => {
