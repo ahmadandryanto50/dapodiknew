@@ -499,7 +499,9 @@ export default function App() {
     customAdministrators = administrators,
     customNotifications = notificationsRef.current,
     customAplikasiLinks = aplikasiLinks,
-    customDeletedNotifIds = getDeletedNotifIds()
+    customDeletedNotifIds = getDeletedNotifIds(),
+    customSchoolFiles = schoolFiles,
+    customAccessRequests = accessRequests
   ) => {
     if (!isInitialized) return;
     try {
@@ -516,7 +518,9 @@ export default function App() {
           administrators: customAdministrators,
           notifications: customNotifications,
           aplikasiLinks: customAplikasiLinks,
-          deletedNotifIds: customDeletedNotifIds
+          deletedNotifIds: customDeletedNotifIds,
+          schoolFiles: customSchoolFiles,
+          permintaanAkses: customAccessRequests
         })
       });
     } catch (err) {
@@ -769,7 +773,10 @@ export default function App() {
             schoolProfile,
             administrator || administrators,
             notifikasi || notificationsRef.current,
-            aplikasi || aplikasiLinks
+            aplikasi || aplikasiLinks,
+            getDeletedNotifIds(),
+            berkas || schoolFiles,
+            permintaanAkses || accessRequests
           );
 
           const nowStr = new Date().toLocaleString('id-ID');
@@ -1421,7 +1428,9 @@ export default function App() {
       title: string;
       message: string;
       type?: 'info' | 'success' | 'warning' | 'error';
-    }
+    },
+    customSchoolFiles = schoolFiles,
+    customAccessRequests = accessRequests
   ) => {
     // Persiapkan notifikasi terbaru jika ada pendingNotification
     let activeNotifs = customNotifications || [];
@@ -1443,7 +1452,10 @@ export default function App() {
       customSchoolProfile,
       customAdministrators,
       activeNotifs,
-      aplikasiLinks
+      aplikasiLinks,
+      getDeletedNotifIds(),
+      customSchoolFiles,
+      customAccessRequests
     );
 
     // Otomatis simpan & sync perubahan ke Google Spreadsheet
@@ -1457,8 +1469,8 @@ export default function App() {
         administrator: customAdministrators,
         notifikasi: activeNotifs,
         aplikasi: aplikasiLinks,
-        permintaanAkses: accessRequests,
-        berkas: schoolFiles
+        permintaanAkses: customAccessRequests,
+        berkas: customSchoolFiles
       }).then(res => {
         if (res && res.success) {
           const nowStr = new Date().toLocaleString('id-ID');

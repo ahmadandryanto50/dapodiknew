@@ -60,7 +60,9 @@ import {
 import {
   uploadFileToDriveViaAppsScript,
   APPS_SCRIPT_TEMPLATE,
-  downloadKodeGsFile
+  downloadKodeGsFile,
+  syncPermintaanAksesToGoogleSheets,
+  syncBerkasToGoogleSheets
 } from '../services/googleSheetsService';
 
 const compressImageIfNeeded = (file: File, maxWidth = 1000, maxHeight = 1000, quality = 0.5): Promise<string> => {
@@ -209,6 +211,18 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
     } catch (e) {}
   }, [syncConfig]);
 
+  useEffect(() => {
+    if (propFiles !== undefined) {
+      setLocalFiles(propFiles);
+    }
+  }, [propFiles]);
+
+  useEffect(() => {
+    if (propAccessRequests !== undefined) {
+      setLocalAccessRequests(propAccessRequests);
+    }
+  }, [propAccessRequests]);
+
   // Helper function to safely merge incoming remote files with local files without losing newly uploaded items
   const mergeFilesWithLocal = (incomingFiles: SchoolFileItem[]): SchoolFileItem[] => {
     let deletedIds: string[] = [];
@@ -356,7 +370,10 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
     deletedId?: string,
     successNote?: string
   ) => {
-    setAccessRequests(updatedRequests);
+    setLocalAccessRequests(updatedRequests);
+    if (propSetAccessRequests) {
+      propSetAccessRequests(updatedRequests);
+    }
     try {
       localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(updatedRequests));
     } catch (e) {}
@@ -370,6 +387,14 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
         ...(deletedId ? { deletedPermintaanAksesIds: [deletedId] } : {})
       })
     }).catch(() => {});
+
+    // Sync to Google Sheets
+    const syncCfg = activeSyncConfig || syncConfig;
+    if (syncCfg && syncCfg.webAppUrl) {
+      syncPermintaanAksesToGoogleSheets(syncCfg, updatedRequests).catch(err => {
+        console.error('Failed to sync permintaan akses to Google Sheets:', err);
+      });
+    }
 
     if (successNote) {
       setSyncFeedback(successNote);
@@ -418,6 +443,14 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
         ...(deletedId ? { deletedFileIds: [deletedId], deletedFileId: deletedId } : {})
       })
     }).catch(() => {});
+
+    // Sync to Google Sheets
+    const syncCfg = activeSyncConfig || syncConfig;
+    if (syncCfg && syncCfg.webAppUrl) {
+      syncBerkasToGoogleSheets(syncCfg, cleanFiles).catch(err => {
+        console.error('Failed to sync berkas to Google Sheets:', err);
+      });
+    }
 
     if (successNote) {
       setSyncFeedback(successNote);
