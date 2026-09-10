@@ -312,6 +312,10 @@ export default function App() {
       welcomeGreeting: 'SELAMAT DATANG',
       welcomeTitle: 'DI DAPODIK',
       welcomeSubtitle: 'DATA POKOK PENDIDIKAN',
+      welcomeCustomIconUrl: '/logo_smpn11palu.jpg',
+      operatorTitle: 'Operator Sekolah',
+      operatorName: 'Ahmad Andryanto, S.Pd.',
+      operatorAvatarUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=300&auto=format&fit=crop&q=80',
       curriculumBadge: 'Kurikulum Merdeka Ready',
       footerVersionText: 'Dapodik Cloud 2026.a (Next.js & Vercel Ready)'
     };
@@ -320,6 +324,15 @@ export default function App() {
     }
     if (!parsed.logoCustomUrl || parsed.logoCustomUrl.includes('facebook.com')) {
       parsed.logoCustomUrl = '/logo_smpn11palu.jpg';
+    }
+    if (!parsed.welcomeCustomIconUrl) {
+      parsed.welcomeCustomIconUrl = '/logo_smpn11palu.jpg';
+    }
+    if (!parsed.operatorName || parsed.operatorName === 'SMP NEGERI 11 PALU') {
+      parsed.operatorName = 'Ahmad Andryanto, S.Pd.';
+    }
+    if (!parsed.operatorAvatarUrl) {
+      parsed.operatorAvatarUrl = 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=300&auto=format&fit=crop&q=80';
     }
     if (parsed.appVersion === '2026.A' || parsed.appVersion === '2026.B') {
       parsed.appVersion = '2026.b';
@@ -761,6 +774,17 @@ export default function App() {
           if (Array.isArray(aplikasi) && aplikasi.length > 0) {
             setAplikasiLinks(aplikasi);
             localStorage.setItem('dapodik_aplikasi_links', JSON.stringify(aplikasi));
+          }
+          if (Array.isArray(profilSekolah) && profilSekolah.length > 0) {
+            const newProf: any = { ...schoolProfile };
+            profilSekolah.forEach((item: any) => {
+              if (item && item.key && item.value !== undefined && item.value !== '') {
+                newProf[item.key] = item.value;
+              }
+            });
+            const cleanProf = sanitizeSchoolProfileDates(newProf);
+            setSchoolProfile(cleanProf);
+            localStorage.setItem('dapodik_school_profile', JSON.stringify(cleanProf));
           }
 
           // Update server cache

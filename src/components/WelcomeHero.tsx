@@ -409,37 +409,21 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
                 title="Logo Banner"
               >
                 <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-br from-white via-sky-50 to-sky-100 p-2.5 sm:p-3 flex items-center justify-center shadow-lg overflow-hidden border-2 border-white/80">
-                  {displayConfig.welcomeCustomIconUrl ? (
-                    <SafeImage 
-                      src={displayConfig.welcomeCustomIconUrl} 
-                      fallbackSrc="/logo_smpn11palu.jpg"
-                      fallbackNode={
-                        displayConfig.welcomeIconType === 'graduation' ? <GraduationCap className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" /> :
-                        displayConfig.welcomeIconType === 'award' ? <Award className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" /> :
-                        displayConfig.welcomeIconType === 'book' ? <BookOpen className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" /> :
-                        displayConfig.welcomeIconType === 'star' ? <Star className="w-10 h-10 sm:w-12 sm:h-12 text-amber-500" /> :
-                        displayConfig.welcomeIconType === 'shield' ? <ShieldCheck className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" /> :
-                        displayConfig.welcomeIconType === 'landmark' ? <Landmark className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" /> :
-                        <School className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" />
-                      }
-                      alt="Custom Banner Icon" 
-                      className="w-full h-full object-contain rounded-full"
-                    />
-                  ) : displayConfig.welcomeIconType === 'graduation' ? (
-                    <GraduationCap className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" />
-                  ) : displayConfig.welcomeIconType === 'award' ? (
-                    <Award className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" />
-                  ) : displayConfig.welcomeIconType === 'book' ? (
-                    <BookOpen className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" />
-                  ) : displayConfig.welcomeIconType === 'star' ? (
-                    <Star className="w-10 h-10 sm:w-12 sm:h-12 text-amber-500" />
-                  ) : displayConfig.welcomeIconType === 'shield' ? (
-                    <ShieldCheck className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" />
-                  ) : displayConfig.welcomeIconType === 'landmark' ? (
-                    <Landmark className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" />
-                  ) : (
-                    <School className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" />
-                  )}
+                  <SafeImage 
+                    src={displayConfig.welcomeCustomIconUrl || displayConfig.logoCustomUrl || schoolProfile.logoSekolah || '/logo_smpn11palu.jpg'} 
+                    fallbackSrc="/logo_smpn11palu.jpg"
+                    fallbackNode={
+                      displayConfig.welcomeIconType === 'graduation' ? <GraduationCap className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" /> :
+                      displayConfig.welcomeIconType === 'award' ? <Award className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" /> :
+                      displayConfig.welcomeIconType === 'book' ? <BookOpen className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" /> :
+                      displayConfig.welcomeIconType === 'star' ? <Star className="w-10 h-10 sm:w-12 sm:h-12 text-amber-500" /> :
+                      displayConfig.welcomeIconType === 'shield' ? <ShieldCheck className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" /> :
+                      displayConfig.welcomeIconType === 'landmark' ? <Landmark className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" /> :
+                      <School className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" />
+                    }
+                    alt="Custom Banner Icon" 
+                    className="w-full h-full object-contain rounded-full"
+                  />
                 </div>
               </div>
             </div>
@@ -525,22 +509,16 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
                 title="Klik untuk melihat foto operator"
               >
                 <div className="relative w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-400 to-orange-500 flex items-center justify-center font-bold text-slate-950 shadow-md overflow-hidden shrink-0 ring-2 ring-amber-300/40 group-hover:ring-amber-300 group-hover:scale-105 transition-all">
-                  {displayConfig.operatorAvatarUrl ? (
-                    <SafeImage 
-                      src={displayConfig.operatorAvatarUrl} 
-                      fallbackNode={
-                        <span className="text-xs font-black">
-                          {(displayConfig.operatorTitle ?? 'OP').replace(/[^a-zA-Z0-9]/g, '').substring(0, 2).toUpperCase() || 'OP'}
-                        </span>
-                      }
-                      alt="Operator" 
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <span className="text-xs font-black">
-                      {(displayConfig.operatorTitle ?? 'OP').replace(/[^a-zA-Z0-9]/g, '').substring(0, 2).toUpperCase() || 'OP'}
-                    </span>
-                  )}
+                  <SafeImage 
+                    src={displayConfig.operatorAvatarUrl || schoolProfile.fotoKepalaSekolah || 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=300&auto=format&fit=crop&q=80'} 
+                    fallbackNode={
+                      <span className="text-xs font-black">
+                        {(displayConfig.operatorTitle ?? 'OP').replace(/[^a-zA-Z0-9]/g, '').substring(0, 2).toUpperCase() || 'OP'}
+                      </span>
+                    }
+                    alt="Operator" 
+                    className="w-full h-full object-cover"
+                  />
                   <div className="absolute inset-0 bg-slate-950/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
                     <ZoomIn className="w-3.5 h-3.5 drop-shadow" />
                   </div>
@@ -550,7 +528,9 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
                     <span>{displayConfig.operatorTitle ?? 'Operator Sekolah'}</span>
                   </div>
                   <div className="text-[11px] text-sky-200 truncate">
-                    {displayConfig.operatorName ?? schoolProfile.namaSekolah ?? 'SMP NEGERI 11 PALU'}
+                    {displayConfig.operatorName && displayConfig.operatorName !== schoolProfile.namaSekolah
+                      ? displayConfig.operatorName
+                      : (schoolProfile.operatorSekolah || schoolProfile.kepalaSekolah || 'Ahmad Andryanto, S.Pd.')}
                   </div>
                 </div>
               </div>
