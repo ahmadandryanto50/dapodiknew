@@ -133,7 +133,7 @@ async function startServer() {
       if (webAppUrl) {
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 12000);
+          const timeoutId = setTimeout(() => controller.abort(), 30000);
 
           const scriptRes = await fetch(webAppUrl, {
             method: "POST",

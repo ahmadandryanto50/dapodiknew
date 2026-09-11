@@ -334,18 +334,96 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
     });
   };
 
+  const compressImageIfNeeded = (file: File): Promise<File> => {
+    return new Promise((resolve) => {
+      if (!file.type.startsWith('image/')) {
+        resolve(file);
+        return;
+      }
+
+      const img = new Image();
+      img.src = URL.createObjectURL(file);
+      
+      img.onload = () => {
+        try {
+          URL.revokeObjectURL(img.src);
+          
+          // Max dimension of 1600px is perfect for clear readable school documents
+          const MAX_WIDTH = 1600;
+          const MAX_HEIGHT = 1600;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > MAX_WIDTH || height > MAX_HEIGHT) {
+            if (width > height) {
+              height = Math.round((height * MAX_WIDTH) / width);
+              width = MAX_WIDTH;
+            } else {
+              width = Math.round((width * MAX_HEIGHT) / height);
+              height = MAX_HEIGHT;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(file);
+            return;
+          }
+
+          ctx.drawImage(img, 0, 0, width, height);
+
+          canvas.toBlob(
+            (blob) => {
+              if (blob) {
+                const compressedFile = new File([blob], file.name, {
+                  type: 'image/jpeg',
+                  lastModified: Date.now(),
+                });
+                console.log(`Image compressed from ${(file.size / 1024).toFixed(1)}KB to ${(compressedFile.size / 1024).toFixed(1)}KB`);
+                resolve(compressedFile);
+              } else {
+                resolve(file);
+              }
+            },
+            'image/jpeg',
+            0.8
+          );
+        } catch (err) {
+          console.error('Error during image compression:', err);
+          resolve(file);
+        }
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(img.src);
+        resolve(file);
+      };
+    });
+  };
+
   const uploadSingleFile = async (queuedItem: QueuedFile, uploader: string): Promise<string> => {
     const { file, id } = queuedItem;
 
     // Update state to uploading
     setQueue((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, status: 'uploading', progress: 20 } : item))
+      prev.map((item) => (item.id === id ? { ...item, status: 'uploading', progress: 15 } : item))
     );
 
-    const { base64Pure, mimeType } = await readAsBase64(file);
+    let fileToUpload = file;
+    try {
+      fileToUpload = await compressImageIfNeeded(file);
+    } catch (compressErr) {
+      console.warn('Compression skipped, using original file:', compressErr);
+    }
+
+    const { base64Pure, mimeType } = await readAsBase64(fileToUpload);
     
     setQueue((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, progress: 50 } : item))
+      prev.map((item) => (item.id === id ? { ...item, progress: 45 } : item))
     );
 
     const targetFolder = "Arsip Tamu";
@@ -406,6 +484,7 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
     setGlobalSuccess(null);
 
     let successCount = 0;
+    let firstErrorMessage = '';
     const uploader = senderName.trim();
 
     for (let i = 0; i < queue.length; i++) {
@@ -420,8 +499,12 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
         successCount++;
       } catch (err: any) {
         console.error('File upload error in queue:', err);
+        const errMsg = err?.message || 'Gagal mengunggah';
+        if (!firstErrorMessage) {
+          firstErrorMessage = errMsg;
+        }
         setQueue((prev) =>
-          prev.map((q) => (q.id === item.id ? { ...q, status: 'error', errorMsg: err?.message || 'Gagal mengunggah' } : q))
+          prev.map((q) => (q.id === item.id ? { ...q, status: 'error', errorMsg: errMsg } : q))
         );
       }
     }
@@ -436,9 +519,9 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
         setQueue([]);
       }, 5000);
     } else if (successCount > 0) {
-      setGlobalError(`Berhasil mengunggah ${successCount} dari ${queue.length} berkas. Beberapa berkas mengalami kegagalan.`);
+      setGlobalError(`Berhasil mengunggah ${successCount} dari ${queue.length} berkas. Beberapa berkas mengalami kegagalan: ${firstErrorMessage}`);
     } else {
-      setGlobalError('Gagal mengunggah berkas ke Google Drive. Silakan periksa koneksi internet Anda atau coba lagi.');
+      setGlobalError(`Gagal mengunggah berkas ke Google Drive: ${firstErrorMessage || 'Silakan periksa koneksi internet Anda atau coba lagi.'}`);
     }
   };
 
