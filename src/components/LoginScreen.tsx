@@ -19,7 +19,14 @@ import {
   Globe,
   Settings,
   Database,
-  RefreshCw
+  RefreshCw,
+  Upload,
+  Folder,
+  FileText,
+  X,
+  ExternalLink,
+  Download,
+  Plus
 } from 'lucide-react';
 import { AdminUser, AppDisplayConfig, SyncConfig, TeacherStaff, Student } from '../types';
 
@@ -53,6 +60,146 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [selectedLang, setSelectedLang] = useState<'ID' | 'EN'>('ID');
+
+  // Direct Upload (No Login Required) State
+  const [isDirectUploadOpen, setIsDirectUploadOpen] = useState(false);
+  const [directFiles, setDirectFiles] = useState<File[]>([]);
+  const [directFolderChoiceMode, setDirectFolderChoiceMode] = useState<'category' | 'custom'>('category');
+  const [directCategory, setDirectCategory] = useState('Kurikulum & Pembelajaran');
+  const [directCustomCategory, setDirectCustomCategory] = useState('');
+  const [directUploaderName, setDirectUploaderName] = useState('');
+  const [directDescription, setDirectDescription] = useState('');
+  const [isDirectUploading, setIsDirectUploading] = useState(false);
+  const [directUploadProgress, setDirectUploadProgress] = useState(0);
+  const [directUploadProgressText, setDirectUploadProgressText] = useState('');
+  const [directUploadSuccess, setDirectUploadSuccess] = useState<any | null>(null);
+  const [directUploadError, setDirectUploadError] = useState<string | null>(null);
+  const directFileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const handleGuestLogin = () => {
+    const guestUser: AdminUser = {
+      id: `tamu-${Date.now()}`,
+      username: 'tamu',
+      password: '',
+      nama: 'Pengunjung / Tamu',
+      role: 'Tamu / Umum',
+      email: 'tamu@dapodik.belajar.id',
+      status: 'Aktif',
+      lastLogin: new Date().toLocaleString('id-ID')
+    };
+    onLogin(guestUser);
+  };
+
+  const handleDirectFileSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const incoming = Array.from(e.target.files);
+      setDirectFiles(prev => [...prev, ...incoming]);
+      setDirectUploadError(null);
+    }
+  };
+
+  const removeDirectFile = (index: number) => {
+    setDirectFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const readDirectFileAsBase64 = (file: File): Promise<{ base64Pure: string; mimeType: string }> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      const mime = file.type || 'application/octet-stream';
+      reader.onload = () => {
+        try {
+          const res = (reader.result as string) || '';
+          const base64Pure = res.includes(',') ? res.split(',')[1] : res;
+          resolve({ base64Pure, mimeType: mime });
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.onerror = (e) => reject(e);
+      reader.onabort = (e) => reject(e);
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleExecuteDirectUpload = async () => {
+    if (directFiles.length === 0) {
+      setDirectUploadError('Silakan pilih minimal 1 berkas terlebih dahulu.');
+      return;
+    }
+
+    setIsDirectUploading(true);
+    setDirectUploadProgress(5);
+    setDirectUploadError(null);
+    setDirectUploadSuccess(null);
+
+    const targetFolder = directFolderChoiceMode === 'custom' && directCustomCategory.trim()
+      ? directCustomCategory.trim()
+      : directCategory;
+    const uploader = directUploaderName.trim() || 'Pengguna Tanpa Login';
+    const uploadedList: any[] = [];
+
+    try {
+      for (let i = 0; i < directFiles.length; i++) {
+        const file = directFiles[i];
+        setDirectUploadProgressText(`Membaca berkas (${i + 1}/${directFiles.length}): ${file.name}`);
+        setDirectUploadProgress(Math.round((i / directFiles.length) * 100) + 15);
+
+        const { base64Pure, mimeType } = await readDirectFileAsBase64(file);
+
+        setDirectUploadProgressText(`Mengunggah ke database (${i + 1}/${directFiles.length}): ${file.name}`);
+        setDirectUploadProgress(Math.round((i / directFiles.length) * 100) + 60);
+
+        const res = await fetch('/api/upload-file', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: file.name,
+            mimeType,
+            base64Data: base64Pure,
+            category: targetFolder,
+            uploadedBy: uploader,
+            uploadedByRole: 'Tamu / Bebas Login',
+            description: directDescription || `Berkas ${targetFolder} (diunggah bebas tanpa login email)`,
+            privacy: 'Public',
+            folderName: targetFolder
+          })
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.message || `Gagal mengunggah berkas ${file.name}`);
+        }
+
+        const json = await res.json();
+        if (json.success && json.file) {
+          uploadedList.push(json.file);
+        }
+        setDirectUploadProgress(Math.round(((i + 1) / directFiles.length) * 100));
+      }
+
+      setDirectUploadSuccess({
+        count: uploadedList.length,
+        files: uploadedList,
+        folderName: targetFolder
+      });
+      setDirectFiles([]);
+      setDirectDescription('');
+    } catch (err: any) {
+      console.error('Direct upload error:', err);
+      setDirectUploadError(err?.message || 'Terjadi kesalahan saat mengunggah berkas. Pastikan koneksi internet stabil.');
+    } finally {
+      setIsDirectUploading(false);
+      setDirectUploadProgressText('');
+    }
+  };
 
   const handleManualSync = async () => {
     if (!onPullData || isSyncing) return;
@@ -566,6 +713,42 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 )}
               </button>
 
+              {/* Divider for Direct Access without Login */}
+              <div className="relative my-3.5 flex items-center justify-center">
+                <div className="border-t border-slate-200 w-full" />
+                <span className="bg-white px-2.5 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
+                  ATAU AKSES LANGSUNG (BEBAS LOGIN EMAIL)
+                </span>
+              </div>
+
+              {/* Unggah Berkas Tanpa Login Button */}
+              <button
+                type="button"
+                id="btn-login-direct-upload"
+                onClick={() => {
+                  setDirectUploadSuccess(null);
+                  setDirectUploadError(null);
+                  setIsDirectUploadOpen(true);
+                }}
+                className="w-full py-3 px-4 rounded-2xl bg-amber-400 hover:bg-amber-300 active:scale-[0.98] text-slate-950 font-black text-xs sm:text-sm tracking-wide shadow-md shadow-amber-400/25 flex items-center justify-center gap-2.5 transition-all cursor-pointer border border-amber-500/40 group"
+              >
+                <div className="w-6 h-6 rounded-lg bg-amber-500/30 flex items-center justify-center text-slate-950">
+                  <Upload className="w-4 h-4 stroke-[2.5]" />
+                </div>
+                <span>UNGGAH BERKAS (TANPA LOGIN EMAIL)</span>
+              </button>
+
+              {/* Masuk sebagai Tamu Button */}
+              <button
+                type="button"
+                id="btn-login-guest-access"
+                onClick={handleGuestLogin}
+                className="w-full py-2.5 px-4 rounded-2xl bg-slate-100 hover:bg-slate-200 active:scale-[0.98] text-slate-700 hover:text-slate-950 font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer border border-slate-200"
+              >
+                <Globe className="w-4 h-4 text-sky-600" />
+                <span>Masuk sebagai Tamu / Akses Publik (Lihat &amp; Kelola)</span>
+              </button>
+
             </form>
 
           </div>
@@ -630,6 +813,343 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 Tutup & Kembali
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: UNGGAH BERKAS BEBAS AKSES (TANPA LOGIN EMAIL)                      */}
+      {/* ========================================================================= */}
+      {isDirectUploadOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-4 sm:p-6 shadow-2xl border border-slate-100 space-y-4 animate-scale-up max-h-[90vh] overflow-y-auto my-auto text-slate-800 font-sans">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-400/20 text-amber-600 flex items-center justify-center">
+                  <Upload className="w-5 h-5 stroke-[2.5]" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-base leading-snug">
+                    Unggah Berkas ke Database Sekolah
+                  </h3>
+                  <div className="flex items-center gap-1.5 text-[11px] text-emerald-700 font-bold">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>Bebas Akses: Bisa dari HP &amp; Browser Tanpa Login Email</span>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isDirectUploading) {
+                    setIsDirectUploadOpen(false);
+                    setDirectUploadSuccess(null);
+                    setDirectUploadError(null);
+                  }
+                }}
+                disabled={isDirectUploading}
+                className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors disabled:opacity-50"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Success View */}
+            {directUploadSuccess ? (
+              <div className="space-y-4 py-2">
+                <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 text-emerald-950 flex flex-col items-center text-center">
+                  <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mb-2">
+                    <CheckCircle2 className="w-7 h-7" />
+                  </div>
+                  <h4 className="font-extrabold text-base text-emerald-900">
+                    Berkas Berhasil Tersimpan!
+                  </h4>
+                  <p className="text-xs text-emerald-800 mt-1 max-w-sm">
+                    {directUploadSuccess.count} berkas berhasil diunggah ke folder <strong>{directUploadSuccess.folderName}</strong> dan langsung disinkronkan ke Database Sekolah &amp; Cloud Drive.
+                  </p>
+                </div>
+
+                {/* Uploaded items list */}
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {directUploadSuccess.files?.map((f: any, idx: number) => (
+                    <div key={idx} className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 overflow-hidden">
+                        <FileText className="w-4 h-4 text-sky-600 shrink-0" />
+                        <span className="font-semibold text-slate-900 truncate">{f.name}</span>
+                        <span className="text-slate-400 text-[10px]">({formatFileSize(f.fileSize || 0)})</span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {f.fileUrl && (
+                          <a
+                            href={f.fileUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            download={f.name}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-sky-100 hover:bg-sky-200 text-sky-800 rounded-lg font-bold text-[11px] transition-colors"
+                          >
+                            <Download className="w-3 h-3" />
+                            <span>Unduh</span>
+                          </a>
+                        )}
+                        {f.driveFileUrl && f.driveFileUrl.includes('drive.google.com') && (
+                          <a
+                            href={f.driveFileUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-lg font-bold text-[11px] transition-colors"
+                          >
+                            <Folder className="w-3 h-3 text-amber-600" />
+                            <span>Drive</span>
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDirectUploadSuccess(null);
+                      setDirectFiles([]);
+                    }}
+                    className="flex-1 py-3 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 font-bold text-xs text-slate-800 transition-colors"
+                  >
+                    + Unggah Berkas Lain
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsDirectUploadOpen(false);
+                      handleGuestLogin();
+                    }}
+                    className="flex-1 py-3 px-4 rounded-xl bg-sky-600 hover:bg-sky-500 font-extrabold text-xs text-white transition-colors shadow-md shadow-sky-600/20"
+                  >
+                    Buka Aplikasi &amp; Lihat Arsip
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* Upload Form */
+              <div className="space-y-3.5">
+                {/* Touch-Friendly Mobile File Picker Area */}
+                <label
+                  htmlFor="direct-login-file-input"
+                  className="relative block border-2 border-dashed border-sky-300 hover:border-sky-500 bg-sky-50/50 hover:bg-sky-50/90 active:bg-sky-100 rounded-2xl p-4 text-center transition-all cursor-pointer group select-none shadow-xs overflow-hidden"
+                >
+                  <input
+                    id="direct-login-file-input"
+                    type="file"
+                    multiple
+                    ref={directFileInputRef}
+                    onChange={handleDirectFileSelection}
+                    className="opacity-0 absolute inset-0 w-full h-full cursor-pointer z-10"
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.webp,.svg,.zip,.rar,image/*,application/*"
+                  />
+                  <div className="flex flex-col items-center justify-center pointer-events-none">
+                    <div className="w-11 h-11 rounded-2xl bg-sky-100 text-sky-600 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform shadow-xs">
+                      <Upload className="w-6 h-6" />
+                    </div>
+                    <div className="font-extrabold text-slate-900 text-xs sm:text-sm mb-1">
+                      Pilih Berkas dari HP atau Laptop
+                    </div>
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-sky-600 group-hover:bg-sky-700 text-white rounded-xl text-xs font-bold shadow-xs my-1 transition-colors">
+                      📂 Buka File Picker / Galeri HP
+                    </div>
+                    <p className="text-slate-500 text-[11px] mt-1 max-w-sm">
+                      Mendukung PDF, Word, Excel, Foto/Gambar, ZIP. Bisa langsung pilih dari memori HP Android, iPhone, atau browser apa saja.
+                    </p>
+                  </div>
+                </label>
+
+                {/* Selected Files List */}
+                {directFiles.length > 0 && (
+                  <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                    <div className="text-xs font-bold text-slate-700 flex justify-between items-center">
+                      <span>Berkas Terpilih ({directFiles.length})</span>
+                      <button
+                        type="button"
+                        onClick={() => setDirectFiles([])}
+                        className="text-rose-500 hover:underline text-[11px]"
+                      >
+                        Hapus Semua
+                      </button>
+                    </div>
+                    {directFiles.map((file, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between p-2 bg-slate-50 rounded-xl border border-slate-200 text-xs"
+                      >
+                        <div className="flex items-center gap-2 overflow-hidden">
+                          <FileText className="w-4 h-4 text-sky-600 shrink-0" />
+                          <span className="font-medium text-slate-900 truncate">{file.name}</span>
+                          <span className="text-slate-400 text-[10px]">({formatFileSize(file.size)})</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeDirectFile(idx)}
+                          className="p-1 text-slate-400 hover:text-rose-600"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Destination Folder Selector */}
+                <div className="space-y-2 bg-slate-50 p-3 rounded-2xl border border-slate-200 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <Folder className="w-4 h-4 text-amber-500" />
+                      <span>Folder Tujuan Berkas</span>
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 p-1 bg-slate-200/70 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() => setDirectFolderChoiceMode('category')}
+                      className={`py-1.5 px-2 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                        directFolderChoiceMode === 'category'
+                          ? 'bg-white text-slate-900 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <Folder className="w-3 h-3 text-amber-500" />
+                      <span>Kategori Umum</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setDirectFolderChoiceMode('custom')}
+                      className={`py-1.5 px-2 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                        directFolderChoiceMode === 'custom'
+                          ? 'bg-amber-400 text-slate-950 font-extrabold shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <Plus className="w-3 h-3 text-slate-950" />
+                      <span>Folder Baru</span>
+                    </button>
+                  </div>
+
+                  {directFolderChoiceMode === 'category' ? (
+                    <select
+                      value={directCategory}
+                      onChange={(e) => setDirectCategory(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-800 text-xs font-semibold focus:border-sky-500 outline-none"
+                    >
+                      <option value="Kurikulum & Pembelajaran">Kurikulum & Pembelajaran</option>
+                      <option value="SK & Penugasan PTK">SK & Penugasan PTK</option>
+                      <option value="Kesiswaan & Ekstrakurikuler">Kesiswaan & Ekstrakurikuler</option>
+                      <option value="Sarpras & Aset Sekolah">Sarpras & Aset Sekolah</option>
+                      <option value="Keuangan & Laporan BOS">Keuangan & Laporan BOS</option>
+                      <option value="Surat Masuk & Keluar">Surat Masuk & Keluar</option>
+                      <option value="Dokumen & Foto Kegiatan">Dokumen & Foto Kegiatan</option>
+                      <option value="Dokumen Resmi Sekolah">Dokumen Resmi Sekolah</option>
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={directCustomCategory}
+                      onChange={(e) => setDirectCustomCategory(e.target.value)}
+                      placeholder="Ketik nama folder baru (misal: Berkas Lomba 2026)"
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-800 text-xs font-semibold focus:border-sky-500 outline-none"
+                    />
+                  )}
+                </div>
+
+                {/* Identity & Description */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <label className="block font-bold text-slate-700 text-[11px] mb-1">
+                      Nama Pengunggah (Opsional):
+                    </label>
+                    <input
+                      type="text"
+                      value={directUploaderName}
+                      onChange={(e) => setDirectUploaderName(e.target.value)}
+                      placeholder="Contoh: Pak Budi (Guru), Siswa, dll."
+                      className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-xs font-medium focus:bg-white focus:border-sky-500 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 text-[11px] mb-1">
+                      Keterangan Berkas (Opsional):
+                    </label>
+                    <input
+                      type="text"
+                      value={directDescription}
+                      onChange={(e) => setDirectDescription(e.target.value)}
+                      placeholder="Contoh: Berkas revisi semester 2"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-xs font-medium focus:bg-white focus:border-sky-500 outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Error alert */}
+                {directUploadError && (
+                  <div className="p-3 bg-rose-50 rounded-xl border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>{directUploadError}</span>
+                  </div>
+                )}
+
+                {/* Progress bar */}
+                {isDirectUploading && (
+                  <div className="p-3 bg-sky-50 rounded-2xl border border-sky-200 space-y-1.5">
+                    <div className="flex justify-between text-xs font-bold text-sky-950">
+                      <span className="truncate">{directUploadProgressText || 'Mengunggah berkas...'}</span>
+                      <span>{directUploadProgress}%</span>
+                    </div>
+                    <div className="w-full h-2.5 bg-sky-200 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-sky-500 to-blue-600 transition-all duration-300 rounded-full"
+                        style={{ width: `${directUploadProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Submit Upload Button */}
+                <div className="pt-2 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    disabled={isDirectUploading}
+                    onClick={() => {
+                      setIsDirectUploadOpen(false);
+                      setDirectFiles([]);
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isDirectUploading || directFiles.length === 0}
+                    onClick={handleExecuteDirectUpload}
+                    className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 active:scale-[0.98] text-slate-950 font-black text-xs sm:text-sm tracking-wide shadow-md shadow-amber-500/20 flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isDirectUploading ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                        <span>MENGUNGGAH...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-4 h-4 stroke-[2.5]" />
+                        <span>UNGGAH SEKARANG ({directFiles.length})</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+
           </div>
         </div>
       )}

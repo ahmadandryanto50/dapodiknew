@@ -126,14 +126,14 @@ async function startServer() {
 
       let driveResult: any = null;
 
-      // Try uploading to Google Apps Script
+      // Try uploading to Google Apps Script (with 12s timeout to avoid mobile browser hang)
       const savedConfig = safeReadJSON(CONFIG_FILE, null);
       const webAppUrl = savedConfig?.webAppUrl || "https://script.google.com/macros/s/AKfycbyhC26e6a4a0ORdBvnMCz7c1pDR0rQsGkcO_LfVKhxAZGYtBMGle4qbjZoNx6D_uT79/exec";
 
       if (webAppUrl) {
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 60000);
+          const timeoutId = setTimeout(() => controller.abort(), 12000);
 
           const scriptRes = await fetch(webAppUrl, {
             method: "POST",

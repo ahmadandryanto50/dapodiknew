@@ -81,10 +81,9 @@ const readFileAsBase64 = async (
           const buffer = reader.result as ArrayBuffer;
           const bytes = new Uint8Array(buffer);
           let binary = '';
-          const chunkSize = 8192;
-          for (let i = 0; i < bytes.length; i += chunkSize) {
-            const chunk = bytes.subarray(i, i + chunkSize);
-            binary += String.fromCharCode.apply(null, chunk as any);
+          const len = bytes.byteLength;
+          for (let i = 0; i < len; i++) {
+            binary += String.fromCharCode(bytes[i]);
           }
           const base64 = btoa(binary);
           resolve(`data:${mimeType};base64,${base64}`);
@@ -102,7 +101,7 @@ const readFileAsBase64 = async (
   try {
     dataUrl = await Promise.race([
       readViaDataUrl(),
-      new Promise<string>((_, reject) => setTimeout(() => reject(new Error('Timeout reading file')), 25000))
+      new Promise<string>((_, reject) => setTimeout(() => reject(new Error('Timeout reading file')), 60000))
     ]);
   } catch (e1) {
     try {
@@ -555,6 +554,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
   const [uploadPrivacy, setUploadPrivacy] = useState<'Restricted' | 'Guru Only' | 'Public'>('Public');
   const [uploadDescription, setUploadDescription] = useState<string>('');
   const [selectedUploadFiles, setSelectedUploadFiles] = useState<File[]>([]);
+  const [guestUploaderName, setGuestUploaderName] = useState<string>('');
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [uploadRemainingBytesText, setUploadRemainingBytesText] = useState<string>('');
   const [currentUploadingFileIndex, setCurrentUploadingFileIndex] = useState<number>(0);
@@ -833,6 +833,9 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
         let uploadedServerFile: any = null;
         let isDriveSynced = false;
 
+        const effectiveUploaderName = guestUploaderName.trim() || currentUser?.nama || currentUser?.username || 'Pengguna Tanpa Login';
+        const effectiveUploaderRole = currentUser?.role || 'Tamu / Umum';
+
         if (base64Pure) {
           // 1. Upload to local server storage directly (Works reliably on mobile & all browsers)
           try {
@@ -844,8 +847,8 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
                 mimeType: inferredMime,
                 base64Data: base64Pure,
                 category: targetCategory,
-                uploadedBy: currentUser?.nama || currentUser?.username || 'Administrator',
-                uploadedByRole: currentUser?.role || 'Staff Sekolah',
+                uploadedBy: effectiveUploaderName,
+                uploadedByRole: effectiveUploaderRole,
                 description: uploadDescription || `Berkas ${targetCategory}`,
                 privacy: uploadPrivacy,
                 folderName: targetCategory
@@ -902,8 +905,8 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
           name: file.name,
           category: targetCategory,
           fileSize: driveResult?.size || uploadedServerFile?.fileSize || fileSize,
-          uploadedBy: currentUser?.nama || currentUser?.username || 'Administrator',
-          uploadedByRole: currentUser?.role || 'Staff Sekolah',
+          uploadedBy: effectiveUploaderName,
+          uploadedByRole: effectiveUploaderRole,
           uploadedAt: nowStr,
           privacy: uploadPrivacy,
           driveFileUrl: driveUrl,
@@ -1570,25 +1573,25 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
               </button>
             </div>
 
-            {/* Google Drive Status inside Modal */}
-            {isDriveLinked && (
-              <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-200 text-emerald-900 text-xs flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 overflow-hidden">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span className="truncate font-medium">
-                    Google Drive Terhubung: <strong>{driveUser?.email}</strong>
-                  </span>
-                </div>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-800 text-[10px] font-bold shrink-0">
-                  Otomatis Sinkron
+            {/* Direct Access & Google Drive Status inside Modal */}
+            <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-200 text-emerald-900 text-xs flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 overflow-hidden">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span className="truncate font-bold text-[11px] sm:text-xs">
+                  {isDriveLinked 
+                    ? `Google Drive Terhubung: ${driveUser?.email}` 
+                    : 'Bebas Akses: Unggah berkas tanpa perlu login email / akun Google'}
                 </span>
               </div>
-            )}
+              <span className="px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900 text-[10px] font-black shrink-0">
+                Otomatis Tersimpan
+              </span>
+            </div>
 
             {/* Mobile & Desktop Friendly File Picker Box */}
             <label
               htmlFor="berkas-file-input"
-              className="relative block border-2 border-dashed border-sky-300 hover:border-sky-500 bg-sky-50/50 hover:bg-sky-50/90 active:bg-sky-100 rounded-2xl p-4 text-center transition-all cursor-pointer group select-none shadow-xs"
+              className="relative block border-2 border-dashed border-sky-300 hover:border-sky-500 bg-sky-50/50 hover:bg-sky-50/90 active:bg-sky-100 rounded-2xl p-4 text-center transition-all cursor-pointer group select-none shadow-xs overflow-hidden"
             >
               <input
                 id="berkas-file-input"
@@ -1596,19 +1599,19 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
                 multiple
                 ref={multiFileInputRef}
                 onChange={handleFileSelection}
-                className="sr-only"
+                className="opacity-0 absolute inset-0 w-full h-full cursor-pointer z-10"
                 accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.webp,.svg,.zip,.rar,image/*,application/*"
               />
-              <div className="flex flex-col items-center justify-center">
+              <div className="flex flex-col items-center justify-center pointer-events-none">
                 <div className="w-11 h-11 rounded-2xl bg-sky-100 text-sky-600 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform shadow-xs">
                   <Upload className="w-6 h-6" />
                 </div>
                 <div className="font-extrabold text-slate-900 text-xs sm:text-sm mb-1">
                   Pilih Berkas dari HP atau Komputer
                 </div>
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold shadow-xs my-1 transition-colors">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-sky-600 group-hover:bg-sky-700 text-white rounded-xl text-xs font-bold shadow-xs my-1 transition-colors">
                   📂 Buka File Picker / Galeri HP
-                </span>
+                </div>
                 <p className="text-slate-500 text-[11px] mt-1 max-w-sm">
                   Mendukung PDF, Word, Excel, Foto/Gambar, ZIP. Bisa pilih langsung dari penyimpanan internal HP atau browser.
                 </p>
@@ -1771,22 +1774,38 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-7 h-7 rounded-full bg-sky-700 text-white font-bold flex items-center justify-center text-xs shadow-xs">
-                    {(currentUser?.nama || 'A').charAt(0).toUpperCase()}
+                    {(guestUploaderName || currentUser?.nama || 'P').charAt(0).toUpperCase()}
                   </div>
                   <div>
                     <div className="font-bold text-slate-900 text-xs">
-                      {currentUser?.nama || 'Pengguna Terdaftar'}
+                      {guestUploaderName || currentUser?.nama || 'Pengguna Tanpa Login'}
                     </div>
                     <div className="text-[10px] text-sky-800 font-medium">
-                      Role: <span className="bg-sky-200 text-sky-950 px-1.5 py-0.2 rounded font-extrabold">{currentUser?.role || 'Umum'}</span> • Hak unggah aktif untuk semua role
+                      Status: <span className="bg-sky-200 text-sky-950 px-1.5 py-0.2 rounded font-extrabold">{currentUser?.role || 'Bebas Akses (Umum)'}</span> • Akses upload aktif
                     </div>
                   </div>
                 </div>
                 <div className="text-[10px] text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 border border-emerald-300">
                   <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
-                  <span>Dapat Mengunggah</span>
+                  <span>Siap Unggah</span>
                 </div>
               </div>
+
+              {/* Optional Guest Name Input */}
+              {(!currentUser || currentUser.role === 'Tamu / Umum' || currentUser.role === 'Umum') && (
+                <div className="pt-2 border-t border-sky-200/70">
+                  <label className="block font-semibold text-slate-800 text-[11px] mb-1">
+                    Nama / Identitas Pengunggah (Opsional):
+                  </label>
+                  <input
+                    type="text"
+                    value={guestUploaderName}
+                    onChange={(e) => setGuestUploaderName(e.target.value)}
+                    placeholder="Contoh: Budi Santoso (Guru), Siswa Kelas 9, dll."
+                    className="w-full px-3 py-1.5 rounded-xl bg-white border border-sky-200 text-slate-800 text-xs font-medium focus:border-sky-500 outline-none placeholder-slate-400"
+                  />
+                </div>
+              )}
 
               {/* Privacy Setting Selector */}
               <div className="space-y-1 pt-1.5 border-t border-sky-200/70">
