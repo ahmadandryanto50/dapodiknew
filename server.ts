@@ -114,7 +114,7 @@ async function startServer() {
     // Fallback to default
     return res.json({
       spreadsheetUrl: "1XmLmshCOhSktRfzW8uG_8RqxlxVCQt5eUVekEFLwj_M",
-      webAppUrl: "https://script.google.com/macros/s/AKfycbx82FotXhPvN0i9hOo_S-bctwcT5JCB6JrvUu5CHtIMEepaJj1EIl5Bf7mxPoW8JuPguA/exec",
+      webAppUrl: "https://script.google.com/macros/s/AKfycbxo-R6-aq1A8nE30sSjsSIw_Pw1QidfRktHS2C4UIJvMJ4W-ySlS4TE5qlWKdG2fB0UhA/exec",
       sheetId: "",
       autoSync: true,
       lastSynced: null,
@@ -196,7 +196,7 @@ async function startServer() {
 
         // Try uploading to Google Apps Script (with robust 45s timeout to allow large file transfers)
         const savedConfig = safeReadJSON(CONFIG_FILE, null);
-        const webAppUrl = savedConfig?.webAppUrl || "https://script.google.com/macros/s/AKfycbx82FotXhPvN0i9hOo_S-bctwcT5JCB6JrvUu5CHtIMEepaJj1EIl5Bf7mxPoW8JuPguA/exec";
+        const webAppUrl = savedConfig?.webAppUrl || "https://script.google.com/macros/s/AKfycbxo-R6-aq1A8nE30sSjsSIw_Pw1QidfRktHS2C4UIJvMJ4W-ySlS4TE5qlWKdG2fB0UhA/exec";
 
         if (webAppUrl) {
           try {
@@ -279,7 +279,7 @@ async function startServer() {
 
       // SINKRONISASI KE GOOGLE SPREADSHEET (Data_Berkas Sheet)
       const savedConfig = safeReadJSON(CONFIG_FILE, null);
-      const webAppUrl = savedConfig?.webAppUrl || "https://script.google.com/macros/s/AKfycbx82FotXhPvN0i9hOo_S-bctwcT5JCB6JrvUu5CHtIMEepaJj1EIl5Bf7mxPoW8JuPguA/exec";
+      const webAppUrl = savedConfig?.webAppUrl || "https://script.google.com/macros/s/AKfycbxo-R6-aq1A8nE30sSjsSIw_Pw1QidfRktHS2C4UIJvMJ4W-ySlS4TE5qlWKdG2fB0UhA/exec";
       if (webAppUrl) {
         try {
           const syncPayload = {
@@ -372,7 +372,7 @@ async function startServer() {
       let { webAppUrl, payload } = req.body || {};
       if (!webAppUrl) {
         const savedConfig = safeReadJSON(CONFIG_FILE, null);
-        webAppUrl = savedConfig?.webAppUrl || "https://script.google.com/macros/s/AKfycbx82FotXhPvN0i9hOo_S-bctwcT5JCB6JrvUu5CHtIMEepaJj1EIl5Bf7mxPoW8JuPguA/exec";
+        webAppUrl = savedConfig?.webAppUrl || "https://script.google.com/macros/s/AKfycbxo-R6-aq1A8nE30sSjsSIw_Pw1QidfRktHS2C4UIJvMJ4W-ySlS4TE5qlWKdG2fB0UhA/exec";
       }
       
       const controller = new AbortController();
@@ -552,7 +552,7 @@ async function startServer() {
       
       // Also try to load fresh data from Google Sheets to merge/sync!
       const savedConfig = safeReadJSON(CONFIG_FILE, null);
-      const webAppUrl = savedConfig?.webAppUrl;
+      const webAppUrl = savedConfig?.webAppUrl || "https://script.google.com/macros/s/AKfycbxo-R6-aq1A8nE30sSjsSIw_Pw1QidfRktHS2C4UIJvMJ4W-ySlS4TE5qlWKdG2fB0UhA/exec";
       let spreadsheetFiles: any[] = [];
       
       if (webAppUrl) {

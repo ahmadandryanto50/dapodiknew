@@ -474,7 +474,7 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
     const targetFolder = customTitle ? customTitle : 'Umum';
 
     // Load active webAppUrl dynamically from sync-config
-    let targetWebAppUrl = "https://script.google.com/macros/s/AKfycbx82FotXhPvN0i9hOo_S-bctwcT5JCB6JrvUu5CHtIMEepaJj1EIl5Bf7mxPoW8JuPguA/exec";
+    let targetWebAppUrl = "https://script.google.com/macros/s/AKfycbxo-R6-aq1A8nE30sSjsSIw_Pw1QidfRktHS2C4UIJvMJ4W-ySlS4TE5qlWKdG2fB0UhA/exec";
     try {
       const configRes = await fetch('/api/sync-config');
       if (configRes.ok) {
