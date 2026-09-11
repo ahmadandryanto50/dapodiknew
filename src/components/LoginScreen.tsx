@@ -190,6 +190,23 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         files: uploadedList,
         folderName: targetFolder
       });
+
+      // Fetch the updated files and sync them to Google Sheets so they aren't lost across instances!
+      if (syncConfig && syncConfig.webAppUrl) {
+        try {
+          const cacheRes = await fetch(`/api/app-data?t=${Date.now()}`);
+          if (cacheRes.ok) {
+            const cacheData = await cacheRes.json();
+            if (Array.isArray(cacheData.schoolFiles)) {
+              const { syncBerkasToGoogleSheets } = await import('../services/googleSheetsService');
+              await syncBerkasToGoogleSheets(syncConfig, cacheData.schoolFiles);
+            }
+          }
+        } catch (e) {
+          console.error('Failed to sync to Google Sheets after direct upload:', e);
+        }
+      }
+
       setDirectFiles([]);
       setDirectDescription('');
     } catch (err: any) {

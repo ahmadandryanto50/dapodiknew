@@ -374,7 +374,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
         if (cfgSaved) syncCfg = JSON.parse(cfgSaved);
       } catch (e) {}
     }
-    const finalWebAppUrl = syncCfg?.webAppUrl || 'https://script.google.com/macros/s/AKfycbyhC26e6a4a0ORdBvnMCz7c1pDR0rQsGkcO_LfVKhxAZGYtBMGle4qbjZoNx6D_uT79/exec';
+    const finalWebAppUrl = syncCfg?.webAppUrl || 'https://script.google.com/macros/s/AKfycbx82FotXhPvN0i9hOo_S-bctwcT5JCB6JrvUu5CHtIMEepaJj1EIl5Bf7mxPoW8JuPguA/exec';
     const effectiveCfg: SyncConfig = {
       ...(syncCfg || {}),
       webAppUrl: finalWebAppUrl
@@ -391,7 +391,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
   };
 
   // Google Drive Real Auth State & Diagnostics
-  const DEFAULT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyhC26e6a4a0ORdBvnMCz7c1pDR0rQsGkcO_LfVKhxAZGYtBMGle4qbjZoNx6D_uT79/exec';
+  const DEFAULT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbx82FotXhPvN0i9hOo_S-bctwcT5JCB6JrvUu5CHtIMEepaJj1EIl5Bf7mxPoW8JuPguA/exec';
   const [driveUser, setDriveUser] = useState<any>(null);
   const [isDriveLinked, setIsDriveLinked] = useState<boolean>(false);
   const [isConnectingDrive, setIsConnectingDrive] = useState<boolean>(false);

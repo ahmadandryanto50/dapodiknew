@@ -398,7 +398,7 @@ export default function App() {
   const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => {
     const OLD_APP_SCRIPT_URL_1 = 'https://script.google.com/macros/s/AKfycbwHOEkfJ7iJVAlTKUVboM7ZHd13dX9Z6adJBH6N2UwA-LbDmTrJvxPHuBB8T4kePUmJAQ/exec';
     const OLD_APP_SCRIPT_URL_2 = 'https://script.google.com/macros/s/AKfycbwCjNbFmpToPA9JATA4FlFJPESoWbqS9JzIhbF2TS7FNsTlK2ZIUMtfsPBE5ln3Q7eO/exec';
-    const ACTIVE_APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyhC26e6a4a0ORdBvnMCz7c1pDR0rQsGkcO_LfVKhxAZGYtBMGle4qbjZoNx6D_uT79/exec';
+    const ACTIVE_APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx82FotXhPvN0i9hOo_S-bctwcT5JCB6JrvUu5CHtIMEepaJj1EIl5Bf7mxPoW8JuPguA/exec';
 
     const saved = localStorage.getItem('dapodik_sync_config');
     if (saved) {

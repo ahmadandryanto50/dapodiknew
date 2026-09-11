@@ -1066,7 +1066,7 @@ export async function uploadFileToDriveViaAppsScript(
     } catch (e) {}
   }
   if (!webAppUrl) {
-    webAppUrl = 'https://script.google.com/macros/s/AKfycbyhC26e6a4a0ORdBvnMCz7c1pDR0rQsGkcO_LfVKhxAZGYtBMGle4qbjZoNx6D_uT79/exec';
+    webAppUrl = 'https://script.google.com/macros/s/AKfycbx82FotXhPvN0i9hOo_S-bctwcT5JCB6JrvUu5CHtIMEepaJj1EIl5Bf7mxPoW8JuPguA/exec';
   }
 
   // Infer MIME type if missing or octet-stream
