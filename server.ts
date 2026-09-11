@@ -164,6 +164,7 @@ async function startServer() {
       let fileSize = providedSize || 0;
       let fileUrl = "";
       let isDriveSynced = Boolean(providedDriveUrl);
+      let syncWarning = "";
 
       // If we are only saving metadata from a direct client-side upload
       if (onlySaveMetadata) {
@@ -193,14 +194,14 @@ async function startServer() {
           fileUrl = `data:${mimeType || "application/octet-stream"};base64,${cleanBase64.substring(0, 100)}...`;
         }
 
-        // Try uploading to Google Apps Script (with 30s timeout to avoid mobile browser hang)
+        // Try uploading to Google Apps Script (with 4s timeout to avoid mobile browser hang or gateway timeout)
         const savedConfig = safeReadJSON(CONFIG_FILE, null);
         const webAppUrl = savedConfig?.webAppUrl || "https://script.google.com/macros/s/AKfycbx82FotXhPvN0i9hOo_S-bctwcT5JCB6JrvUu5CHtIMEepaJj1EIl5Bf7mxPoW8JuPguA/exec";
 
         if (webAppUrl) {
           try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 30000);
+            const timeoutId = setTimeout(() => controller.abort(), 4000);
 
             const scriptRes = await fetch(webAppUrl, {
               method: "POST",
@@ -219,17 +220,29 @@ async function startServer() {
             });
             clearTimeout(timeoutId);
 
-            const resText = await scriptRes.text();
-            try {
-              const parsed = JSON.parse(resText);
-              if (parsed && parsed.status === "success" && parsed.id) {
-                driveFileUrl = parsed.webViewLink || `https://drive.google.com/file/d/${parsed.id}/view`;
-                driveFolderId = parsed.folderId || driveFolderId;
-                isDriveSynced = true;
+            if (scriptRes.status === 403) {
+              syncWarning = "Google Apps Script mengembalikan error 403 Forbidden. Harap pastikan setelan 'Who has access' (Siapa yang memiliki akses) diatur ke 'Anyone' (Siapa saja) saat melakukan deployment Web App.";
+              console.warn("Apps Script 403 Forbidden detected.");
+            } else if (!scriptRes.ok) {
+              syncWarning = `Google Apps Script mengembalikan HTTP status ${scriptRes.status}`;
+            } else {
+              const resText = await scriptRes.text();
+              try {
+                const parsed = JSON.parse(resText);
+                if (parsed && parsed.status === "success" && parsed.id) {
+                  driveFileUrl = parsed.webViewLink || `https://drive.google.com/file/d/${parsed.id}/view`;
+                  driveFolderId = parsed.folderId || driveFolderId;
+                  isDriveSynced = true;
+                } else if (parsed && parsed.status === "error") {
+                  syncWarning = parsed.message || "Error dikembalikan oleh Google Apps Script.";
+                }
+              } catch (e) {
+                syncWarning = "Gagal memproses respons dari Google Apps Script.";
               }
-            } catch (e) {}
+            }
           } catch (scriptErr: any) {
             console.warn("Apps Script Drive sync warning in /api/upload-file:", scriptErr?.message || scriptErr);
+            syncWarning = `Gagal terhubung ke Google Apps Script: ${scriptErr?.message || "Koneksi terputus / Timeout"}`;
           }
         }
       }
@@ -270,7 +283,8 @@ async function startServer() {
           ? `Berkas "${name}" berhasil disimpan dan disinkronkan ke Google Drive!` 
           : `Berkas "${name}" berhasil disimpan ke server sekolah dan dapat diakses semua perangkat!`,
         file: newItem,
-        isDriveSynced
+        isDriveSynced,
+        syncWarning: syncWarning || undefined
       });
     } catch (err: any) {
       console.error("Error in /api/upload-file:", err);

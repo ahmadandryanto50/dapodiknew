@@ -89,7 +89,14 @@
     "notif-1789054050333-h4ysc",
     "notif-1789053836525-n6g5j",
     "notif-1789053688007-hz3l6",
-    "notif-1789053549647-yl7es"
+    "notif-1789053549647-yl7es",
+    "notif-1789056932694-gxc9h",
+    "notif-1789057164006-fkjhw",
+    "notif-1789057152604-cunt7",
+    "notif-upload-1789036567945-es48",
+    "notif-1789059620612-8qgex",
+    "notif-1789059577857-otrd7",
+    "notif-upload-1789059321074-n88b"
   ],
   "deletedPermintaanAksesIds": [
     "req-1789021706564"
@@ -101,10 +108,70 @@
     "gdrive-file-1789006313406-8iema",
     "1PPNtWRcaLkJ__uC-JgDLTYo6BbBKuKwD",
     "gdrive-file-1789035040705-7m1ms",
-    "file-1789100027457-9xdy83"
+    "file-1789100027457-9xdy83",
+    "file-1789109356150-vghplc",
+    "file-1789109360296-4sdbzw",
+    "file-1789109350696-sqlq8p",
+    "file-1789109323825-xqvsfw",
+    "file-1789101881906-5uiimf",
+    "file-1789100978487-dv4a8a",
+    "file-1789110785156-4jg8k1",
+    "file-1789112607604-243ix1"
   ],
-  "notifications": [],
-  "schoolFiles": [],
+  "notifications": [
+    {
+      "id": "notif-1789112919031-2kjm2",
+      "title": "Update Akun Pengguna",
+      "message": "Data pengguna & hak akses administrator berhasil diperbarui di database.",
+      "time": "15.48",
+      "type": "info",
+      "read": false
+    }
+  ],
+  "schoolFiles": [
+    {
+      "id": "file-1789119227543-fi2mmh",
+      "name": "test.txt",
+      "category": "Umum",
+      "fileSize": 4,
+      "uploadedBy": "Pengguna",
+      "uploadedByRole": "Staff Sekolah",
+      "uploadedAt": "2026-09-11 09:33",
+      "privacy": "Public",
+      "driveFileUrl": "/uploads/file-1789119227543-fi2mmh_test.txt",
+      "driveFolderId": "1OFVFI1xhsk45_ONTihtuSHeBVvEOr44m",
+      "fileExtension": "txt",
+      "fileType": "text/plain",
+      "fileUrl": "/uploads/file-1789119227543-fi2mmh_test.txt",
+      "description": "Berkas Umum",
+      "tags": [
+        "Server",
+        "Umum",
+        "TXT"
+      ]
+    },
+    {
+      "id": "file-1789115724717-zjl0ew",
+      "name": "Raport Abdulla.pdf",
+      "category": "Arsip Tamu",
+      "fileSize": 264607,
+      "uploadedBy": "AHMAD",
+      "uploadedByRole": "Tamu / Umum",
+      "uploadedAt": "2026-09-11 08:35",
+      "privacy": "Public",
+      "driveFileUrl": "https://drive.google.com/file/d/16ef_lZaRBH_feHTYddkvm5mRnJgxSw5t/view?usp=drivesdk",
+      "driveFolderId": "1_WxjFVQfMHxCvHeC4Fvvmbo0gk06Mae-",
+      "fileExtension": "pdf",
+      "fileType": "application/pdf",
+      "fileUrl": "/uploads/file-1789115724717-zjl0ew_Raport_Abdulla.pdf",
+      "description": "Berkas tamu diunggah oleh AHMAD via Portal Berkas",
+      "tags": [
+        "GoogleDrive",
+        "Arsip",
+        "PDF"
+      ]
+    }
+  ],
   "students": [
     {
       "id": "std-imp-1789059572087-1",
@@ -18950,6 +19017,17 @@
       "email": "operator@smp.belajar.id",
       "lastLogin": "31/08/2026 21:15",
       "role": "Operator"
+    },
+    {
+      "id": "adm-9030",
+      "username": "ella",
+      "nama": "Noerlaila, S.Pd",
+      "noHp": "08517227665",
+      "password": "ella11",
+      "status": "Aktif",
+      "email": "ahmad.andryanto50@admin.smp.belajar.id",
+      "lastLogin": "-",
+      "role": "Guru"
     }
   ],
   "aplikasiLinks": [
@@ -19068,5 +19146,5 @@
     "AHMAD",
     "TES"
   ],
-  "deletedFileId": "file-1789100027457-9xdy83"
+  "deletedFileId": "file-1789112607604-243ix1"
 }

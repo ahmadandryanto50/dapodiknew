@@ -405,7 +405,7 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
     });
   };
 
-  const uploadSingleFile = async (queuedItem: QueuedFile, uploader: string): Promise<string> => {
+  const uploadSingleFile = async (queuedItem: QueuedFile, uploader: string): Promise<{ driveUrl: string; isDriveSynced: boolean; syncWarning?: string }> => {
     const { file, id } = queuedItem;
 
     // Update state to uploading
@@ -449,6 +449,9 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
     // Step A: Attempt direct client-side upload to Google Drive for 100% reliability
     try {
       console.log('Attempting super-reliable direct client-side upload to:', targetWebAppUrl);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+
       const directUploadRes = await fetch(targetWebAppUrl, {
         method: 'POST',
         headers: {
@@ -462,8 +465,11 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
           folderName: targetFolder,
           description: `Berkas tamu diunggah oleh ${uploader} via Portal Berkas (Direct Browser)`,
           parentFolderId: "1OFVFI1xhsk45_ONTihtuSHeBVvEOr44m"
-        })
+        }),
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
 
       if (directUploadRes.ok) {
         const directText = await directUploadRes.text();
@@ -515,7 +521,7 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
             driveUrl: directDriveUrl 
           } : item))
         );
-        return directDriveUrl;
+        return { driveUrl: directDriveUrl, isDriveSynced: true };
       }
       const errData = await res.json().catch(() => ({}));
       throw new Error(errData.message || `Gagal mengunggah berkas ${file.name}`);
@@ -537,7 +543,11 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
       } : item))
     );
 
-    return finalDriveUrl;
+    return { 
+      driveUrl: finalDriveUrl, 
+      isDriveSynced: Boolean(json.isDriveSynced || isDirectSuccess),
+      syncWarning: json.syncWarning 
+    };
   };
 
   const handleExecuteUpload = async () => {
@@ -559,6 +569,8 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
 
     let successCount = 0;
     let firstErrorMessage = '';
+    let hasSyncWarning = false;
+    let syncWarningText = '';
     const uploader = senderName.trim();
 
     for (let i = 0; i < queue.length; i++) {
@@ -569,7 +581,11 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
       }
 
       try {
-        await uploadSingleFile(item, uploader);
+        const uploadRes = await uploadSingleFile(item, uploader);
+        if (!uploadRes.isDriveSynced && uploadRes.syncWarning) {
+          hasSyncWarning = true;
+          syncWarningText = uploadRes.syncWarning;
+        }
         successCount++;
       } catch (err: any) {
         console.error('File upload error in queue:', err);
@@ -587,11 +603,15 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
     fetchHistory(); // Refresh history immediately after upload operations complete
 
     if (successCount === queue.length) {
-      setGlobalSuccess(`Selamat! Seluruh ${successCount} berkas Anda berhasil dikirim dan tersimpan aman di Google Drive.`);
+      if (hasSyncWarning && syncWarningText) {
+        setGlobalSuccess(`Berkas Anda berhasil disimpan di server sekolah, namun sinkronisasi Google Drive ditunda: ${syncWarningText}`);
+      } else {
+        setGlobalSuccess(`Selamat! Seluruh ${successCount} berkas Anda berhasil dikirim dan tersimpan aman.`);
+      }
       // Clear queue shortly after success
       setTimeout(() => {
         setQueue([]);
-      }, 5000);
+      }, 7000);
     } else if (successCount > 0) {
       setGlobalError(`Berhasil mengunggah ${successCount} dari ${queue.length} berkas. Beberapa berkas mengalami kegagalan: ${firstErrorMessage}`);
     } else {
