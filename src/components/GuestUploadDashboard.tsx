@@ -495,7 +495,7 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
     try {
       console.log('Attempting super-reliable direct client-side upload to:', targetWebAppUrl);
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const timeoutId = setTimeout(() => controller.abort(), 45000);
 
       const directUploadRes = await fetch(targetWebAppUrl, {
         method: 'POST',
@@ -1054,7 +1054,7 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
                       </div>
                     </div>
 
-                    {currentUser?.role !== 'Tamu / Umum' && (
+                    {currentUser && currentUser.role !== 'Tamu / Umum' && (
                       <div className="flex items-center gap-1.5 shrink-0">
                         {/* Drive View Link */}
                         {file.driveFileUrl && (

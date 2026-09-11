@@ -194,14 +194,14 @@ async function startServer() {
           fileUrl = `data:${mimeType || "application/octet-stream"};base64,${cleanBase64.substring(0, 100)}...`;
         }
 
-        // Try uploading to Google Apps Script (with 4s timeout to avoid mobile browser hang or gateway timeout)
+        // Try uploading to Google Apps Script (with robust 45s timeout to allow large file transfers)
         const savedConfig = safeReadJSON(CONFIG_FILE, null);
         const webAppUrl = savedConfig?.webAppUrl || "https://script.google.com/macros/s/AKfycbx82FotXhPvN0i9hOo_S-bctwcT5JCB6JrvUu5CHtIMEepaJj1EIl5Bf7mxPoW8JuPguA/exec";
 
         if (webAppUrl) {
           try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 4000);
+            const timeoutId = setTimeout(() => controller.abort(), 45000);
 
             const scriptRes = await fetch(webAppUrl, {
               method: "POST",
