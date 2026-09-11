@@ -3,15 +3,61 @@ import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
 
-const CONFIG_FILE = path.join(process.cwd(), "sync_config.json");
-const DATA_FILE = path.join(process.cwd(), "app_data.json");
-const UPLOADS_DIR = path.join(process.cwd(), "public", "uploads");
+let CONFIG_FILE = path.join(process.cwd(), "sync_config.json");
+let DATA_FILE = path.join(process.cwd(), "app_data.json");
+let UPLOADS_DIR = path.join(process.cwd(), "public", "uploads");
 
-if (!fs.existsSync(UPLOADS_DIR)) {
+try {
+  // Test if the current working directory is writeable (fails on read-only serverless like Cloud Run)
+  const testFile = path.join(process.cwd(), ".write_test_" + Date.now());
+  let isReadOnly = false;
   try {
-    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+    fs.writeFileSync(testFile, "test");
+    fs.unlinkSync(testFile);
   } catch (e) {
-    console.error("Failed to create uploads directory:", e);
+    isReadOnly = true;
+  }
+
+  // Force /tmp in production or if read-only filesystem is detected
+  if (isReadOnly || process.env.NODE_ENV === "production") {
+    const tmpUploads = path.join("/tmp", "uploads");
+    const tmpConfig = path.join("/tmp", "sync_config.json");
+    const tmpData = path.join("/tmp", "app_data.json");
+
+    if (!fs.existsSync("/tmp")) {
+      fs.mkdirSync("/tmp", { recursive: true });
+    }
+    if (!fs.existsSync(tmpUploads)) {
+      fs.mkdirSync(tmpUploads, { recursive: true });
+    }
+
+    // Copy initial seed files from read-only directory to writeable /tmp if not already there
+    const srcConfig = path.join(process.cwd(), "sync_config.json");
+    const srcData = path.join(process.cwd(), "app_data.json");
+
+    if (fs.existsSync(srcConfig) && !fs.existsSync(tmpConfig)) {
+      fs.copyFileSync(srcConfig, tmpConfig);
+    }
+    if (fs.existsSync(srcData) && !fs.existsSync(tmpData)) {
+      fs.copyFileSync(srcData, tmpData);
+    }
+
+    CONFIG_FILE = tmpConfig;
+    DATA_FILE = tmpData;
+    UPLOADS_DIR = tmpUploads;
+    console.log("Using writeable /tmp filesystem for serverless environment:", { CONFIG_FILE, DATA_FILE, UPLOADS_DIR });
+  } else {
+    // Standard workspace local write check
+    if (!fs.existsSync(UPLOADS_DIR)) {
+      fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+    }
+  }
+} catch (e) {
+  console.error("Failed to setup writeable directories, falling back to defaults:", e);
+  if (!fs.existsSync(UPLOADS_DIR)) {
+    try {
+      fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+    } catch (err) {}
   }
 }
 
