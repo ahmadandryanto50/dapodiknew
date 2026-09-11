@@ -114,7 +114,7 @@ async function startServer() {
     // Fallback to default
     return res.json({
       spreadsheetUrl: "1XmLmshCOhSktRfzW8uG_8RqxlxVCQt5eUVekEFLwj_M",
-      webAppUrl: "https://script.google.com/macros/s/AKfycbxo-R6-aq1A8nE30sSjsSIw_Pw1QidfRktHS2C4UIJvMJ4W-ySlS4TE5qlWKdG2fB0UhA/exec",
+      webAppUrl: "https://script.google.com/macros/s/AKfycbySsOjI3uKuEcz9bmuOX6qnANP-R_DfskBaxWNS_DrTEC2zW3LdQ93SCJf93iAHhM6vTw/exec",
       sheetId: "",
       autoSync: true,
       lastSynced: null,
@@ -196,7 +196,7 @@ async function startServer() {
 
         // Try uploading to Google Apps Script (with robust 45s timeout to allow large file transfers)
         const savedConfig = safeReadJSON(CONFIG_FILE, null);
-        const webAppUrl = savedConfig?.webAppUrl || "https://script.google.com/macros/s/AKfycbxo-R6-aq1A8nE30sSjsSIw_Pw1QidfRktHS2C4UIJvMJ4W-ySlS4TE5qlWKdG2fB0UhA/exec";
+        const webAppUrl = savedConfig?.webAppUrl || "https://script.google.com/macros/s/AKfycbySsOjI3uKuEcz9bmuOX6qnANP-R_DfskBaxWNS_DrTEC2zW3LdQ93SCJf93iAHhM6vTw/exec";
 
         if (webAppUrl) {
           try {
@@ -281,7 +281,7 @@ async function startServer() {
 
       // SINKRONISASI KE GOOGLE SPREADSHEET (Data_Berkas Sheet)
       const savedConfig = safeReadJSON(CONFIG_FILE, null);
-      const webAppUrl = savedConfig?.webAppUrl || "https://script.google.com/macros/s/AKfycbxo-R6-aq1A8nE30sSjsSIw_Pw1QidfRktHS2C4UIJvMJ4W-ySlS4TE5qlWKdG2fB0UhA/exec";
+      const webAppUrl = savedConfig?.webAppUrl || "https://script.google.com/macros/s/AKfycbySsOjI3uKuEcz9bmuOX6qnANP-R_DfskBaxWNS_DrTEC2zW3LdQ93SCJf93iAHhM6vTw/exec";
       if (webAppUrl) {
         try {
           const syncPayload = {
@@ -554,13 +554,13 @@ async function startServer() {
       
       // Also try to load fresh data from Google Sheets to merge/sync!
       const savedConfig = safeReadJSON(CONFIG_FILE, null);
-      const webAppUrl = savedConfig?.webAppUrl || "https://script.google.com/macros/s/AKfycbxo-R6-aq1A8nE30sSjsSIw_Pw1QidfRktHS2C4UIJvMJ4W-ySlS4TE5qlWKdG2fB0UhA/exec";
+      const webAppUrl = savedConfig?.webAppUrl || "https://script.google.com/macros/s/AKfycbySsOjI3uKuEcz9bmuOX6qnANP-R_DfskBaxWNS_DrTEC2zW3LdQ93SCJf93iAHhM6vTw/exec";
       let spreadsheetFiles: any[] = [];
       
       if (webAppUrl) {
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout for Google Apps Script cold-starts
+          const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout for Google Apps Script cold-starts
           const sheetsRes = await fetch(webAppUrl, {
             method: "POST",
             headers: { "Content-Type": "text/plain" },
@@ -587,17 +587,19 @@ async function startServer() {
       const fileMap = new Map<string, any>();
       
       // First, insert spreadsheet files
-      for (const f of spreadsheetFiles) {
-        if (f && f.id) {
-          fileMap.set(String(f.id), {
-            id: String(f.id),
-            name: f["Nama Berkas"] || f.name || f.Name || "",
+      for (let idx = 0; idx < spreadsheetFiles.length; idx++) {
+        const f = spreadsheetFiles[idx];
+        if (f && (f.id || f["Nama Berkas"] || f.name || f["Link Drive"] || f.driveFileUrl)) {
+          const fileId = String(f.id || f.fileId || `file-sheet-${idx}`);
+          fileMap.set(fileId, {
+            id: fileId,
+            name: f["Nama Berkas"] || f.name || f.Name || "Berkas Dokumen",
             category: f["Kategori"] || f.category || f.Category || "Umum",
             fileSize: Number(f["Ukuran File"] || f.fileSize || f.FileSize || f.size || 0),
             fileType: f.fileType || f.FileType || "application/octet-stream",
             fileExtension: f.fileExtension || f.FileExtension || "",
             uploadedAt: f["Tanggal"] || f.uploadedAt || f.UploadedAt || "",
-            uploadedBy: f["Nama Pengirim/Orang Tua"] || f.uploadedBy || f.UploadedBy || "Pengguna",
+            uploadedBy: f["Nama Pengirim/Orang Tua"] || f.uploadedBy || f.UploadedBy || "Tamu / Orang Tua",
             uploadedByRole: f.uploadedByRole || f.UploadedByRole || "Tamu / Umum",
             driveFileUrl: f["Link Drive"] || f.driveFileUrl || f.DriveFileUrl || f.url || "",
             driveFolderId: f.driveFolderId || f.DriveFolderId || "",

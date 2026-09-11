@@ -261,34 +261,78 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
 
   const fetchHistory = async () => {
     setIsLoadingHistory(true);
+    let loadedFiles: any[] = [];
+
+    // 1. First, fetch from server cache (/api/app-data)
     try {
       const res = await fetch(`/api/app-data?t=${Date.now()}`);
       if (res.ok) {
         const serverData = await res.json();
-        if (serverData && Array.isArray(serverData.schoolFiles)) {
-          const normalized = serverData.schoolFiles.map((f: any) => ({
-            ...f,
-            id: String(f.id || f.fileId || Date.now()),
-            name: f.name || f['Nama Berkas'] || f.Name || 'Berkas Dokumen',
-            uploadedBy: f.uploadedBy || f['Nama Pengirim/Orang Tua'] || f.UploadedBy || 'Tamu',
-            category: f.category || f['Kategori'] || f.Category || 'Umum',
-            uploadedAt: f.uploadedAt || f['Tanggal'] || f.UploadedAt || '',
-            driveFileUrl: f.driveFileUrl || f['Link Drive'] || f.DriveFileUrl || f.url || '',
-            fileSize: Number(f.fileSize || f['Ukuran File'] || f.FileSize || f.size || 0)
-          }));
-          const sorted = normalized.sort((a, b) => {
-            const timeA = a.uploadedAt ? new Date(a.uploadedAt.replace(/-/g, '/')).getTime() : 0;
-            const timeB = b.uploadedAt ? new Date(b.uploadedAt.replace(/-/g, '/')).getTime() : 0;
-            return timeB - timeA;
-          });
-          setHistoryFiles(sorted);
+        if (serverData && Array.isArray(serverData.schoolFiles) && serverData.schoolFiles.length > 0) {
+          loadedFiles = serverData.schoolFiles;
         }
       }
     } catch (e) {
-      console.error('Failed to fetch file history:', e);
-    } finally {
-      setIsLoadingHistory(false);
+      console.warn('Failed to fetch file history from server endpoint:', e);
     }
+
+    // 2. Fallback or Sync Direct from Google Apps Script Spreadsheet if server cache is empty
+    if (!loadedFiles || loadedFiles.length === 0) {
+      let targetWebAppUrl = "https://script.google.com/macros/s/AKfycbySsOjI3uKuEcz9bmuOX6qnANP-R_DfskBaxWNS_DrTEC2zW3LdQ93SCJf93iAHhM6vTw/exec";
+      try {
+        const configRes = await fetch('/api/sync-config');
+        if (configRes.ok) {
+          const configData = await configRes.json();
+          if (configData && configData.webAppUrl) {
+            targetWebAppUrl = configData.webAppUrl;
+          }
+        }
+      } catch (cfgErr) {
+        // ignore
+      }
+
+      if (targetWebAppUrl) {
+        try {
+          const gasRes = await fetch(targetWebAppUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ type: 'LOAD_ALL' })
+          });
+          if (gasRes.ok) {
+            const gasData = await gasRes.json();
+            if (gasData && Array.isArray(gasData.berkas) && gasData.berkas.length > 0) {
+              loadedFiles = gasData.berkas;
+            }
+          }
+        } catch (gasErr) {
+          console.warn('Direct client-side fetch from Google Apps Script failed:', gasErr);
+        }
+      }
+    }
+
+    // 3. Normalize & Sort History Items
+    if (Array.isArray(loadedFiles) && loadedFiles.length > 0) {
+      const normalized = loadedFiles.map((f: any, idx: number) => ({
+        ...f,
+        id: String(f.id || f.fileId || `file-idx-${idx}`),
+        name: f.name || f['Nama Berkas'] || f.Name || 'Berkas Dokumen',
+        uploadedBy: f.uploadedBy || f['Nama Pengirim/Orang Tua'] || f.UploadedBy || 'Tamu / Orang Tua',
+        category: f.category || f['Kategori'] || f.Category || 'Umum',
+        uploadedAt: f.uploadedAt || f['Tanggal'] || f.UploadedAt || '',
+        driveFileUrl: f.driveFileUrl || f['Link Drive'] || f.DriveFileUrl || f.url || '',
+        fileSize: Number(f.fileSize || f['Ukuran File'] || f.FileSize || f.size || 0)
+      }));
+      const sorted = normalized.sort((a, b) => {
+        const timeA = a.uploadedAt ? new Date(String(a.uploadedAt).replace(/-/g, '/')).getTime() : 0;
+        const timeB = b.uploadedAt ? new Date(String(b.uploadedAt).replace(/-/g, '/')).getTime() : 0;
+        return timeB - timeA;
+      });
+      setHistoryFiles(sorted);
+    } else {
+      setHistoryFiles([]);
+    }
+
+    setIsLoadingHistory(false);
   };
 
   const handleDeleteHistoryFile = async (fileId: string) => {
