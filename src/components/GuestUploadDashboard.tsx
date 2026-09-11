@@ -235,6 +235,30 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
     fetchHistory();
   }, []);
 
+  const formatIndonesianDate = (dateStr: string) => {
+    if (!dateStr) return 'Baru';
+    try {
+      const cleanStr = dateStr.replace(/-/g, '/');
+      const date = new Date(cleanStr);
+      if (isNaN(date.getTime())) return dateStr;
+      
+      const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+      
+      const dayName = days[date.getDay()];
+      const day = date.getDate();
+      const monthName = months[date.getMonth()];
+      const year = date.getFullYear();
+      
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      
+      return `${dayName}, ${day} ${monthName} ${year} • ${hours}:${minutes}`;
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
   const fetchHistory = async () => {
     setIsLoadingHistory(true);
     try {
@@ -446,8 +470,8 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
       }
     }
 
-    // Dynamic folder name inside Arsip Tamu based on the file title
-    const targetFolder = customTitle ? `Arsip Tamu/${customTitle}` : 'Arsip Tamu';
+    // Dynamic folder name inside Google Drive based on the custom file title
+    const targetFolder = customTitle ? customTitle : 'Umum';
 
     // Load active webAppUrl dynamically from sync-config
     let targetWebAppUrl = "https://script.google.com/macros/s/AKfycbx82FotXhPvN0i9hOo_S-bctwcT5JCB6JrvUu5CHtIMEepaJj1EIl5Bf7mxPoW8JuPguA/exec";
@@ -518,7 +542,7 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
         name: finalFileName,
         mimeType,
         base64Data: isDirectSuccess ? undefined : base64Pure, // Skip sending heavy binary data to server if direct upload succeeded
-        category: 'Arsip Tamu',
+        category: targetFolder,
         uploadedBy: uploader,
         uploadedByRole: 'Tamu / Umum',
         description: `Berkas tamu diunggah oleh ${uploader} via Portal Berkas`,
@@ -1025,7 +1049,7 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
                           {file.name}
                         </div>
                         <p className="text-[10px] text-slate-400 font-medium">
-                          {formatFileSize(file.fileSize || 0)} • {file.uploadedAt || 'Baru'}
+                          {formatFileSize(file.fileSize || 0)} • {formatIndonesianDate(file.uploadedAt)}
                         </p>
                       </div>
                     </div>

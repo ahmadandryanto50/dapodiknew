@@ -277,6 +277,50 @@ async function startServer() {
       currentData.schoolFiles = updatedFiles;
       safeWriteJSON(DATA_FILE, currentData);
 
+      // SINKRONISASI KE GOOGLE SPREADSHEET (Data_Berkas Sheet)
+      const savedConfig = safeReadJSON(CONFIG_FILE, null);
+      const webAppUrl = savedConfig?.webAppUrl || "https://script.google.com/macros/s/AKfycbx82FotXhPvN0i9hOo_S-bctwcT5JCB6JrvUu5CHtIMEepaJj1EIl5Bf7mxPoW8JuPguA/exec";
+      if (webAppUrl) {
+        try {
+          const syncPayload = {
+            type: "SYNC_BERKAS",
+            payload: [{
+              id: fileId,
+              name: newItem.name,
+              category: newItem.category,
+              fileSize: newItem.fileSize,
+              fileType: newItem.fileType,
+              fileExtension: newItem.fileExtension,
+              uploadedAt: newItem.uploadedAt,
+              uploadedBy: newItem.uploadedBy,
+              uploadedByRole: newItem.uploadedByRole,
+              driveFolderId: newItem.driveFolderId || "",
+              driveFileUrl: newItem.driveFileUrl || newItem.fileUrl || "",
+              privacy: newItem.privacy,
+              description: newItem.description,
+              tags: newItem.tags ? newItem.tags.join(",") : "",
+              allowedUserIds: "",
+              allowedRoles: ""
+            }]
+          };
+
+          const sheetsSyncRes = await fetch(webAppUrl, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain" },
+            body: JSON.stringify(syncPayload),
+            redirect: "follow"
+          });
+          
+          if (sheetsSyncRes.ok) {
+            console.log(`Successfully synced uploaded file "${newItem.name}" metadata to Google Sheets Data_Berkas.`);
+          } else {
+            console.warn(`Failed to sync uploaded file metadata to Google Sheets. Status: ${sheetsSyncRes.status}`);
+          }
+        } catch (syncErr: any) {
+          console.warn("Spreadsheet file sync error in upload-file:", syncErr?.message || syncErr);
+        }
+      }
+
       return res.json({
         success: true,
         message: isDriveSynced 
@@ -498,22 +542,95 @@ async function startServer() {
   });
 
   // API Route: Get Shared App Data Cache
-  app.get("/api/app-data", (req, res) => {
-    const data = safeReadJSON(DATA_FILE, {});
-    
-    // Filter out deleted files permanently across devices
-    const deletedFileIds: string[] = Array.isArray(data.deletedFileIds) ? data.deletedFileIds : [];
-    if (deletedFileIds.length > 0) {
+  app.get("/api/app-data", async (req, res) => {
+    try {
+      const data = safeReadJSON(DATA_FILE, {});
+      
+      // Filter out deleted files permanently across devices
+      const deletedFileIds: string[] = Array.isArray(data.deletedFileIds) ? data.deletedFileIds : [];
       const deletedSet = new Set(deletedFileIds.map(id => String(id)));
-      if (Array.isArray(data.schoolFiles)) {
-        data.schoolFiles = data.schoolFiles.filter((f: any) => f && f.id && !deletedSet.has(String(f.id)));
+      
+      // Also try to load fresh data from Google Sheets to merge/sync!
+      const savedConfig = safeReadJSON(CONFIG_FILE, null);
+      const webAppUrl = savedConfig?.webAppUrl;
+      let spreadsheetFiles: any[] = [];
+      
+      if (webAppUrl) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 3500); // 3.5s timeout for fast response
+          const sheetsRes = await fetch(webAppUrl, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain" },
+            body: JSON.stringify({ type: "LOAD_ALL" }),
+            redirect: "follow",
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+          if (sheetsRes.ok) {
+            const sheetsData = await sheetsRes.json();
+            if (sheetsData && sheetsData.status === "success" && Array.isArray(sheetsData.berkas)) {
+              spreadsheetFiles = sheetsData.berkas;
+            }
+          }
+        } catch (e: any) {
+          console.warn("Could not load fresh files from Google Sheets in /api/app-data, using local cache:", e?.message || e);
+        }
       }
-      if (Array.isArray(data.files)) {
+
+      // Merge both
+      const localFiles = Array.isArray(data.schoolFiles) ? data.schoolFiles : [];
+      
+      // Merge by id, preferring localFiles if they are newer or have custom properties, but using spreadsheetFiles
+      const fileMap = new Map<string, any>();
+      
+      // First, insert spreadsheet files
+      for (const f of spreadsheetFiles) {
+        if (f && f.id) {
+          fileMap.set(String(f.id), {
+            id: String(f.id),
+            name: f.name || f.Name || "",
+            category: f.category || f.Category || "Umum",
+            fileSize: Number(f.fileSize || f.FileSize || f.size || 0),
+            fileType: f.fileType || f.FileType || "application/octet-stream",
+            fileExtension: f.fileExtension || f.FileExtension || "",
+            uploadedAt: f.uploadedAt || f.UploadedAt || "",
+            uploadedBy: f.uploadedBy || f.UploadedBy || "Pengguna",
+            uploadedByRole: f.uploadedByRole || f.UploadedByRole || "Tamu / Umum",
+            driveFileUrl: f.driveFileUrl || f.DriveFileUrl || f.url || "",
+            driveFolderId: f.driveFolderId || f.DriveFolderId || "",
+            privacy: f.privacy || f.Privacy || "Public",
+            description: f.description || f.Description || ""
+          });
+        }
+      }
+      
+      // Then overwrite with local files
+      for (const f of localFiles) {
+        if (f && f.id) {
+          fileMap.set(String(f.id), f);
+        }
+      }
+      
+      // Filter out deleted files
+      let mergedFiles = Array.from(fileMap.values());
+      if (deletedSet.size > 0) {
+        mergedFiles = mergedFiles.filter(f => f && f.id && !deletedSet.has(String(f.id)));
+      }
+      
+      data.schoolFiles = mergedFiles;
+      
+      if (deletedFileIds.length > 0 && Array.isArray(data.files)) {
         data.files = data.files.filter((f: any) => f && f.id && !deletedSet.has(String(f.id)));
       }
+      
+      return res.json(data);
+    } catch (e: any) {
+      console.error("Error in GET /api/app-data:", e);
+      // Fail-safe: return local cache
+      const data = safeReadJSON(DATA_FILE, {});
+      return res.json(data);
     }
-    
-    return res.json(data);
   });
 
   // API Route: Save Shared App Data Cache
