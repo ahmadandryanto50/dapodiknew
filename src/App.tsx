@@ -14,9 +14,7 @@ import {
   NotificationItem,
   AppDisplayConfig,
   SchoolProfile,
-  AdminUser,
-  SchoolFileItem,
-  FileAccessRequest
+  AdminUser
 } from './types';
 import { 
   initialStudents, 
@@ -37,14 +35,13 @@ import { RaporModule } from './components/RaporModule';
 import { LaporanModule } from './components/LaporanModule';
 import { SettingsModule } from './components/SettingsModule';
 import { AplikasiModule } from './components/AplikasiModule';
-import { BerkasModule } from './components/BerkasModule';
+import { GuestUploadDashboard } from './components/GuestUploadDashboard';
 import { QuickSearchModal } from './components/QuickSearchModal';
 import { NotificationDrawer } from './components/NotificationDrawer';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { SafeImage } from './components/SafeImage';
 import { formatDateIndonesian, cleanLeadingZerosCode } from './utils/dateUtils';
 import { loadFromGoogleSheets, syncToGoogleSheets } from './services/googleSheetsService';
-import { initialSchoolFiles, initialAccessRequests } from './data/mockFiles';
 import { 
   Home, 
   School,
@@ -454,28 +451,6 @@ export default function App() {
     return [];
   });
 
-  const [schoolFiles, setSchoolFiles] = useState<SchoolFileItem[]>(() => {
-    try {
-      const saved = localStorage.getItem('dapodik_school_files_v3');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      }
-    } catch (e) {}
-    return [];
-  });
-
-  const [accessRequests, setAccessRequests] = useState<FileAccessRequest[]>(() => {
-    try {
-      const saved = localStorage.getItem('dapodik_file_access_requests_v3');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      }
-    } catch (e) {}
-    return [];
-  });
-
   const [customFolders, setCustomFolders] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('dapodik_custom_folders');
@@ -494,7 +469,6 @@ export default function App() {
   const [isInitialized, setIsInitialized] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [settingsInitialFilter, setSettingsInitialFilter] = useState<'all' | '1' | '2' | '3' | '4' | '5'>('all');
-  const [berkasAutoOpenUpload, setBerkasAutoOpenUpload] = useState<boolean>(false);
 
   const notificationsRef = useRef<NotificationItem[]>(notifications);
   useEffect(() => {
@@ -522,9 +496,7 @@ export default function App() {
     customAdministrators = administrators,
     customNotifications = notificationsRef.current,
     customAplikasiLinks = aplikasiLinks,
-    customDeletedNotifIds = getDeletedNotifIds(),
-    customSchoolFiles = schoolFiles,
-    customAccessRequests = accessRequests
+    customDeletedNotifIds = getDeletedNotifIds()
   ) => {
     if (!isInitialized) return;
     try {
@@ -541,9 +513,7 @@ export default function App() {
           administrators: customAdministrators,
           notifications: customNotifications,
           aplikasiLinks: customAplikasiLinks,
-          deletedNotifIds: customDeletedNotifIds,
-          schoolFiles: customSchoolFiles,
-          permintaanAkses: customAccessRequests
+          deletedNotifIds: customDeletedNotifIds
         })
       });
     } catch (err) {
@@ -667,29 +637,9 @@ export default function App() {
     localStorage.setItem('dapodik_aplikasi_links', JSON.stringify(aplikasiLinks));
     if (!isSyncingFromServerRef.current) {
       lastLocalMutationRef.current = Date.now();
-      saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks, getDeletedNotifIds(), schoolFiles, accessRequests);
+      saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks, getDeletedNotifIds());
     }
   }, [aplikasiLinks, isInitialized]);
-
-  useEffect(() => {
-    if (!isInitialized) return;
-    localStorage.setItem('dapodik_school_files_v3', JSON.stringify(schoolFiles));
-    if (!isSyncingFromServerRef.current) {
-      lastLocalMutationRef.current = Date.now();
-      saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks, getDeletedNotifIds(), schoolFiles, accessRequests);
-      triggerAutoSync(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, false, notificationsRef.current, undefined, schoolFiles, accessRequests);
-    }
-  }, [schoolFiles, isInitialized]);
-
-  useEffect(() => {
-    if (!isInitialized) return;
-    localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(accessRequests));
-    if (!isSyncingFromServerRef.current) {
-      lastLocalMutationRef.current = Date.now();
-      saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks, getDeletedNotifIds(), schoolFiles, accessRequests);
-      triggerAutoSync(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, false, notificationsRef.current, undefined, schoolFiles, accessRequests);
-    }
-  }, [accessRequests, isInitialized]);
 
   // Auth Handlers
   const handleLogin = (user: AdminUser) => {
@@ -760,7 +710,7 @@ export default function App() {
         const result = await loadFromGoogleSheets(currentCfg);
         if (result && result.success && result.data) {
           const {
-            siswa, ptk, sarpras, rapor, administrator, pengaturan, profilSekolah, aplikasi, notifikasi, permintaanAkses, berkas
+            siswa, ptk, sarpras, rapor, administrator, pengaturan, profilSekolah, aplikasi, notifikasi
           } = result.data;
 
           isSyncingFromServerRef.current = true;
@@ -794,32 +744,6 @@ export default function App() {
             setNotifications(mergedNotifs);
             notificationsRef.current = mergedNotifs;
             localStorage.setItem('dapodik_notifications', JSON.stringify(mergedNotifs));
-          }
-          if (Array.isArray(permintaanAkses)) {
-            setAccessRequests(permintaanAkses);
-            localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(permintaanAkses));
-          }
-          let pulledFiles = schoolFiles;
-          if (Array.isArray(berkas) && berkas.length > 0) {
-            pulledFiles = berkas;
-            setSchoolFiles(pulledFiles);
-            localStorage.setItem('dapodik_school_files_v3', JSON.stringify(pulledFiles));
-          } else if (schoolFiles && schoolFiles.length > 0) {
-            pulledFiles = schoolFiles;
-          } else {
-            // If empty in this browser (e.g. Mozilla/Mobile), fetch from server cache
-            try {
-              const cacheRes = await fetch(`/api/app-data?t=${Date.now()}`);
-              if (cacheRes.ok) {
-                const cacheData = await cacheRes.json();
-                const serverFiles = cacheData?.schoolFiles || cacheData?.files;
-                if (Array.isArray(serverFiles) && serverFiles.length > 0) {
-                  pulledFiles = serverFiles;
-                  setSchoolFiles(pulledFiles);
-                  localStorage.setItem('dapodik_school_files_v3', JSON.stringify(pulledFiles));
-                }
-              }
-            } catch (e) {}
           }
           if (Array.isArray(aplikasi)) {
             setAplikasiLinks(aplikasi);
@@ -863,9 +787,7 @@ export default function App() {
             Array.isArray(administrator) ? administrator : administrators,
             Array.isArray(notifikasi) ? notifikasi : notificationsRef.current,
             Array.isArray(aplikasi) ? aplikasi : aplikasiLinks,
-            getDeletedNotifIds(),
-            pulledFiles,
-            Array.isArray(permintaanAkses) ? permintaanAkses : accessRequests
+            getDeletedNotifIds()
           );
 
           const nowStr = new Date().toLocaleString('id-ID');
@@ -926,15 +848,6 @@ export default function App() {
             notificationsRef.current = serverData.notifications;
             localStorage.setItem('dapodik_notifications', JSON.stringify(serverData.notifications));
           }
-          if (serverData.permintaanAkses && Array.isArray(serverData.permintaanAkses)) {
-            setAccessRequests(serverData.permintaanAkses);
-            localStorage.setItem('dapodik_file_access_requests_v3', JSON.stringify(serverData.permintaanAkses));
-          }
-          const serverFiles = serverData.schoolFiles || serverData.files;
-          if (serverFiles && Array.isArray(serverFiles)) {
-            setSchoolFiles(serverFiles);
-            localStorage.setItem('dapodik_school_files_v3', JSON.stringify(serverFiles));
-          }
           if (serverData.displayConfig) {
             setDisplayConfig(serverData.displayConfig);
             localStorage.setItem('dapodik_display_config', JSON.stringify(serverData.displayConfig));
@@ -974,10 +887,6 @@ export default function App() {
           if (cacheRes.ok) {
             const serverData = await cacheRes.json();
             if (serverData) {
-              const sf = serverData.schoolFiles || serverData.files;
-              if (Array.isArray(sf) && sf.length > 0) {
-                setSchoolFiles(prev => prev.length === 0 ? sf : prev);
-              }
               if (Array.isArray(serverData.customFolders) && serverData.customFolders.length > 0) {
                 setCustomFolders(serverData.customFolders);
               }
@@ -1204,8 +1113,6 @@ export default function App() {
       message: string;
       type?: 'info' | 'success' | 'warning' | 'error';
     },
-    customSchoolFiles = schoolFiles,
-    customAccessRequests = accessRequests,
     customAplikasiLinks = aplikasiLinks
   ) => {
     // Persiapkan notifikasi terbaru jika ada pendingNotification
@@ -1233,9 +1140,7 @@ export default function App() {
       customAdministrators,
       activeNotifs,
       currentAplikasi,
-      getDeletedNotifIds(),
-      customSchoolFiles,
-      customAccessRequests
+      getDeletedNotifIds()
     );
 
     // Otomatis simpan & sync perubahan ke Google Spreadsheet
@@ -1259,9 +1164,7 @@ export default function App() {
         profilSekolah: profilSekolahArray,
         administrator: customAdministrators,
         notifikasi: activeNotifs,
-        aplikasi: currentAplikasi,
-        permintaanAkses: customAccessRequests,
-        berkas: customSchoolFiles
+        aplikasi: currentAplikasi
       }).then(res => {
         if (res && res.success) {
           const nowStr = new Date().toLocaleString('id-ID');
@@ -1305,9 +1208,7 @@ export default function App() {
       administrators,
       notificationsRef.current,
       aplikasiLinks,
-      getDeletedNotifIds(),
-      schoolFiles,
-      accessRequests
+      getDeletedNotifIds()
     );
     showToast('Seluruh cache data offline (Siswa, PTK, Sarpras, Rapor) berhasil dibersihkan permanen!');
   };
@@ -1332,8 +1233,6 @@ export default function App() {
         message: 'Pengaturan tautan pintasan berhasil diperbarui dan tersimpan di database.',
         type: 'success'
       },
-      schoolFiles,
-      accessRequests,
       newLinks
     );
   };
@@ -2231,13 +2130,8 @@ export default function App() {
         {activeTab === 'home' && (
           <WelcomeHero
             onNavigate={(tab) => {
-              setBerkasAutoOpenUpload(false);
               setSettingsInitialFilter('all');
               setActiveTab(tab);
-            }}
-            onOpenUploadBerkas={() => {
-              setBerkasAutoOpenUpload(true);
-              setActiveTab('berkas');
             }}
             onOpenEditDisplay={handleOpenEditDisplay}
             syncConfig={syncConfig}
@@ -2364,20 +2258,18 @@ export default function App() {
 
         {activeTab === 'berkas' && (
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-            <BerkasModule
+            <div className="mb-4">
+              <button
+                onClick={() => setActiveTab('home')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+              >
+                &larr; Kembali ke Beranda
+              </button>
+            </div>
+            <GuestUploadDashboard
               currentUser={currentUser}
-              onBackToHome={() => {
-                setBerkasAutoOpenUpload(false);
-                setActiveTab('home');
-              }}
-              autoOpenUpload={berkasAutoOpenUpload}
-              syncConfig={syncConfig}
-              files={schoolFiles}
-              setFiles={setSchoolFiles}
-              accessRequests={accessRequests}
-              setAccessRequests={setAccessRequests}
-              customFolders={customFolders}
-              setCustomFolders={setCustomFolders}
+              displayConfig={displayConfig}
+              schoolProfile={schoolProfile}
             />
           </div>
         )}
@@ -2527,7 +2419,7 @@ export default function App() {
                 { id: 'rapor' as ActiveTab, label: 'Penilaian Rapor', icon: FileText, desc: 'Capaian kompetensi & nilai' },
                 { id: 'laporan' as ActiveTab, label: 'Laporan & Statistik', icon: BarChart3, desc: 'Rekapitulasi grafik & analisis' },
                 { id: 'aplikasi' as ActiveTab, label: 'Portal Aplikasi', icon: Laptop, desc: 'Tautan eksternal & pintasan' },
-                { id: 'berkas' as ActiveTab, label: 'Arsip & Berkas', icon: FolderLock, desc: 'Google Drive & repositori dokumen' },
+                { id: 'berkas' as ActiveTab, label: 'Portal Berkas', icon: FolderLock, desc: 'Kelola & upload berkas sekolah' },
                 ...(currentUser?.role === 'Administrator' || currentUser?.role === 'Operator' ? [
                   { id: 'pengaturan' as ActiveTab, label: 'Pengaturan Database', icon: Settings, desc: 'Konfigurasi cloud & akun' }
                 ] : [])

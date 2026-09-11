@@ -341,24 +341,34 @@ async function startServer() {
         } catch (postErr) {}
       }
 
+      // Filter out deleted files permanently across devices
+      const cachedData = safeReadJSON(DATA_FILE, {});
+      const deletedFileIds: string[] = Array.isArray(cachedData.deletedFileIds) ? cachedData.deletedFileIds : [];
+      const deletedSet = new Set(deletedFileIds.map(id => String(id)));
+
       if (data && data.status === 'success') {
+        if (deletedFileIds.length > 0 && Array.isArray(data.berkas)) {
+          data.berkas = data.berkas.filter((b: any) => b && b.id && !deletedSet.has(String(b.id)));
+        }
         return res.json(data);
       } else {
         // Fallback to locally cached app_data.json so multi-device/browser sync never fails
-        const cached = safeReadJSON(DATA_FILE, null);
-        if (cached) {
+        if (cachedData) {
+          const unfilteredFiles = cachedData.schoolFiles || cachedData.files || [];
+          const filteredFiles = unfilteredFiles.filter((b: any) => b && b.id && !deletedSet.has(String(b.id)));
+          
           return res.json({
             status: 'success',
             source: 'cache',
-            siswa: cached.students || [],
-            ptk: cached.teachers || [],
-            sarpras: cached.sarpras || [],
-            rapor: cached.reports || [],
-            administrator: cached.administrators || [],
-            aplikasi: cached.aplikasiLinks || [],
-            notifikasi: cached.notifications || [],
-            permintaanAkses: cached.permintaanAkses || [],
-            berkas: cached.schoolFiles || cached.files || []
+            siswa: cachedData.students || [],
+            ptk: cachedData.teachers || [],
+            sarpras: cachedData.sarpras || [],
+            rapor: cachedData.reports || [],
+            administrator: cachedData.administrators || [],
+            aplikasi: cachedData.aplikasiLinks || [],
+            notifikasi: cachedData.notifications || [],
+            permintaanAkses: cachedData.permintaanAkses || [],
+            berkas: filteredFiles
           });
         }
 
@@ -372,6 +382,11 @@ async function startServer() {
       // Fallback to locally cached app_data.json
       const cached = safeReadJSON(DATA_FILE, null);
       if (cached) {
+        const deletedFileIds: string[] = Array.isArray(cached.deletedFileIds) ? cached.deletedFileIds : [];
+        const deletedSet = new Set(deletedFileIds.map(id => String(id)));
+        const unfilteredFiles = cached.schoolFiles || cached.files || [];
+        const filteredFiles = unfilteredFiles.filter((b: any) => b && b.id && !deletedSet.has(String(b.id)));
+
         return res.json({
           status: 'success',
           source: 'cache',
@@ -383,7 +398,7 @@ async function startServer() {
           aplikasi: cached.aplikasiLinks || [],
           notifikasi: cached.notifications || [],
           permintaanAkses: cached.permintaanAkses || [],
-          berkas: cached.schoolFiles || cached.files || []
+          berkas: filteredFiles
         });
       }
       return res.json({ status: 'error', message: err?.message || 'Gagal memuat data dari Google Sheets' });
@@ -405,6 +420,19 @@ async function startServer() {
   // API Route: Get Shared App Data Cache
   app.get("/api/app-data", (req, res) => {
     const data = safeReadJSON(DATA_FILE, {});
+    
+    // Filter out deleted files permanently across devices
+    const deletedFileIds: string[] = Array.isArray(data.deletedFileIds) ? data.deletedFileIds : [];
+    if (deletedFileIds.length > 0) {
+      const deletedSet = new Set(deletedFileIds.map(id => String(id)));
+      if (Array.isArray(data.schoolFiles)) {
+        data.schoolFiles = data.schoolFiles.filter((f: any) => f && f.id && !deletedSet.has(String(f.id)));
+      }
+      if (Array.isArray(data.files)) {
+        data.files = data.files.filter((f: any) => f && f.id && !deletedSet.has(String(f.id)));
+      }
+    }
+    
     return res.json(data);
   });
 

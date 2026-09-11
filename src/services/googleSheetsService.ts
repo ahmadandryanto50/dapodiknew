@@ -1,4 +1,4 @@
-import { Student, TeacherStaff, SarprasItem, StudentReport, SyncConfig, AppDisplayConfig, SchoolProfile, AdminUser, NotificationItem, FileAccessRequest, SchoolFileItem } from '../types';
+import { Student, TeacherStaff, SarprasItem, StudentReport, SyncConfig, AppDisplayConfig, SchoolProfile, AdminUser, NotificationItem } from '../types';
 
 export const APPS_SCRIPT_TEMPLATE = `/**
  * =========================================================================
@@ -139,8 +139,6 @@ function doPost(e) {
         profilSekolah: getSheetData(ss, 'Profil_Sekolah'),
         aplikasi: getSheetData(ss, 'Data_Aplikasi'),
         notifikasi: getSheetData(ss, 'Notifikasi'),
-        permintaanAkses: getSheetData(ss, 'Permintaan_Akses_Berkas'),
-        berkas: getSheetData(ss, 'Data_Berkas'),
         status: 'success'
       };
       return ContentService.createTextOutput(JSON.stringify(result))
@@ -159,8 +157,6 @@ function doPost(e) {
       if (data.profilSekolah !== undefined) saveSheetData(ss, 'Profil_Sekolah', data.profilSekolah);
       if (data.aplikasi !== undefined) saveSheetData(ss, 'Data_Aplikasi', data.aplikasi);
       if (data.notifikasi !== undefined) saveSheetData(ss, 'Notifikasi', data.notifikasi, HEADERS_MAP['Notifikasi']);
-      if (data.permintaanAkses !== undefined) saveSheetData(ss, 'Permintaan_Akses_Berkas', data.permintaanAkses, HEADERS_MAP['Permintaan_Akses_Berkas']);
-      if (data.berkas !== undefined) saveSheetData(ss, 'Data_Berkas', data.berkas, HEADERS_MAP['Data_Berkas']);
     } else if (data.type === 'SYNC_SISWA') {
       saveSheetData(ss, 'Data_Siswa', data.payload, HEADERS_MAP['Data_Siswa']);
     } else if (data.type === 'SYNC_SISWA_KELUAR') {
@@ -642,35 +638,6 @@ function parseSheetsResult(result: any) {
       administrator: Array.isArray(result.administrator) ? result.administrator : [],
       profilSekolah: Array.isArray(result.profilSekolah) ? result.profilSekolah : [],
       aplikasi: Array.isArray(result.aplikasi) ? result.aplikasi : [],
-      permintaanAkses: (result.permintaanAkses || []).map((p: any, idx: number) => {
-        const id = String(p.id || `req-pulled-${Date.now()}-${idx}`);
-        const fileId = String(p.fileId || '');
-        const fileName = String(p.fileName || '');
-        const requesterName = String(p.requesterName || '');
-        const requesterRole = String(p.requesterRole || 'Guru');
-        const requesterEmail = p.requesterEmail ? String(p.requesterEmail) : undefined;
-        const requestedAt = String(p.requestedAt || '');
-        const reason = String(p.reason || '');
-        const rawStatus = String(p.status || 'pending').toLowerCase();
-        const status = (['approved', 'rejected', 'revoked', 'inactive'].includes(rawStatus) ? rawStatus : 'pending') as 'pending' | 'approved' | 'rejected' | 'revoked' | 'inactive';
-        const reviewedBy = p.reviewedBy ? String(p.reviewedBy) : undefined;
-        const reviewedAt = p.reviewedAt ? String(p.reviewedAt) : undefined;
-        const reviewNotes = p.reviewNotes ? String(p.reviewNotes) : undefined;
-        return {
-          id,
-          fileId,
-          fileName,
-          requesterName,
-          requesterRole,
-          requesterEmail,
-          requestedAt,
-          reason,
-          status,
-          reviewedBy,
-          reviewedAt,
-          reviewNotes
-        };
-      }).filter((p: FileAccessRequest) => p.id && (p.fileId || p.fileName)),
       notifikasi: (result.notifikasi || []).map((n: any, idx: number) => {
         const id = String(n.id || n.ID || `notif-${Date.now()}-${idx}`);
         const title = String(n.title || n.Judul || n.judul || n.Title || '');
@@ -681,72 +648,7 @@ function parseSheetsResult(result: any) {
         const rawRead = n.read !== undefined ? n.read : (n.readStatus !== undefined ? n.readStatus : n.dibaca);
         const read = Boolean(rawRead === true || rawRead === 'true' || rawRead === 'TRUE' || rawRead === 1 || rawRead === '1');
         return { id, title, message, time, type, read };
-      }).filter((n: NotificationItem) => n.title || n.message),
-      berkas: (result.berkas || result.files || result.schoolFiles || []).map((b: any, idx: number) => {
-        const id = String(b.id || `file-${Date.now()}-${idx}`);
-        const name = String(b.name || 'Berkas Tanpa Nama');
-        const category = String(b.category || 'Dokumen Lainnya');
-        const fileSize = typeof b.fileSize === 'number' ? b.fileSize : Number(b.fileSize || 0);
-        const fileType = String(b.fileType || 'application/octet-stream');
-        const fileExtension = String(b.fileExtension || (name.includes('.') ? name.split('.').pop() : 'bin')).toLowerCase();
-        const uploadedAt = String(b.uploadedAt || '');
-        const uploadedBy = String(b.uploadedBy || 'Administrator');
-        const uploadedByRole = String(b.uploadedByRole || 'Administrator');
-        const driveFolderId = b.driveFolderId ? String(b.driveFolderId) : undefined;
-        const driveFileUrl = b.driveFileUrl ? String(b.driveFileUrl) : undefined;
-        const privacy = (['Restricted', 'Guru Only', 'Public'].includes(b.privacy) ? b.privacy : 'Restricted') as 'Restricted' | 'Guru Only' | 'Public';
-        const description = b.description ? String(b.description) : undefined;
-        let tags: string[] = [];
-        if (Array.isArray(b.tags)) {
-          tags = b.tags.map(String);
-        } else if (typeof b.tags === 'string' && b.tags.trim()) {
-          try {
-            if (b.tags.startsWith('[')) {
-              tags = JSON.parse(b.tags);
-            } else {
-              tags = b.tags.split(',').map((t: string) => t.trim()).filter(Boolean);
-            }
-          } catch (e) {
-            tags = [b.tags.trim()];
-          }
-        }
-        let allowedUserIds: string[] | undefined = undefined;
-        if (Array.isArray(b.allowedUserIds)) {
-          allowedUserIds = b.allowedUserIds.map(String);
-        } else if (typeof b.allowedUserIds === 'string' && b.allowedUserIds.trim()) {
-          try {
-            if (b.allowedUserIds.startsWith('[')) allowedUserIds = JSON.parse(b.allowedUserIds);
-            else allowedUserIds = b.allowedUserIds.split(',').map((u: string) => u.trim());
-          } catch (e) {}
-        }
-        let allowedRoles: string[] | undefined = undefined;
-        if (Array.isArray(b.allowedRoles)) {
-          allowedRoles = b.allowedRoles.map(String);
-        } else if (typeof b.allowedRoles === 'string' && b.allowedRoles.trim()) {
-          try {
-            if (b.allowedRoles.startsWith('[')) allowedRoles = JSON.parse(b.allowedRoles);
-            else allowedRoles = b.allowedRoles.split(',').map((r: string) => r.trim());
-          } catch (e) {}
-        }
-        return {
-          id,
-          name,
-          category,
-          fileSize,
-          fileType,
-          fileExtension,
-          uploadedAt,
-          uploadedBy,
-          uploadedByRole,
-          driveFolderId,
-          driveFileUrl,
-          privacy,
-          description,
-          tags,
-          allowedUserIds,
-          allowedRoles
-        };
-      }).filter((b: SchoolFileItem) => b.id && b.name)
+      }).filter((n: NotificationItem) => n.title || n.message)
     }
   };
 }
@@ -763,8 +665,6 @@ export async function syncToGoogleSheets(
     profilSekolah?: Array<{ key: string; value: string }>;
     aplikasi?: any[];
     notifikasi?: NotificationItem[];
-    permintaanAkses?: FileAccessRequest[];
-    berkas?: SchoolFileItem[];
   }
 ): Promise<{ success: boolean; message: string }> {
   if (!config.webAppUrl) {
@@ -775,16 +675,6 @@ export async function syncToGoogleSheets(
   }
 
   try {
-    const sanitizedBerkas = (data.berkas || []).map(f => {
-      const { dataUrl, ...rest } = f;
-      return {
-        ...rest,
-        tags: JSON.stringify(f.tags || []),
-        allowedUserIds: JSON.stringify(f.allowedUserIds || []),
-        allowedRoles: JSON.stringify(f.allowedRoles || [])
-      };
-    });
-
     const isKeluar = (status?: string) => {
       if (!status) return false;
       const s = String(status).trim().toLowerCase();
@@ -837,8 +727,6 @@ export async function syncToGoogleSheets(
       profilSekolah: data.profilSekolah || [],
       aplikasi: data.aplikasi || [],
       notifikasi: data.notifikasi || [],
-      permintaanAkses: data.permintaanAkses || [],
-      berkas: sanitizedBerkas,
       timestamp: new Date().toLocaleString('id-ID')
     };
 
@@ -865,8 +753,6 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
     profilSekolah: Array<{ key: string; value: string }>;
     aplikasi?: any[];
     notifikasi?: NotificationItem[];
-    permintaanAkses?: FileAccessRequest[];
-    berkas?: SchoolFileItem[];
   };
 }> {
   if (!config.webAppUrl) {
@@ -932,9 +818,7 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
               ? Object.entries(cache.schoolProfile).map(([k, v]) => ({ key: k, value: v !== undefined && v !== null ? String(v) : '' }))
               : [],
             aplikasi: cache.aplikasiLinks || [],
-            notifikasi: cache.notifications || [],
-            permintaanAkses: cache.permintaanAkses || [],
-            berkas: cache.schoolFiles || cache.files || []
+            notifikasi: cache.notifications || []
           }
         };
       }
@@ -995,148 +879,7 @@ export async function syncNotifikasiToGoogleSheets(
   return await callProxyOrDirectPost(config.webAppUrl, payload);
 }
 
-export async function syncPermintaanAksesToGoogleSheets(
-  config: SyncConfig,
-  requests: FileAccessRequest[]
-): Promise<{ success: boolean; message: string }> {
-  if (!config.webAppUrl) {
-    return { success: false, message: 'URL Google Apps Script belum dikonfigurasi.' };
-  }
-  const payload = {
-    type: 'SYNC_PERMINTAAN_AKSES',
-    payload: requests
-  };
-  return await callProxyOrDirectPost(config.webAppUrl, payload);
-}
-
-export async function syncBerkasToGoogleSheets(
-  config: SyncConfig,
-  files: SchoolFileItem[]
-): Promise<{ success: boolean; message: string }> {
-  if (!config.webAppUrl) {
-    return { success: false, message: 'URL Google Apps Script belum dikonfigurasi.' };
-  }
-  // Strip large dataUrl to ensure Google Sheets cell limits (50k chars) are not exceeded
-  const sanitized = files.map(f => {
-    const { dataUrl, ...rest } = f;
-    return {
-      ...rest,
-      tags: JSON.stringify(f.tags || []),
-      allowedUserIds: JSON.stringify(f.allowedUserIds || []),
-      allowedRoles: JSON.stringify(f.allowedRoles || [])
-    };
-  });
-  const payload = {
-    type: 'SYNC_BERKAS',
-    payload: sanitized
-  };
-  return await callProxyOrDirectPost(config.webAppUrl, payload);
-}
-
-export async function uploadFileToDriveViaAppsScript(
-  config: SyncConfig | null | undefined,
-  fileInfo: {
-    name: string;
-    type?: string;
-    base64Data: string;
-    category?: string;
-    folderName?: string;
-    description?: string;
-    parentFolderId?: string;
-  }
-): Promise<{
-  success: boolean;
-  message?: string;
-  id?: string;
-  name?: string;
-  webViewLink?: string;
-  folderId?: string;
-  folderName?: string;
-  size?: number;
-  mimeType?: string;
-}> {
-  let webAppUrl = config?.webAppUrl;
-  if (!webAppUrl) {
-    try {
-      const saved = localStorage.getItem('dapodik_sync_config');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed?.webAppUrl) webAppUrl = parsed.webAppUrl;
-      }
-    } catch (e) {}
-  }
-  if (!webAppUrl) {
-    webAppUrl = 'https://script.google.com/macros/s/AKfycbx82FotXhPvN0i9hOo_S-bctwcT5JCB6JrvUu5CHtIMEepaJj1EIl5Bf7mxPoW8JuPguA/exec';
-  }
-
-  // Infer MIME type if missing or octet-stream
-  let safeMime = fileInfo.type;
-  if (!safeMime || safeMime === 'application/octet-stream') {
-    const ext = fileInfo.name.split('.').pop()?.toLowerCase();
-    if (ext === 'pdf') safeMime = 'application/pdf';
-    else if (ext === 'jpg' || ext === 'jpeg') safeMime = 'image/jpeg';
-    else if (ext === 'png') safeMime = 'image/png';
-    else if (ext === 'docx') safeMime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-    else if (ext === 'xlsx') safeMime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-    else if (ext === 'pptx') safeMime = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
-    else safeMime = 'application/octet-stream';
-  }
-
-  // Strip prefix from base64 if passed with dataUrl header
-  let cleanBase64 = fileInfo.base64Data;
-  if (cleanBase64 && cleanBase64.includes(',')) {
-    cleanBase64 = cleanBase64.split(',')[1];
-  }
-
-  const payload = {
-    type: 'UPLOAD_FILE_TO_DRIVE',
-    fileName: fileInfo.name,
-    mimeType: safeMime,
-    base64Data: cleanBase64,
-    folderName: fileInfo.folderName || fileInfo.category || 'Berkas Dapodik',
-    description: fileInfo.description || '',
-    parentFolderId: fileInfo.parentFolderId || ''
-  };
-
-  const res = await callProxyOrDirectPost(webAppUrl, payload);
-  if (res.success && res.data) {
-    const d = res.data;
-    if (d.status === 'success' && d.id) {
-      return {
-        success: true,
-        id: d.id,
-        name: d.name || fileInfo.name,
-        webViewLink: d.webViewLink || `https://drive.google.com/file/d/${d.id}/view`,
-        folderId: d.folderId || 'root',
-        folderName: d.folderName || fileInfo.folderName || fileInfo.category || 'Berkas Dapodik',
-        size: d.size || 0,
-        mimeType: d.mimeType || safeMime
-      };
-    }
-    if (d.status === 'error') {
-      return {
-        success: false,
-        message: d.message || 'Gagal menyimpan berkas di Google Drive (Apps Script error).'
-      };
-    }
-    if (typeof d.text === 'string' && (d.text.includes('<!DOCTYPE') || d.text.includes('html'))) {
-      return {
-        success: false,
-        message: 'Google Apps Script belum diizinkan atau pengaturan Akses (Who has access) belum di-set ke "Siapa saja" (Anyone).'
-      };
-    }
-    if (d.message) {
-      return {
-        success: false,
-        message: d.message
-      };
-    }
-  }
-  return {
-    success: false,
-    message: res.message || 'Gagal terhubung ke Google Drive via Apps Script. Pastikan URL Apps Script valid.'
-  };
-}
+// Removed file upload/sync functions
 
 export function downloadKodeGsFile() {
   try {

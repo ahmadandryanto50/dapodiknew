@@ -191,22 +191,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         folderName: targetFolder
       });
 
-      // Fetch the updated files and sync them to Google Sheets so they aren't lost across instances!
-      if (syncConfig && syncConfig.webAppUrl) {
-        try {
-          const cacheRes = await fetch(`/api/app-data?t=${Date.now()}`);
-          if (cacheRes.ok) {
-            const cacheData = await cacheRes.json();
-            if (Array.isArray(cacheData.schoolFiles)) {
-              const { syncBerkasToGoogleSheets } = await import('../services/googleSheetsService');
-              await syncBerkasToGoogleSheets(syncConfig, cacheData.schoolFiles);
-            }
-          }
-        } catch (e) {
-          console.error('Failed to sync to Google Sheets after direct upload:', e);
-        }
-      }
-
       setDirectFiles([]);
       setDirectDescription('');
     } catch (err: any) {
@@ -730,30 +714,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 )}
               </button>
 
-              {/* Divider for Direct Access without Login */}
-              <div className="relative my-3.5 flex items-center justify-center">
-                <div className="border-t border-slate-200 w-full" />
-                <span className="bg-white px-2.5 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
-                  ATAU AKSES LANGSUNG (BEBAS LOGIN EMAIL)
-                </span>
-              </div>
 
-              {/* Unggah Berkas Tanpa Login Button */}
-              <button
-                type="button"
-                id="btn-login-direct-upload"
-                onClick={() => {
-                  setDirectUploadSuccess(null);
-                  setDirectUploadError(null);
-                  setIsDirectUploadOpen(true);
-                }}
-                className="w-full py-3 px-4 rounded-2xl bg-amber-400 hover:bg-amber-300 active:scale-[0.98] text-slate-950 font-black text-xs sm:text-sm tracking-wide shadow-md shadow-amber-400/25 flex items-center justify-center gap-2.5 transition-all cursor-pointer border border-amber-500/40 group"
-              >
-                <div className="w-6 h-6 rounded-lg bg-amber-500/30 flex items-center justify-center text-slate-950">
-                  <Upload className="w-4 h-4 stroke-[2.5]" />
-                </div>
-                <span>UNGGAH BERKAS (TANPA LOGIN EMAIL)</span>
-              </button>
 
               {/* Masuk sebagai Tamu Button */}
               <button

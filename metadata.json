@@ -1,7 +1,9 @@
 {
   "name": "Dapodik Kemendikbudristek",
   "description": "Sistem Data Pokok Pendidikan Terintegrasi dengan sinkronisasi Google Sheets real-time, manajemen Data Siswa, PTK (25 Guru & 9 Tendik), Sarpras, Rapor, Laporan, dan Repositori Berkas Google Drive dengan Kontrol Izin Administrator.",
-  "requestFramePermissions": [],
+  "requestFramePermissions": [
+    "camera"
+  ],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
   ]

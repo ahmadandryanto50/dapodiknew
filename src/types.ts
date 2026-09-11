@@ -301,40 +301,4 @@ export interface AdminUser {
   lastLogin?: string;
 }
 
-export interface SchoolFileItem {
-  id: string;
-  name: string;
-  category: string;
-  fileSize: number;
-  fileType: string;
-  fileExtension: string;
-  uploadedAt: string;
-  uploadedBy: string;
-  uploadedByRole: string;
-  driveFolderId?: string;
-  driveFileUrl?: string;
-  privacy: 'Restricted' | 'Guru Only' | 'Public';
-  description?: string;
-  tags?: string[];
-  dataUrl?: string;
-  fileUrl?: string;
-  allowedUserIds?: string[];
-  allowedRoles?: string[];
-}
-
-export interface FileAccessRequest {
-  id: string;
-  fileId: string;
-  fileName: string;
-  requesterName: string;
-  requesterRole: string;
-  requesterEmail?: string;
-  requestedAt: string;
-  reason: string;
-  status: 'pending' | 'approved' | 'rejected' | 'revoked' | 'inactive' | string;
-  reviewedBy?: string;
-  reviewedAt?: string;
-  reviewNotes?: string;
-}
-
 export type ActiveTab = 'home' | 'sekolah' | 'siswa' | 'ptk' | 'sarpras' | 'rapor' | 'laporan' | 'aplikasi' | 'berkas' | 'pengaturan' | 'sheets';

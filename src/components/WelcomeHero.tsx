@@ -39,11 +39,11 @@ import {
 import { ActiveTab, SyncConfig, Student, TeacherStaff, SarprasItem, StudentReport, AppDisplayConfig, SchoolProfile, AdminUser } from '../types';
 import { getPtkBreakdown } from '../utils/ptkClassification';
 import { SafeImage } from './SafeImage';
+import { GuestUploadDashboard } from './GuestUploadDashboard';
 
 interface WelcomeHeroProps {
   onNavigate: (tab: ActiveTab) => void;
   onOpenEditDisplay?: (filter?: 'all' | '1' | '2' | '3' | '4' | '5') => void;
-  onOpenUploadBerkas?: () => void;
   syncConfig: SyncConfig;
   displayConfig: AppDisplayConfig;
   schoolProfile: SchoolProfile;
@@ -64,7 +64,6 @@ interface WelcomeHeroProps {
 export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
   onNavigate,
   onOpenEditDisplay,
-  onOpenUploadBerkas,
   syncConfig,
   displayConfig,
   schoolProfile,
@@ -166,14 +165,6 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
       count: 'Pintasan',
       desc: 'Portal Pintasan Dapodik',
       color: 'from-violet-500/20 to-fuchsia-500/20 border-violet-400/30 text-violet-300'
-    },
-    {
-      id: 'berkas' as ActiveTab,
-      label: 'Arsip & Berkas',
-      icon: FolderLock,
-      count: 'Drive',
-      desc: 'Google Drive & Dokumen',
-      color: 'from-amber-500/20 to-yellow-500/20 border-amber-400/30 text-amber-300'
     },
     {
       id: 'pengaturan' as ActiveTab,
@@ -279,30 +270,34 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
 
           {/* Quick Realtime Sync Pill & Actions */}
           <div className="flex items-center gap-2 sm:gap-3">
-            {/* Quick Notification Bell */}
-            <button 
-              id="header-notif-btn"
-              onClick={onOpenNotifications}
-              className="relative p-2.5 rounded-full bg-white/15 hover:bg-white/25 text-white backdrop-blur-md border border-white/20 transition-all cursor-pointer"
-              title="Notifikasi & Validasi"
-            >
-              <Bell className="w-4 h-4" />
-              {unreadCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-rose-500 text-[10px] font-bold flex items-center justify-center shadow-md">
-                  {unreadCount}
-                </span>
-              )}
-            </button>
+            {currentUser?.role !== 'Tamu / Umum' && (
+              <>
+                {/* Quick Notification Bell */}
+                <button 
+                  id="header-notif-btn"
+                  onClick={onOpenNotifications}
+                  className="relative p-2.5 rounded-full bg-white/15 hover:bg-white/25 text-white backdrop-blur-md border border-white/20 transition-all cursor-pointer"
+                  title="Notifikasi & Validasi"
+                >
+                  <Bell className="w-4 h-4" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-rose-500 text-[10px] font-bold flex items-center justify-center shadow-md">
+                      {unreadCount}
+                    </span>
+                  )}
+                </button>
 
-            {/* Quick Search Header Bar */}
-            <div 
-              onClick={onOpenSearch}
-              className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/15 hover:bg-white/25 text-sky-100 text-xs backdrop-blur-md border border-white/20 cursor-pointer transition-all w-36 lg:w-44"
-            >
-              <Search className="w-3.5 h-3.5 text-sky-200" />
-              <span className="truncate">Quick Search...</span>
-              <kbd className="ml-auto text-[10px] bg-white/20 px-1.5 py-0.5 rounded text-white/80 font-mono">⌘K</kbd>
-            </div>
+                {/* Quick Search Header Bar */}
+                <div 
+                  onClick={onOpenSearch}
+                  className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/15 hover:bg-white/25 text-sky-100 text-xs backdrop-blur-md border border-white/20 cursor-pointer transition-all w-36 lg:w-44"
+                >
+                  <Search className="w-3.5 h-3.5 text-sky-200" />
+                  <span className="truncate">Quick Search...</span>
+                  <kbd className="ml-auto text-[10px] bg-white/20 px-1.5 py-0.5 rounded text-white/80 font-mono">⌘K</kbd>
+                </div>
+              </>
+            )}
 
             {/* Current Logged-in User Chip & Logout */}
             {currentUser && onLogout && (
@@ -328,261 +323,237 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
       {/* Main Content Area */}
       <div className="relative z-10 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 flex-1 flex flex-col justify-between">
 
-        {/* Center Grid: Left Nav Cards + Center Welcome Display + Right Interactive Dashboard */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center py-6">
-          
-          {/* Left Vertical Pill Navigation (Collapsible Accordion) */}
-          <div className="lg:col-span-3 flex flex-col gap-3">
-            <button
-              type="button"
-              id="toggle-main-nav-btn"
-              onClick={toggleNav}
-              className="w-full text-xs font-bold uppercase tracking-wider text-sky-100 bg-white/15 hover:bg-white/25 border border-white/25 backdrop-blur-xl px-3.5 py-2.5 rounded-2xl flex items-center justify-between cursor-pointer transition-all shadow-md active:scale-98 group"
-              title="Klik untuk Membuka / Menutup Navigasi Utama"
-            >
-              <div className="flex items-center gap-2.5">
-                <div className="p-1.5 rounded-xl bg-cyan-400/20 border border-cyan-300/40 text-cyan-200 group-hover:scale-110 transition-transform">
-                  <Menu className="w-4 h-4" />
-                </div>
-                <span className="text-xs sm:text-sm tracking-wide">Menu Navigasi Utama</span>
-              </div>
-              <div className="flex items-center gap-1.5 bg-white/20 text-white font-extrabold px-2.5 py-1 rounded-xl text-[10px] sm:text-[11px] shadow-xs group-hover:bg-cyan-400 group-hover:text-slate-900 transition-colors">
-                <span>{isNavOpen ? 'Tutup' : `Buka (${menuItems.length})`}</span>
-                <ChevronDown className={`w-3.5 h-3.5 text-cyan-200 group-hover:text-slate-900 transition-transform duration-300 ${isNavOpen ? 'rotate-180' : ''}`} />
-              </div>
-            </button>
-
-            <AnimatePresence initial={false}>
-              {isNavOpen && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                  animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
-                  exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                  transition={{ duration: 0.3, ease: 'easeInOut' }}
-                  className="space-y-2.5"
-                >
-                  {menuItems.map((item) => {
-                    const IconComponent = item.icon;
-                    return (
-                      <button
-                        key={item.label}
-                        id={`menu-btn-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
-                        onClick={() => (item as any).customAction ? (item as any).customAction() : onNavigate(item.id)}
-                        className="w-full group flex items-center justify-between px-4 py-3 rounded-2xl bg-white/15 hover:bg-white/25 backdrop-blur-xl border border-white/25 shadow-lg shadow-sky-950/10 hover:shadow-cyan-500/20 hover:scale-[1.02] active:scale-[0.99] transition-all text-left cursor-pointer"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className={`p-2.5 rounded-xl bg-gradient-to-br ${item.color} border shadow-inner transition-transform group-hover:rotate-6`}>
-                            <IconComponent className="w-5 h-5" />
-                          </div>
-                          <div>
-                            <div className="font-bold text-sm text-white group-hover:text-cyan-200 transition-colors">
-                              {item.label}
-                            </div>
-                            <div className="text-[11px] text-sky-100/70 font-medium">
-                              {item.desc}
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-white/20 text-sky-100 group-hover:bg-cyan-400 group-hover:text-slate-900 transition-colors">
-                            {item.count}
-                          </span>
-                          <ChevronRight className="w-4 h-4 text-white/50 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
-                        </div>
-                      </button>
-                    );
-                  })}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-          {/* Center Graphic & Typography Banner */}
-          <div className="lg:col-span-6 flex flex-col items-center text-center px-2 relative">
+        {currentUser?.role === 'Tamu / Umum' ? (
+          <GuestUploadDashboard
+            currentUser={currentUser}
+            displayConfig={displayConfig}
+            schoolProfile={schoolProfile}
+          />
+        ) : (
+          /* Center Grid: Left Nav Cards + Center Welcome Display + Right Interactive Dashboard */
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center py-6">
             
-            {/* Static Visual Logo Banner (Lightweight & Static for Old Devices) */}
-            <div className="relative w-full flex items-center justify-center py-3">
-              {/* Central Shield Icon - Static & Lightweight */}
-              <div 
-                className="p-3.5 sm:p-4 rounded-full bg-gradient-to-tr from-cyan-400/35 via-white/25 to-blue-500/35 backdrop-blur-md border-2 border-white/50 shadow-xl shadow-cyan-400/20 ring-4 ring-cyan-300/20 cursor-default select-none"
-                title="Logo Banner"
-              >
-                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-br from-white via-sky-50 to-sky-100 p-2.5 sm:p-3 flex items-center justify-center shadow-lg overflow-hidden border-2 border-white/80">
-                  <SafeImage 
-                    src={displayConfig.welcomeCustomIconUrl || displayConfig.logoCustomUrl || schoolProfile.logoSekolah || '/logo_smpn11palu.jpg'} 
-                    fallbackSrc="/logo_smpn11palu.jpg"
-                    fallbackNode={
-                      displayConfig.welcomeIconType === 'graduation' ? <GraduationCap className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" /> :
-                      displayConfig.welcomeIconType === 'award' ? <Award className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" /> :
-                      displayConfig.welcomeIconType === 'book' ? <BookOpen className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" /> :
-                      displayConfig.welcomeIconType === 'star' ? <Star className="w-10 h-10 sm:w-12 sm:h-12 text-amber-500" /> :
-                      displayConfig.welcomeIconType === 'shield' ? <ShieldCheck className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" /> :
-                      displayConfig.welcomeIconType === 'landmark' ? <Landmark className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" /> :
-                      <School className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" />
-                    }
-                    alt="Custom Banner Icon" 
-                    className="w-full h-full object-contain rounded-full"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Big Catchy Titles Exactly as shown in the picture */}
-            <div className="space-y-1.5 mt-2">
-              <h2 className="text-sm sm:text-base font-bold tracking-[0.25em] text-cyan-200 uppercase drop-shadow-sm">
-                {displayConfig.welcomeGreeting ?? 'SELAMAT DATANG'}
-              </h2>
-              <h1 className="text-2xl sm:text-4xl lg:text-[42px] font-black tracking-tight text-white drop-shadow-md">
-                {displayConfig.welcomeTitle ?? 'DI DAPODIK'}
-              </h1>
-              <div className="text-base sm:text-xl font-bold tracking-widest text-sky-100 uppercase">
-                {displayConfig.welcomeSubtitle ?? 'DATA POKOK PENDIDIKAN'}
-              </div>
-            </div>
-
-            {/* Quick Action Buttons */}
-            <div className="flex flex-wrap items-center justify-center gap-3 pt-5">
-              <button
-                id="hero-enter-siswa-btn"
-                onClick={() => onNavigate('siswa')}
-                className="px-5 py-2.5 rounded-xl bg-white text-slate-900 font-bold text-sm shadow-xl shadow-sky-950/20 hover:bg-cyan-50 hover:shadow-cyan-400/30 hover:scale-105 active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
-              >
-                <Users className="w-4 h-4 text-blue-600" />
-                <span>Buka Data Siswa</span>
-              </button>
-
-              <button
-                id="hero-quick-sync-btn"
-                onClick={onQuickSync}
-                disabled={isSyncing}
-                className="px-4 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white font-semibold text-sm backdrop-blur-md border border-white/30 hover:border-white/50 transition-all flex items-center gap-2 active:scale-95 cursor-pointer"
-              >
-                <RefreshCw className={`w-4 h-4 text-cyan-300 ${isSyncing ? 'animate-spin' : ''}`} />
-                <span>{isSyncing ? 'Sinkronkan Data' : 'Sinkronkan Data'}</span>
-              </button>
-            </div>
-
-            {/* Bottom Graphic with Characters & School Elements */}
-            <div className="w-full pt-6 flex items-end justify-center gap-4 text-sky-100/80">
-              <div className="flex items-center gap-2 bg-white/10 px-3.5 py-1.5 rounded-full text-xs backdrop-blur-md border border-white/15">
-                {displayConfig.curriculumBadgeIcon === 'sparkles' ? (
-                  <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                ) : displayConfig.curriculumBadgeIcon === 'award' ? (
-                  <Award className="w-3.5 h-3.5 text-cyan-300" />
-                ) : displayConfig.curriculumBadgeIcon === 'shield' ? (
-                  <ShieldCheck className="w-3.5 h-3.5 text-sky-300" />
-                ) : (
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300" />
-                )}
-                <span>{displayConfig.curriculumBadge ?? 'Kurikulum Merdeka Ready'}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Live Dashboard Preview & Quick Stats Widget */}
-          <div className="lg:col-span-3 flex flex-col gap-4">
-            
-            {/* Quick Search Widget at Bottom Right */}
-            <form onSubmit={handleSearchSubmit} className="relative">
-              <input
-                id="hero-bottom-search-input"
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search Siswa, PTK, NISN..."
-                className="w-full px-4 py-2.5 pl-4 pr-10 rounded-2xl bg-white/20 hover:bg-white/25 focus:bg-white/30 text-white placeholder-sky-200 text-xs backdrop-blur-xl border border-white/30 focus:outline-none focus:ring-2 focus:ring-cyan-300 transition-all shadow-lg font-medium"
-              />
-              <button
-                type="submit"
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 rounded-xl bg-amber-400 text-slate-950 hover:bg-amber-300 transition-colors shadow-sm cursor-pointer"
-              >
-                <Search className="w-3.5 h-3.5" />
-              </button>
-            </form>
-
-            {/* School Operator Card */}
-            <div className="p-3.5 rounded-2xl bg-white/10 hover:bg-white/15 backdrop-blur-md border border-white/20 text-xs flex items-center justify-between gap-3 shadow-sm">
-              <div 
-                className="flex items-center gap-3 overflow-hidden cursor-pointer group"
-                onClick={() => setIsOperatorModalOpen(true)}
-                title="Klik untuk melihat foto operator"
-              >
-                <div className="relative w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-400 to-orange-500 flex items-center justify-center font-bold text-slate-950 shadow-md overflow-hidden shrink-0 ring-2 ring-amber-300/40 group-hover:ring-amber-300 group-hover:scale-105 transition-all">
-                  <SafeImage 
-                    src={displayConfig.operatorAvatarUrl || schoolProfile.fotoKepalaSekolah || 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=300&auto=format&fit=crop&q=80'} 
-                    fallbackNode={
-                      <span className="text-xs font-black">
-                        {(displayConfig.operatorTitle ?? 'OP').replace(/[^a-zA-Z0-9]/g, '').substring(0, 2).toUpperCase() || 'OP'}
-                      </span>
-                    }
-                    alt="Operator" 
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute inset-0 bg-slate-950/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
-                    <ZoomIn className="w-3.5 h-3.5 drop-shadow" />
-                  </div>
-                </div>
-                <div className="overflow-hidden">
-                  <div className="font-bold text-white truncate group-hover:text-amber-200 transition-colors flex items-center gap-1.5">
-                    <span>{displayConfig.operatorTitle ?? 'Operator Sekolah'}</span>
-                  </div>
-                  <div className="text-[11px] text-sky-200 truncate">
-                    {displayConfig.operatorName && displayConfig.operatorName !== schoolProfile.namaSekolah
-                      ? displayConfig.operatorName
-                      : (schoolProfile.operatorSekolah || schoolProfile.kepalaSekolah || 'Ahmad Andryanto, S.Pd.')}
-                  </div>
-                </div>
-              </div>
-
+            {/* Left Vertical Pill Navigation (Collapsible Accordion) */}
+            <div className="lg:col-span-3 flex flex-col gap-3">
               <button
                 type="button"
-                onClick={() => setIsOperatorModalOpen(true)}
-                className="px-2.5 py-1.5 rounded-xl bg-white/15 hover:bg-amber-400 hover:text-slate-950 text-white text-[11px] font-semibold border border-white/20 transition-all shrink-0 cursor-pointer flex items-center gap-1 shadow-xs active:scale-95"
-                title="Lihat Foto Operator"
+                id="toggle-main-nav-btn"
+                onClick={toggleNav}
+                className="w-full text-xs font-bold uppercase tracking-wider text-sky-100 bg-white/15 hover:bg-white/25 border border-white/25 backdrop-blur-xl px-3.5 py-2.5 rounded-2xl flex items-center justify-between cursor-pointer transition-all shadow-md active:scale-98 group"
+                title="Klik untuk Membuka / Menutup Navigasi Utama"
               >
-                <ZoomIn className="w-3.5 h-3.5" />
-                <span>Foto</span>
+                <div className="flex items-center gap-2.5">
+                  <div className="p-1.5 rounded-xl bg-cyan-400/20 border border-cyan-300/40 text-cyan-200 group-hover:scale-110 transition-transform">
+                    <Menu className="w-4 h-4" />
+                  </div>
+                  <span className="text-xs sm:text-sm tracking-wide">Menu Navigasi Utama</span>
+                </div>
+                <div className="flex items-center gap-1.5 bg-white/20 text-white font-extrabold px-2.5 py-1 rounded-xl text-[10px] sm:text-[11px] shadow-xs group-hover:bg-cyan-400 group-hover:text-slate-900 transition-colors">
+                  <span>{isNavOpen ? 'Tutup' : `Buka (${menuItems.length})`}</span>
+                  <ChevronDown className={`w-3.5 h-3.5 text-cyan-200 group-hover:text-slate-900 transition-transform duration-300 ${isNavOpen ? 'rotate-180' : ''}`} />
+                </div>
               </button>
+
+              <AnimatePresence initial={false}>
+                {isNavOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                    animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
+                    exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                    transition={{ duration: 0.3, ease: 'easeInOut' }}
+                    className="space-y-2.5"
+                  >
+                    {menuItems.map((item) => {
+                      const IconComponent = item.icon;
+                      return (
+                        <button
+                          key={item.label}
+                          id={`menu-btn-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
+                          onClick={() => (item as any).customAction ? (item as any).customAction() : onNavigate(item.id)}
+                          className="w-full group flex items-center justify-between px-4 py-3 rounded-2xl bg-white/15 hover:bg-white/25 backdrop-blur-xl border border-white/25 shadow-lg shadow-sky-950/10 hover:shadow-cyan-500/20 hover:scale-[1.02] active:scale-[0.99] transition-all text-left cursor-pointer"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`p-2.5 rounded-xl bg-gradient-to-br ${item.color} border shadow-inner transition-transform group-hover:rotate-6`}>
+                              <IconComponent className="w-5 h-5" />
+                            </div>
+                            <div>
+                              <div className="font-bold text-sm text-white group-hover:text-cyan-200 transition-colors">
+                                {item.label}
+                              </div>
+                              <div className="text-[11px] text-sky-100/70 font-medium">
+                                {item.desc}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-white/20 text-sky-100 group-hover:bg-cyan-400 group-hover:text-slate-900 transition-colors">
+                              {item.count}
+                            </span>
+                            <ChevronRight className="w-4 h-4 text-white/50 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
-            {/* Google Drive & Arsip Berkas Mini Card */}
-            <div className="p-3.5 rounded-2xl bg-white/10 hover:bg-white/15 backdrop-blur-md border border-white/20 text-xs flex flex-col gap-2.5 shadow-sm">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-xl bg-gradient-to-br from-amber-400/30 to-yellow-500/20 text-amber-300 border border-amber-300/30">
-                    <FolderLock className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="font-bold text-white text-xs">Arsip & Berkas Sekolah</div>
-                    <div className="text-[10px] text-sky-200">Google Drive & Dokumen PTK</div>
+            {/* Center Graphic & Typography Banner */}
+            <div className="lg:col-span-6 flex flex-col items-center text-center px-2 relative">
+              
+              {/* Static Visual Logo Banner (Lightweight & Static for Old Devices) */}
+              <div className="relative w-full flex items-center justify-center py-3">
+                {/* Central Shield Icon - Static & Lightweight */}
+                <div 
+                  className="p-3.5 sm:p-4 rounded-full bg-gradient-to-tr from-cyan-400/35 via-white/25 to-blue-500/35 backdrop-blur-md border-2 border-white/50 shadow-xl shadow-cyan-400/20 ring-4 ring-cyan-300/20 cursor-default select-none"
+                  title="Logo Banner"
+                >
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-br from-white via-sky-50 to-sky-100 p-2.5 sm:p-3 flex items-center justify-center shadow-lg overflow-hidden border-2 border-white/80">
+                    <SafeImage 
+                      src={displayConfig.welcomeCustomIconUrl || displayConfig.logoCustomUrl || schoolProfile.logoSekolah || '/logo_smpn11palu.jpg'} 
+                      fallbackSrc="/logo_smpn11palu.jpg"
+                      fallbackNode={
+                        displayConfig.welcomeIconType === 'graduation' ? <GraduationCap className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" /> :
+                        displayConfig.welcomeIconType === 'award' ? <Award className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" /> :
+                        displayConfig.welcomeIconType === 'book' ? <BookOpen className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" /> :
+                        displayConfig.welcomeIconType === 'star' ? <Star className="w-10 h-10 sm:w-12 sm:h-12 text-amber-500" /> :
+                        displayConfig.welcomeIconType === 'shield' ? <ShieldCheck className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" /> :
+                        displayConfig.welcomeIconType === 'landmark' ? <Landmark className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" /> :
+                        <School className="w-10 h-10 sm:w-12 sm:h-12 text-[#0284c7]" />
+                      }
+                      alt="Custom Banner Icon" 
+                      className="w-full h-full object-contain rounded-full"
+                    />
                   </div>
                 </div>
+              </div>
+
+              {/* Big Catchy Titles Exactly as shown in the picture */}
+              <div className="space-y-1.5 mt-2">
+                <h2 className="text-sm sm:text-base font-bold tracking-[0.25em] text-cyan-200 uppercase drop-shadow-sm">
+                  {displayConfig.welcomeGreeting ?? 'SELAMAT DATANG'}
+                </h2>
+                <h1 className="text-2xl sm:text-4xl lg:text-[42px] font-black tracking-tight text-white drop-shadow-md">
+                  {displayConfig.welcomeTitle ?? 'DI DAPODIK'}
+                </h1>
+                <div className="text-base sm:text-xl font-bold tracking-widest text-sky-100 uppercase">
+                  {displayConfig.welcomeSubtitle ?? 'DATA POKOK PENDIDIKAN'}
+                </div>
+              </div>
+
+              {/* Quick Action Buttons */}
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-5">
                 <button
-                  type="button"
-                  onClick={() => onNavigate('berkas')}
-                  className="px-2 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-[10px] font-bold text-sky-100 hover:text-white flex items-center gap-1 transition-all cursor-pointer"
+                  id="hero-enter-siswa-btn"
+                  onClick={() => onNavigate('siswa')}
+                  className="px-5 py-2.5 rounded-xl bg-white text-slate-900 font-bold text-sm shadow-xl shadow-sky-950/20 hover:bg-cyan-50 hover:shadow-cyan-400/30 hover:scale-105 active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
                 >
-                  <span>Buka</span>
-                  <ChevronRight className="w-3 h-3" />
+                  <Users className="w-4 h-4 text-blue-600" />
+                  <span>Buka Data Siswa</span>
+                </button>
+
+                <button
+                  id="hero-quick-sync-btn"
+                  onClick={onQuickSync}
+                  disabled={isSyncing}
+                  className="px-4 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white font-semibold text-sm backdrop-blur-md border border-white/30 hover:border-white/50 transition-all flex items-center gap-2 active:scale-95 cursor-pointer"
+                >
+                  <RefreshCw className={`w-4 h-4 text-cyan-300 ${isSyncing ? 'animate-spin' : ''}`} />
+                  <span>{isSyncing ? 'Sinkronkan Data' : 'Sinkronkan Data'}</span>
                 </button>
               </div>
 
-              <button
-                type="button"
-                id="hero-widget-unggah-berkas-btn"
-                onClick={() => onOpenUploadBerkas ? onOpenUploadBerkas() : onNavigate('berkas')}
-                className="w-full py-2 px-3 rounded-full bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-2 shadow-md hover:scale-[1.02] active:scale-98 transition-all cursor-pointer"
-                title="Unggah Berkas Baru"
-              >
-                <Upload className="w-3.5 h-3.5 text-slate-950 stroke-[2.5]" />
-                <span>Unggah Berkas Baru</span>
-              </button>
+              {/* Bottom Graphic with Characters & School Elements */}
+              <div className="w-full pt-6 flex items-end justify-center gap-4 text-sky-100/80">
+                <div className="flex items-center gap-2 bg-white/10 px-3.5 py-1.5 rounded-full text-xs backdrop-blur-md border border-white/15">
+                  {displayConfig.curriculumBadgeIcon === 'sparkles' ? (
+                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                  ) : displayConfig.curriculumBadgeIcon === 'award' ? (
+                    <Award className="w-3.5 h-3.5 text-cyan-300" />
+                  ) : displayConfig.curriculumBadgeIcon === 'shield' ? (
+                    <ShieldCheck className="w-3.5 h-3.5 text-sky-300" />
+                  ) : (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300" />
+                  )}
+                  <span>{displayConfig.curriculumBadge ?? 'Kurikulum Merdeka Ready'}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Live Dashboard Preview & Quick Stats Widget */}
+            <div className="lg:col-span-3 flex flex-col gap-4">
+              
+              {/* Quick Search Widget at Bottom Right */}
+              <form onSubmit={handleSearchSubmit} className="relative">
+                <input
+                  id="hero-bottom-search-input"
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search Siswa, PTK, NISN..."
+                  className="w-full px-4 py-2.5 pl-4 pr-10 rounded-2xl bg-white/20 hover:bg-white/25 focus:bg-white/30 text-white placeholder-sky-200 text-xs backdrop-blur-xl border border-white/30 focus:outline-none focus:ring-2 focus:ring-cyan-300 transition-all shadow-lg font-medium"
+                />
+                <button
+                  type="submit"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 rounded-xl bg-amber-400 text-slate-950 hover:bg-amber-300 transition-colors shadow-sm cursor-pointer"
+                >
+                  <Search className="w-3.5 h-3.5" />
+                </button>
+              </form>
+
+              {/* School Operator Card */}
+              <div className="p-3.5 rounded-2xl bg-white/10 hover:bg-white/15 backdrop-blur-md border border-white/20 text-xs flex items-center justify-between gap-3 shadow-sm">
+                <div 
+                  className="flex items-center gap-3 overflow-hidden cursor-pointer group"
+                  onClick={() => setIsOperatorModalOpen(true)}
+                  title="Klik untuk melihat foto operator"
+                >
+                  <div className="relative w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-400 to-orange-500 flex items-center justify-center font-bold text-slate-950 shadow-md overflow-hidden shrink-0 ring-2 ring-amber-300/40 group-hover:ring-amber-300 group-hover:scale-105 transition-all">
+                    <SafeImage 
+                      src={displayConfig.operatorAvatarUrl || schoolProfile.fotoKepalaSekolah || 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=300&auto=format&fit=crop&q=80'} 
+                      fallbackNode={
+                        <span className="text-xs font-black">
+                          {(displayConfig.operatorTitle ?? 'OP').replace(/[^a-zA-Z0-9]/g, '').substring(0, 2).toUpperCase() || 'OP'}
+                        </span>
+                      }
+                      alt="Operator" 
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-slate-950/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                      <ZoomIn className="w-3.5 h-3.5 drop-shadow" />
+                    </div>
+                  </div>
+                  <div className="overflow-hidden">
+                    <div className="font-bold text-white truncate group-hover:text-amber-200 transition-colors flex items-center gap-1.5">
+                      <span>{displayConfig.operatorTitle ?? 'Operator Sekolah'}</span>
+                    </div>
+                    <div className="text-[11px] text-sky-200 truncate">
+                      {displayConfig.operatorName && displayConfig.operatorName !== schoolProfile.namaSekolah
+                        ? displayConfig.operatorName
+                        : (schoolProfile.operatorSekolah || schoolProfile.kepalaSekolah || 'Ahmad Andryanto, S.Pd.')}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsOperatorModalOpen(true)}
+                  className="px-2.5 py-1.5 rounded-xl bg-white/15 hover:bg-amber-400 hover:text-slate-950 text-white text-[11px] font-semibold border border-white/20 transition-all shrink-0 cursor-pointer flex items-center gap-1 shadow-xs active:scale-95"
+                  title="Lihat Foto Operator"
+                >
+                  <ZoomIn className="w-3.5 h-3.5" />
+                  <span>Foto</span>
+                </button>
+              </div>
+
+
+
             </div>
 
           </div>
-
-        </div>
+        )}
 
         {/* Bottom Bar Info & Fast Shortcuts */}
         <div className="pt-4 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-sky-100/70">
