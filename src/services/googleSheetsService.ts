@@ -3,7 +3,7 @@ import { Student, TeacherStaff, SarprasItem, StudentReport, SyncConfig, AppDispl
 export const APPS_SCRIPT_TEMPLATE = `/**
  * =========================================================================
  * GOOGLE APPS SCRIPT UNTUK DAPODIK TERINTEGRASI 2026
- * Versi Script: v3.0 (Otorisasi Google Drive 100% Otomatis & Pembuatan Sheet Instant)
+ * Versi Script: v3.1 (Header Bahasa Indonesia + Direct Google Drive Sync)
  * =========================================================================
  * 
  * FUNGSI UTAMA OTORISASI GOOGLE DRIVE (Jalankan ini jika butuh izin ulang):

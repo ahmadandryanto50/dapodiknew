@@ -266,8 +266,17 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
       if (res.ok) {
         const serverData = await res.json();
         if (serverData && Array.isArray(serverData.schoolFiles)) {
-          // Sort files by uploadedAt descending
-          const sorted = [...serverData.schoolFiles].sort((a, b) => {
+          const normalized = serverData.schoolFiles.map((f: any) => ({
+            ...f,
+            id: String(f.id || f.fileId || Date.now()),
+            name: f.name || f['Nama Berkas'] || f.Name || 'Berkas Dokumen',
+            uploadedBy: f.uploadedBy || f['Nama Pengirim/Orang Tua'] || f.UploadedBy || 'Tamu',
+            category: f.category || f['Kategori'] || f.Category || 'Umum',
+            uploadedAt: f.uploadedAt || f['Tanggal'] || f.UploadedAt || '',
+            driveFileUrl: f.driveFileUrl || f['Link Drive'] || f.DriveFileUrl || f.url || '',
+            fileSize: Number(f.fileSize || f['Ukuran File'] || f.FileSize || f.size || 0)
+          }));
+          const sorted = normalized.sort((a, b) => {
             const timeA = a.uploadedAt ? new Date(a.uploadedAt.replace(/-/g, '/')).getTime() : 0;
             const timeB = b.uploadedAt ? new Date(b.uploadedAt.replace(/-/g, '/')).getTime() : 0;
             return timeB - timeA;
@@ -474,7 +483,7 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
     const targetFolder = customTitle ? customTitle : 'Umum';
 
     // Load active webAppUrl dynamically from sync-config
-    let targetWebAppUrl = "https://script.google.com/macros/s/AKfycbxo-R6-aq1A8nE30sSjsSIw_Pw1QidfRktHS2C4UIJvMJ4W-ySlS4TE5qlWKdG2fB0UhA/exec";
+    let targetWebAppUrl = "https://script.google.com/macros/s/AKfycbySsOjI3uKuEcz9bmuOX6qnANP-R_DfskBaxWNS_DrTEC2zW3LdQ93SCJf93iAHhM6vTw/exec";
     try {
       const configRes = await fetch('/api/sync-config');
       if (configRes.ok) {

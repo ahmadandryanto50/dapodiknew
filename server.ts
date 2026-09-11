@@ -212,6 +212,8 @@ async function startServer() {
                 mimeType: mimeType || "application/octet-stream",
                 base64Data: cleanBase64,
                 folderName: folderName || category || "Berkas Dapodik",
+                uploadedBy: uploadedBy || "Pengguna",
+                uploadedByRole: uploadedByRole || "Staff Sekolah",
                 description: description || `Berkas resmi ${category || "Dapodik"}`,
                 parentFolderId: "1OFVFI1xhsk45_ONTihtuSHeBVvEOr44m"
               }),
