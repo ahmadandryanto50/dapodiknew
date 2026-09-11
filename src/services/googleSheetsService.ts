@@ -195,15 +195,20 @@ function doPost(e) {
         }
       }
       
-      // 2. Cari atau buat subfolder (folder kategori) di dalam folder induk tersebut
-      var folder = null;
-      if (parentFolder) {
+      // 2. Cari atau buat subfolder (folder kategori) di dalam folder induk tersebut (mendukung folder bersarang / nested folder dengan pemisah '/')
+      var folder = parentFolder;
+      if (folder) {
         try {
-          var subFolders = parentFolder.getFoldersByName(folderName);
-          if (subFolders.hasNext()) {
-            folder = subFolders.next();
-          } else {
-            folder = parentFolder.createFolder(folderName);
+          var folderParts = folderName.split('/');
+          for (var i = 0; i < folderParts.length; i++) {
+            var part = folderParts[i].trim();
+            if (!part) continue;
+            var subFolders = folder.getFoldersByName(part);
+            if (subFolders.hasNext()) {
+              folder = subFolders.next();
+            } else {
+              folder = folder.createFolder(part);
+            }
           }
         } catch(err) {
           folder = null;
@@ -213,12 +218,19 @@ function doPost(e) {
       // Fallback jika semua di atas gagal, buat di root
       if (!folder) {
         try {
-          var folders = DriveApp.getFoldersByName(folderName);
-          if (folders.hasNext()) {
-            folder = folders.next();
-          } else {
-            folder = DriveApp.createFolder(folderName);
+          var folderParts = folderName.split('/');
+          var currentFolder = DriveApp.getRootFolder();
+          for (var i = 0; i < folderParts.length; i++) {
+            var part = folderParts[i].trim();
+            if (!part) continue;
+            var folders = currentFolder.getFoldersByName(part);
+            if (folders.hasNext()) {
+              currentFolder = folders.next();
+            } else {
+              currentFolder = currentFolder.createFolder(part);
+            }
           }
+          folder = currentFolder;
         } catch(err) {
           folder = null;
         }

@@ -36,6 +36,7 @@ interface QueuedFile {
   status: 'idle' | 'uploading' | 'success' | 'error';
   errorMsg?: string;
   driveUrl?: string;
+  customTitle?: string;
 }
 
 export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
@@ -292,13 +293,18 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
 
   const handleFileSelection = (e: React.ChangeEvent<HTMLInputElement>, isCamera = false) => {
     if (e.target.files && e.target.files.length > 0) {
-      const incoming = Array.from(e.target.files);
-      const newItems = incoming.map((file) => ({
-        id: `queued-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-        file,
-        progress: 0,
-        status: 'idle' as const
-      }));
+      const incoming = Array.from(e.target.files) as File[];
+      const newItems = incoming.map((file) => {
+        const dotIndex = file.name.lastIndexOf('.');
+        const defaultTitle = dotIndex > -1 ? file.name.substring(0, dotIndex) : file.name;
+        return {
+          id: `queued-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          file,
+          progress: 0,
+          status: 'idle' as const,
+          customTitle: defaultTitle
+        };
+      });
       setQueue((prev) => [...prev, ...newItems]);
       setGlobalError(null);
       setGlobalSuccess(null);
@@ -426,7 +432,22 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
       prev.map((item) => (item.id === id ? { ...item, progress: 45 } : item))
     );
 
-    const targetFolder = "Arsip Tamu";
+    const customTitle = (queuedItem.customTitle || '').trim();
+    const dotIndex = file.name.lastIndexOf('.');
+    const ext = dotIndex > -1 ? file.name.substring(dotIndex) : '';
+    
+    // Construct final custom file name while preserving original extension
+    let finalFileName = file.name;
+    if (customTitle) {
+      if (ext && !customTitle.toLowerCase().endsWith(ext.toLowerCase())) {
+        finalFileName = `${customTitle}${ext}`;
+      } else {
+        finalFileName = customTitle;
+      }
+    }
+
+    // Dynamic folder name inside Arsip Tamu based on the file title
+    const targetFolder = customTitle ? `Arsip Tamu/${customTitle}` : 'Arsip Tamu';
 
     // Load active webAppUrl dynamically from sync-config
     let targetWebAppUrl = "https://script.google.com/macros/s/AKfycbx82FotXhPvN0i9hOo_S-bctwcT5JCB6JrvUu5CHtIMEepaJj1EIl5Bf7mxPoW8JuPguA/exec";
@@ -459,7 +480,7 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
         },
         body: JSON.stringify({
           type: "UPLOAD_FILE_TO_DRIVE",
-          fileName: file.name,
+          fileName: finalFileName,
           mimeType: mimeType || "application/octet-stream",
           base64Data: base64Pure,
           folderName: targetFolder,
@@ -494,10 +515,10 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        name: file.name,
+        name: finalFileName,
         mimeType,
         base64Data: isDirectSuccess ? undefined : base64Pure, // Skip sending heavy binary data to server if direct upload succeeded
-        category: targetFolder,
+        category: 'Arsip Tamu',
         uploadedBy: uploader,
         uploadedByRole: 'Tamu / Umum',
         description: `Berkas tamu diunggah oleh ${uploader} via Portal Berkas`,
@@ -829,59 +850,81 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
                 </button>
               </div>
 
-              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
                 {queue.map((item) => (
                   <div
                     key={item.id}
-                    className="p-3 bg-slate-50 rounded-xl border border-slate-150 flex items-center justify-between gap-2.5 text-xs transition-all"
+                    className="p-3 bg-slate-50 rounded-xl border border-slate-150 flex flex-col gap-2 text-xs transition-all"
                   >
-                    <div className="flex items-center gap-2 overflow-hidden">
-                      <FileIcon className="w-4 h-4 text-sky-600 shrink-0" />
-                      <div className="overflow-hidden">
-                        <div className="font-bold text-slate-900 truncate max-w-[180px] sm:max-w-xs">
-                          {item.file.name}
+                    <div className="flex items-center justify-between gap-2.5">
+                      <div className="flex items-center gap-2 overflow-hidden">
+                        <FileIcon className="w-4 h-4 text-sky-600 shrink-0" />
+                        <div className="overflow-hidden">
+                          <div className="font-medium text-slate-500 truncate max-w-[180px] sm:max-w-xs text-[10px]">
+                            File asli: {item.file.name}
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-semibold">
+                            Ukuran: {formatFileSize(item.file.size)}
+                          </div>
                         </div>
-                        <div className="text-[10px] text-slate-400 font-semibold">
-                          {formatFileSize(item.file.size)}
-                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 shrink-0">
+                        {item.status === 'idle' && (
+                          <button
+                            onClick={() => removeQueueItem(item.id)}
+                            disabled={isUploadingAll}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                            title="Hapus"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+
+                        {item.status === 'uploading' && (
+                          <div className="flex items-center gap-1.5 text-sky-600 font-bold text-[11px]">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>{item.progress}%</span>
+                          </div>
+                        )}
+
+                        {item.status === 'success' && (
+                          <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full font-bold text-[10px]">
+                            <Check className="w-3 h-3 stroke-[3]" />
+                            <span>Selesai</span>
+                          </div>
+                        )}
+
+                        {item.status === 'error' && (
+                          <div
+                            className="inline-flex items-center gap-1 px-2 py-0.5 bg-rose-100 text-rose-800 rounded-full font-bold text-[10px]"
+                            title={item.errorMsg}
+                          >
+                            <AlertCircle className="w-3 h-3" />
+                            <span>Gagal</span>
+                          </div>
+                        )}
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3 shrink-0">
-                      {item.status === 'idle' && (
-                        <button
-                          onClick={() => removeQueueItem(item.id)}
-                          disabled={isUploadingAll}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-slate-100 transition-colors cursor-pointer"
-                          title="Hapus"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-
-                      {item.status === 'uploading' && (
-                        <div className="flex items-center gap-1.5 text-sky-600 font-bold text-[11px]">
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          <span>{item.progress}%</span>
-                        </div>
-                      )}
-
-                      {item.status === 'success' && (
-                        <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full font-bold text-[10px]">
-                          <Check className="w-3 h-3 stroke-[3]" />
-                          <span>Selesai</span>
-                        </div>
-                      )}
-
-                      {item.status === 'error' && (
-                        <div
-                          className="inline-flex items-center gap-1 px-2 py-0.5 bg-rose-100 text-rose-800 rounded-full font-bold text-[10px]"
-                          title={item.errorMsg}
-                        >
-                          <AlertCircle className="w-3 h-3" />
-                          <span>Gagal</span>
-                        </div>
-                      )}
+                    {/* Field Input Nama Berkas / Judul Berkas */}
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider">
+                        Nama Berkas <span className="text-slate-400 font-normal text-[9px]">(Silakan edit manual jika perlu)</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Masukkan nama berkas (contoh: Data siswa, Kartu Keluarga, Raport)"
+                        value={item.customTitle || ''}
+                        disabled={isUploadingAll || item.status === 'success'}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setQueue((prev) =>
+                            prev.map((q) => (q.id === item.id ? { ...q, customTitle: val } : q))
+                          );
+                        }}
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 focus:outline-none focus:ring-1 focus:ring-sky-500 text-xs font-semibold bg-white text-slate-900 disabled:bg-slate-100 disabled:text-slate-500 placeholder:text-slate-400"
+                      />
                     </div>
                   </div>
                 ))}
