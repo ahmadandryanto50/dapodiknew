@@ -87,7 +87,7 @@ const HEADERS_MAP = {
   'Data_Rapor': ['id', 'studentId', 'nisn', 'studentName', 'rombel', 'semester', 'tahunAjaran', 'scores', 'kehadiran', 'catatanWaliKelas', 'statusKenaikan'],
   'Notifikasi': ['id', 'title', 'message', 'time', 'type', 'read'],
   'Permintaan_Akses_Berkas': ['id', 'fileId', 'fileName', 'requesterName', 'requesterRole', 'requesterEmail', 'requestedAt', 'reason', 'status', 'reviewedBy', 'reviewedAt', 'reviewNotes'],
-  'Data_Berkas': ['id', 'name', 'category', 'fileSize', 'fileType', 'fileExtension', 'uploadedAt', 'uploadedBy', 'uploadedByRole', 'driveFolderId', 'driveFileUrl', 'privacy', 'description', 'tags', 'allowedUserIds', 'allowedRoles']
+  'Data_Berkas': ['id', 'Nama Berkas', 'Nama Pengirim/Orang Tua', 'Kategori', 'Tanggal', 'Link Drive', 'Ukuran File']
 };
 
 function doGet(e) {
@@ -139,6 +139,8 @@ function doPost(e) {
         profilSekolah: getSheetData(ss, 'Profil_Sekolah'),
         aplikasi: getSheetData(ss, 'Data_Aplikasi'),
         notifikasi: getSheetData(ss, 'Notifikasi'),
+        permintaanAkses: getSheetData(ss, 'Permintaan_Akses_Berkas'),
+        berkas: getSheetData(ss, 'Data_Berkas'),
         status: 'success'
       };
       return ContentService.createTextOutput(JSON.stringify(result))
@@ -157,6 +159,7 @@ function doPost(e) {
       if (data.profilSekolah !== undefined) saveSheetData(ss, 'Profil_Sekolah', data.profilSekolah);
       if (data.aplikasi !== undefined) saveSheetData(ss, 'Data_Aplikasi', data.aplikasi);
       if (data.notifikasi !== undefined) saveSheetData(ss, 'Notifikasi', data.notifikasi, HEADERS_MAP['Notifikasi']);
+      if (data.berkas !== undefined) appendOrMergeSheetData(ss, 'Data_Berkas', data.berkas, HEADERS_MAP['Data_Berkas']);
     } else if (data.type === 'SYNC_SISWA') {
       saveSheetData(ss, 'Data_Siswa', data.payload, HEADERS_MAP['Data_Siswa']);
     } else if (data.type === 'SYNC_SISWA_KELUAR') {
@@ -174,7 +177,7 @@ function doPost(e) {
     } else if (data.type === 'SYNC_PERMINTAAN_AKSES') {
       saveSheetData(ss, 'Permintaan_Akses_Berkas', data.payload, HEADERS_MAP['Permintaan_Akses_Berkas']);
     } else if (data.type === 'SYNC_BERKAS') {
-      saveSheetData(ss, 'Data_Berkas', data.payload, HEADERS_MAP['Data_Berkas']);
+      appendOrMergeSheetData(ss, 'Data_Berkas', data.payload, HEADERS_MAP['Data_Berkas']);
     } else if (data.type === 'UPLOAD_FILE_TO_DRIVE') {
       var parentFolder = null;
       var folderName = data.folderName || data.category || 'Berkas Dapodik';
@@ -259,6 +262,33 @@ function doPost(e) {
       var actualMimeType = createdFile.getMimeType();
       var folderId = folder ? folder.getId() : (parentFolder ? parentFolder.getId() : '');
       var folderActualName = folder ? folder.getName() : folderName;
+
+      // Otomatis catat metadata berkas ke Sheet Data_Berkas
+      try {
+        var nowStr = Utilities.formatDate(new Date(), ss.getSpreadsheetTimeZone() || "Asia/Jakarta", "yyyy-MM-dd HH:mm");
+        var fileMetaData = {
+          id: fileId,
+          'Nama Berkas': safeFileName || createdFile.getName(),
+          'Nama Pengirim/Orang Tua': data.uploadedBy || 'Tamu / Orang Tua',
+          'Kategori': folderActualName || 'Umum',
+          'Tanggal': nowStr,
+          'Link Drive': fileUrl,
+          'Ukuran File': fileSize,
+          name: safeFileName || createdFile.getName(),
+          category: folderActualName || 'Umum',
+          fileSize: fileSize,
+          fileType: actualMimeType,
+          fileExtension: safeFileName.indexOf('.') > -1 ? safeFileName.split('.').pop() : '',
+          uploadedAt: nowStr,
+          uploadedBy: data.uploadedBy || 'Tamu / Orang Tua',
+          uploadedByRole: data.uploadedByRole || 'Tamu / Umum',
+          driveFolderId: folderId,
+          driveFileUrl: fileUrl
+        };
+        appendOrMergeSheetData(ss, 'Data_Berkas', [fileMetaData], HEADERS_MAP['Data_Berkas']);
+      } catch(errRecord) {
+        Logger.log('Could not auto-record to Data_Berkas: ' + errRecord.toString());
+      }
       
       return ContentService.createTextOutput(JSON.stringify({
         status: 'success',
@@ -371,7 +401,16 @@ function saveSheetData(ss, sheetName, items, fallbackHeaders) {
   for (let i = 0; i < items.length; i++) {
     const row = [];
     for (let j = 0; j < headers.length; j++) {
-      let val = items[i][headers[j]];
+      const key = headers[j];
+      let val = items[i][key];
+      if (val === undefined || val === null) {
+        if (key === 'Nama Berkas') val = items[i]['name'] || items[i]['Name'];
+        else if (key === 'Nama Pengirim/Orang Tua') val = items[i]['uploadedBy'] || items[i]['UploadedBy'];
+        else if (key === 'Kategori') val = items[i]['category'] || items[i]['Category'];
+        else if (key === 'Tanggal') val = items[i]['uploadedAt'] || items[i]['UploadedAt'];
+        else if (key === 'Link Drive') val = items[i]['driveFileUrl'] || items[i]['DriveFileUrl'] || items[i]['url'];
+        else if (key === 'Ukuran File') val = items[i]['fileSize'] || items[i]['FileSize'] || items[i]['size'];
+      }
       if (typeof val === 'object' && val !== null) {
         val = JSON.stringify(val);
       } else if (typeof val === 'string' && val.trim().startsWith('0') && val.trim().length > 1 && !val.includes('-') && !val.includes('/')) {
@@ -400,6 +439,31 @@ function saveSheetData(ss, sheetName, items, fallbackHeaders) {
       sheet.autoResizeColumn(c);
     }
   } catch(e) {}
+}
+
+function appendOrMergeSheetData(ss, sheetName, newItems, fallbackHeaders) {
+  if (!newItems || !Array.isArray(newItems) || newItems.length === 0) return;
+  var existingItems = getSheetData(ss, sheetName) || [];
+  var itemMap = {};
+  for (var i = 0; i < existingItems.length; i++) {
+    var item = existingItems[i];
+    if (item && item.id) {
+      itemMap[String(item.id)] = item;
+    }
+  }
+  for (var j = 0; j < newItems.length; j++) {
+    var newItem = newItems[j];
+    if (newItem && newItem.id) {
+      itemMap[String(newItem.id)] = newItem;
+    }
+  }
+  var mergedList = [];
+  for (var key in itemMap) {
+    if (itemMap.hasOwnProperty(key)) {
+      mergedList.push(itemMap[key]);
+    }
+  }
+  saveSheetData(ss, sheetName, mergedList, fallbackHeaders);
 }
 
 function checkAndInitializeSheets(ss) {

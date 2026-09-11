@@ -508,6 +508,8 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
           mimeType: mimeType || "application/octet-stream",
           base64Data: base64Pure,
           folderName: targetFolder,
+          uploadedBy: uploader,
+          uploadedByRole: 'Tamu / Umum',
           description: `Berkas tamu diunggah oleh ${uploader} via Portal Berkas (Direct Browser)`,
           parentFolderId: "1OFVFI1xhsk45_ONTihtuSHeBVvEOr44m"
         }),

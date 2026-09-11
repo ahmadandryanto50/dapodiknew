@@ -558,7 +558,7 @@ async function startServer() {
       if (webAppUrl) {
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 3500); // 3.5s timeout for fast response
+          const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout for Google Apps Script cold-starts
           const sheetsRes = await fetch(webAppUrl, {
             method: "POST",
             headers: { "Content-Type": "text/plain" },
@@ -589,15 +589,15 @@ async function startServer() {
         if (f && f.id) {
           fileMap.set(String(f.id), {
             id: String(f.id),
-            name: f.name || f.Name || "",
-            category: f.category || f.Category || "Umum",
-            fileSize: Number(f.fileSize || f.FileSize || f.size || 0),
+            name: f["Nama Berkas"] || f.name || f.Name || "",
+            category: f["Kategori"] || f.category || f.Category || "Umum",
+            fileSize: Number(f["Ukuran File"] || f.fileSize || f.FileSize || f.size || 0),
             fileType: f.fileType || f.FileType || "application/octet-stream",
             fileExtension: f.fileExtension || f.FileExtension || "",
-            uploadedAt: f.uploadedAt || f.UploadedAt || "",
-            uploadedBy: f.uploadedBy || f.UploadedBy || "Pengguna",
+            uploadedAt: f["Tanggal"] || f.uploadedAt || f.UploadedAt || "",
+            uploadedBy: f["Nama Pengirim/Orang Tua"] || f.uploadedBy || f.UploadedBy || "Pengguna",
             uploadedByRole: f.uploadedByRole || f.UploadedByRole || "Tamu / Umum",
-            driveFileUrl: f.driveFileUrl || f.DriveFileUrl || f.url || "",
+            driveFileUrl: f["Link Drive"] || f.driveFileUrl || f.DriveFileUrl || f.url || "",
             driveFolderId: f.driveFolderId || f.DriveFolderId || "",
             privacy: f.privacy || f.Privacy || "Public",
             description: f.description || f.Description || ""
