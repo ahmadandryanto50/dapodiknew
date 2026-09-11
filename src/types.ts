@@ -317,6 +317,7 @@ export interface SchoolFileItem {
   description?: string;
   tags?: string[];
   dataUrl?: string;
+  fileUrl?: string;
   allowedUserIds?: string[];
   allowedRoles?: string[];
 }

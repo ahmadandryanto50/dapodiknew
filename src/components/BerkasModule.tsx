@@ -624,8 +624,28 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
         } catch (e) {}
       }
 
-      if (currentCfg?.webAppUrl && file.dataUrl) {
-        const base64Pure = file.dataUrl.includes(',') ? file.dataUrl.split(',')[1] : file.dataUrl;
+      let base64Pure = '';
+      if (file.dataUrl) {
+        base64Pure = file.dataUrl.includes(',') ? file.dataUrl.split(',')[1] : file.dataUrl;
+      } else if (file.fileUrl) {
+        try {
+          const fetchRes = await fetch(file.fileUrl);
+          if (fetchRes.ok) {
+            const blob = await fetchRes.blob();
+            const reader = new FileReader();
+            base64Pure = await new Promise((resolve) => {
+              reader.onload = () => {
+                const s = reader.result as string;
+                resolve(s.includes(',') ? s.split(',')[1] : s);
+              };
+              reader.onerror = () => resolve('');
+              reader.readAsDataURL(blob);
+            });
+          }
+        } catch (fErr) {}
+      }
+
+      if (currentCfg?.webAppUrl && base64Pure) {
         const uploadRes = await uploadFileToDriveViaAppsScript(currentCfg, {
           name: file.name,
           type: file.fileType || 'application/octet-stream',
@@ -641,7 +661,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
           throw new Error('Gagal dari Apps Script: ' + (uploadRes.message || ''));
         }
       } else {
-        throw new Error('URL Google Apps Script belum dikonfigurasi di Pengaturan.');
+        throw new Error('Data berkas belum siap atau URL Google Apps Script belum dikonfigurasi.');
       }
 
       if (!driveResult) {
@@ -672,9 +692,13 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
 
   // Handle Multi-Upload
   const handleFileSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
+    if (e.target.files && e.target.files.length > 0) {
       const selected = Array.from(e.target.files);
       setSelectedUploadFiles(prev => [...prev, ...selected]);
+    }
+    // Crucial for mobile: reset input value so selecting the same file triggers onChange
+    if (e.target) {
+      e.target.value = '';
     }
   };
 
@@ -803,54 +827,94 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
 
         if (uploadCancelledRef.current) break;
 
-        setUploadRemainingBytesText(`Menyimpan & Memverifikasi di Google Drive...`);
+        setUploadRemainingBytesText(`Menyimpan berkas ke repositori...`);
 
         let driveResult: any = null;
+        let uploadedServerFile: any = null;
+        let isDriveSynced = false;
 
         if (base64Pure) {
+          // 1. Upload to local server storage directly (Works reliably on mobile & all browsers)
           try {
-            const appsScriptRes = await uploadFileToDriveViaAppsScript(currentCfg, {
-              name: file.name,
-              type: inferredMime,
-              base64Data: base64Pure,
-              description: `Berkas resmi ${targetCategory} diunggah.`,
-              parentFolderId: GOOGLE_DRIVE_FOLDER_ID,
-              folderName: targetCategory
+            const uploadRes = await fetch('/api/upload-file', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                name: file.name,
+                mimeType: inferredMime,
+                base64Data: base64Pure,
+                category: targetCategory,
+                uploadedBy: currentUser?.nama || currentUser?.username || 'Administrator',
+                uploadedByRole: currentUser?.role || 'Staff Sekolah',
+                description: uploadDescription || `Berkas ${targetCategory}`,
+                privacy: uploadPrivacy,
+                folderName: targetCategory
+              })
             });
-            if (appsScriptRes.success && appsScriptRes.id) {
-              driveResult = appsScriptRes;
-            } else {
-              console.warn('Apps Script upload warning:', appsScriptRes.message);
-              if (appsScriptRes.message) uploadErrors.push(`${file.name}: ${appsScriptRes.message}`);
+
+            if (uploadRes.ok) {
+              const uploadJson = await uploadRes.json();
+              if (uploadJson.success && uploadJson.file) {
+                uploadedServerFile = uploadJson.file;
+                isDriveSynced = Boolean(uploadJson.isDriveSynced);
+                if (uploadJson.isDriveSynced) {
+                  driveResult = {
+                    id: uploadJson.file.id,
+                    webViewLink: uploadJson.file.driveFileUrl,
+                    folderId: uploadJson.file.driveFolderId
+                  };
+                }
+              }
             }
-          } catch (appsScriptErr: any) {
-            console.warn('Apps Script upload failed:', appsScriptErr);
-            uploadErrors.push(`${file.name}: ${appsScriptErr?.message || 'Gagal koneksi'}`);
+          } catch (serverUploadErr) {
+            console.warn('Direct /api/upload-file warning:', serverUploadErr);
+          }
+
+          // 2. If server didn't sync to Drive and Apps Script is configured, try direct Apps Script
+          if (!isDriveSynced && currentCfg?.webAppUrl) {
+            try {
+              const appsScriptRes = await uploadFileToDriveViaAppsScript(currentCfg, {
+                name: file.name,
+                type: inferredMime,
+                base64Data: base64Pure,
+                description: uploadDescription || `Berkas resmi ${targetCategory} diunggah.`,
+                parentFolderId: GOOGLE_DRIVE_FOLDER_ID,
+                folderName: targetCategory
+              });
+              if (appsScriptRes.success && appsScriptRes.id) {
+                driveResult = appsScriptRes;
+                isDriveSynced = true;
+              }
+            } catch (appsScriptErr: any) {
+              console.warn('Apps Script direct upload warning:', appsScriptErr);
+            }
           }
         }
 
         const ext = file.name.split('.').pop() || 'dat';
-        const fileId = driveResult?.id || `drive-file-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
-        const driveUrl = driveResult?.webViewLink || (driveResult?.id ? `https://drive.google.com/file/d/${driveResult.id}/view` : `${GOOGLE_DRIVE_MAIN_FOLDER_URL}`);
+        const fileId = uploadedServerFile?.id || driveResult?.id || `file-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+        const localFileUrl = uploadedServerFile?.fileUrl || `/uploads/${fileId}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+        const driveUrl = driveResult?.webViewLink || (driveResult?.id ? `https://drive.google.com/file/d/${driveResult.id}/view` : (uploadedServerFile?.driveFileUrl || localFileUrl));
         const folderId = driveResult?.folderId || GOOGLE_DRIVE_FOLDER_ID;
 
         const newItem: SchoolFileItem = {
           id: fileId,
           name: file.name,
           category: targetCategory,
-          fileSize: driveResult?.size || fileSize,
+          fileSize: driveResult?.size || uploadedServerFile?.fileSize || fileSize,
           uploadedBy: currentUser?.nama || currentUser?.username || 'Administrator',
           uploadedByRole: currentUser?.role || 'Staff Sekolah',
           uploadedAt: nowStr,
           privacy: uploadPrivacy,
           driveFileUrl: driveUrl,
+          fileUrl: localFileUrl,
           driveFolderId: folderId,
           fileExtension: ext,
           fileType: driveResult?.mimeType || inferredMime,
-          dataUrl: dataUrl,
+          dataUrl: fileSize <= 120000 ? dataUrl : undefined,
           description: uploadDescription || `Berkas ${targetCategory}`,
           tags: Array.from(new Set([
-            'GoogleDrive',
+            isDriveSynced ? 'GoogleDrive' : 'Server',
             targetCategory.split(' ')[0],
             ext.toUpperCase()
           ]))
@@ -1263,6 +1327,16 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
                           <span>{syncingFileId === file.id ? 'Mengunggah...' : 'Ke Drive'}</span>
                         </button>
                       )}
+                      <a
+                        href={file.fileUrl || `/api/download-file/${file.id}` || file.driveFileUrl || file.dataUrl}
+                        download={file.name}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold transition-colors cursor-pointer"
+                        title="Unduh Berkas Langsung"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                      </a>
                       <button
                         onClick={() => setPreviewFile(file)}
                         className="px-2.5 py-1.5 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 font-bold flex items-center gap-1 transition-colors cursor-pointer"
@@ -1339,6 +1413,16 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
                                 <span>{syncingFileId === file.id ? 'Mengunggah...' : 'Ke Drive'}</span>
                               </button>
                             )}
+                            <a
+                              href={file.fileUrl || `/api/download-file/${file.id}` || file.driveFileUrl || file.dataUrl}
+                              download={file.name}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 transition-colors cursor-pointer"
+                              title="Unduh Berkas Langsung"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                            </a>
                             <button
                               onClick={() => setPreviewFile(file)}
                               className="px-2.5 py-1 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 font-bold flex items-center gap-1 transition-colors cursor-pointer"
@@ -1501,27 +1585,35 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
               </div>
             )}
 
-            {/* Drag & Drop Box */}
-            <div
-              onClick={() => multiFileInputRef.current?.click()}
-              className="border-2 border-dashed border-sky-300 hover:border-sky-500 bg-sky-50/40 hover:bg-sky-50/80 rounded-2xl p-3.5 text-center transition-all cursor-pointer group"
+            {/* Mobile & Desktop Friendly File Picker Box */}
+            <label
+              htmlFor="berkas-file-input"
+              className="relative block border-2 border-dashed border-sky-300 hover:border-sky-500 bg-sky-50/50 hover:bg-sky-50/90 active:bg-sky-100 rounded-2xl p-4 text-center transition-all cursor-pointer group select-none shadow-xs"
             >
               <input
+                id="berkas-file-input"
                 type="file"
                 multiple
                 ref={multiFileInputRef}
                 onChange={handleFileSelection}
-                className="hidden"
-                accept="*/*"
+                className="sr-only"
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.webp,.svg,.zip,.rar,image/*,application/*"
               />
-              <Upload className="w-8 h-8 text-sky-500 mx-auto mb-1 group-hover:scale-110 transition-transform" />
-              <div className="font-bold text-slate-900 text-xs">
-                Klik atau Seret Berkas ke Area Ini
+              <div className="flex flex-col items-center justify-center">
+                <div className="w-11 h-11 rounded-2xl bg-sky-100 text-sky-600 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform shadow-xs">
+                  <Upload className="w-6 h-6" />
+                </div>
+                <div className="font-extrabold text-slate-900 text-xs sm:text-sm mb-1">
+                  Pilih Berkas dari HP atau Komputer
+                </div>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold shadow-xs my-1 transition-colors">
+                  📂 Buka File Picker / Galeri HP
+                </span>
+                <p className="text-slate-500 text-[11px] mt-1 max-w-sm">
+                  Mendukung PDF, Word, Excel, Foto/Gambar, ZIP. Bisa pilih langsung dari penyimpanan internal HP atau browser.
+                </p>
               </div>
-              <p className="text-slate-500 text-[11px] mt-0.5">
-                Format PDF, DOCX, XLSX, PPTX, JPG, PNG, ZIP (Bisa pilih banyak berkas)
-              </p>
-            </div>
+            </label>
 
             {/* Selected Files List */}
             {selectedUploadFiles.length > 0 && (
@@ -1897,13 +1989,23 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
                   </div>
                   <div className="pt-0.5 flex flex-wrap items-center justify-center gap-2">
                     <a
+                      href={previewFile.fileUrl || `/api/download-file/${previewFile.id}` || previewFile.dataUrl || previewFile.driveFileUrl}
+                      download={previewFile.name}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] flex items-center gap-1.5 transition-colors shadow-xs"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Unduh Berkas</span>
+                    </a>
+                    <a
                       href={previewFile.driveFileUrl || GOOGLE_DRIVE_MAIN_FOLDER_URL}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold text-[11px] flex items-center gap-1.5 transition-colors shadow-xs"
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
-                      <span>Buka File Asli di Google Drive</span>
+                      <span>Buka File di Google Drive</span>
                     </a>
                   </div>
                 </div>
@@ -1912,9 +2014,19 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
                   <FileCheck2 className="w-8 h-8 text-emerald-400 mx-auto" />
                   <div className="font-bold text-white text-xs">Pratinjau Dokumen Tersedia</div>
                   <p className="text-[11px] text-slate-400 max-w-xs mx-auto leading-tight">
-                    Berkas telah diverifikasi & tersimpan di Google Drive Repository.
+                    Berkas telah diverifikasi & tersimpan di repositori server sekolah dan Google Drive.
                   </p>
                   <div className="pt-1 flex flex-wrap items-center justify-center gap-2">
+                    <a
+                      href={previewFile.fileUrl || `/api/download-file/${previewFile.id}` || previewFile.dataUrl || previewFile.driveFileUrl}
+                      download={previewFile.name}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] flex items-center gap-1.5 transition-colors shadow-xs"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Unduh Berkas</span>
+                    </a>
                     <a
                       href={previewFile.driveFileUrl || GOOGLE_DRIVE_MAIN_FOLDER_URL}
                       target="_blank"
@@ -1922,7 +2034,7 @@ export const BerkasModule: React.FC<BerkasModuleProps> = ({
                       className="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold text-[11px] flex items-center gap-1.5 transition-colors"
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
-                      <span>Buka File Asli di Google Drive</span>
+                      <span>Buka File di Google Drive</span>
                     </a>
                   </div>
                 </div>

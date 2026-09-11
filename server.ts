@@ -5,6 +5,15 @@ import { createServer as createViteServer } from "vite";
 
 const CONFIG_FILE = path.join(process.cwd(), "sync_config.json");
 const DATA_FILE = path.join(process.cwd(), "app_data.json");
+const UPLOADS_DIR = path.join(process.cwd(), "public", "uploads");
+
+if (!fs.existsSync(UPLOADS_DIR)) {
+  try {
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+  } catch (e) {
+    console.error("Failed to create uploads directory:", e);
+  }
+}
 
 function safeReadJSON(filePath: string, fallback: any = {}) {
   try {
@@ -66,6 +75,171 @@ async function startServer() {
       status: "connected",
       mode: "appscript"
     });
+  });
+
+  // Serve uploaded files statically with correct cache & CORS headers
+  app.use("/uploads", express.static(UPLOADS_DIR, {
+    maxAge: '1d',
+    setHeaders: (res) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+    }
+  }));
+
+  // API Route: Unified Rock-Solid File Upload (Works on Mobile / All Browsers + Drive Backup)
+  app.post("/api/upload-file", async (req, res) => {
+    try {
+      const {
+        name,
+        mimeType,
+        base64Data,
+        category,
+        uploadedBy,
+        uploadedByRole,
+        description,
+        privacy,
+        folderName
+      } = req.body || {};
+
+      if (!name || !base64Data) {
+        return res.status(400).json({ success: false, message: "Nama berkas dan data berkas (base64) diperlukan." });
+      }
+
+      // Extract raw base64 string
+      let cleanBase64 = String(base64Data);
+      if (cleanBase64.includes(",")) {
+        cleanBase64 = cleanBase64.split(",")[1];
+      }
+
+      const buffer = Buffer.from(cleanBase64, "base64");
+      const fileSize = buffer.length;
+      const fileId = `file-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+      const safeName = path.basename(name).replace(/[^a-zA-Z0-9._-]/g, "_");
+      const storedFileName = `${fileId}_${safeName}`;
+      const localFilePath = path.join(UPLOADS_DIR, storedFileName);
+
+      fs.writeFileSync(localFilePath, buffer);
+
+      const fileUrl = `/uploads/${storedFileName}`;
+      const ext = name.split(".").pop()?.toLowerCase() || "dat";
+      const nowStr = new Date().toISOString().replace("T", " ").substring(0, 16);
+
+      let driveResult: any = null;
+
+      // Try uploading to Google Apps Script
+      const savedConfig = safeReadJSON(CONFIG_FILE, null);
+      const webAppUrl = savedConfig?.webAppUrl || "https://script.google.com/macros/s/AKfycbyhC26e6a4a0ORdBvnMCz7c1pDR0rQsGkcO_LfVKhxAZGYtBMGle4qbjZoNx6D_uT79/exec";
+
+      if (webAppUrl) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+          const scriptRes = await fetch(webAppUrl, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain" },
+            body: JSON.stringify({
+              type: "UPLOAD_FILE_TO_DRIVE",
+              fileName: name,
+              mimeType: mimeType || "application/octet-stream",
+              base64Data: cleanBase64,
+              folderName: folderName || category || "Berkas Dapodik",
+              description: description || `Berkas resmi ${category || "Dapodik"}`,
+              parentFolderId: "1OFVFI1xhsk45_ONTihtuSHeBVvEOr44m"
+            }),
+            redirect: "follow",
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+
+          const resText = await scriptRes.text();
+          try {
+            const parsed = JSON.parse(resText);
+            if (parsed && parsed.status === "success" && parsed.id) {
+              driveResult = parsed;
+            }
+          } catch (e) {}
+        } catch (scriptErr: any) {
+          console.warn("Apps Script Drive sync warning in /api/upload-file:", scriptErr?.message || scriptErr);
+        }
+      }
+
+      const isDriveSynced = Boolean(driveResult?.id);
+      const driveFileUrl = driveResult?.webViewLink || (driveResult?.id ? `https://drive.google.com/file/d/${driveResult.id}/view` : fileUrl);
+
+      const newItem = {
+        id: fileId,
+        name: name,
+        category: category || "Umum",
+        fileSize: fileSize,
+        uploadedBy: uploadedBy || "Pengguna",
+        uploadedByRole: uploadedByRole || "Staff Sekolah",
+        uploadedAt: nowStr,
+        privacy: privacy || "Public",
+        driveFileUrl: driveFileUrl,
+        driveFolderId: driveResult?.folderId || "1OFVFI1xhsk45_ONTihtuSHeBVvEOr44m",
+        fileExtension: ext,
+        fileType: mimeType || "application/octet-stream",
+        fileUrl: fileUrl,
+        dataUrl: fileSize <= 120000 ? `data:${mimeType};base64,${cleanBase64}` : undefined,
+        description: description || `Berkas ${category || "Sekolah"}`,
+        tags: Array.from(new Set([
+          isDriveSynced ? "GoogleDrive" : "Server",
+          (category || "Umum").split(" ")[0],
+          ext.toUpperCase()
+        ]))
+      };
+
+      // Persist directly to app_data.json
+      const currentData: any = safeReadJSON(DATA_FILE, {});
+      const existingFiles: any[] = Array.isArray(currentData.schoolFiles) ? currentData.schoolFiles : [];
+      const updatedFiles = [newItem, ...existingFiles.filter(f => f && f.id !== fileId)];
+      
+      currentData.schoolFiles = updatedFiles;
+      safeWriteJSON(DATA_FILE, currentData);
+
+      return res.json({
+        success: true,
+        message: isDriveSynced 
+          ? `Berkas "${name}" berhasil disimpan dan disinkronkan ke Google Drive!` 
+          : `Berkas "${name}" berhasil disimpan ke server sekolah dan dapat diakses semua perangkat!`,
+        file: newItem,
+        isDriveSynced
+      });
+    } catch (err: any) {
+      console.error("Error in /api/upload-file:", err);
+      return res.status(500).json({
+        success: false,
+        message: `Gagal memproses berkas: ${err?.message || err}`
+      });
+    }
+  });
+
+  // API Route: Download file directly
+  app.get("/api/download-file/:fileId", (req, res) => {
+    try {
+      const { fileId } = req.params;
+      const currentData: any = safeReadJSON(DATA_FILE, {});
+      const files: any[] = Array.isArray(currentData.schoolFiles) ? currentData.schoolFiles : [];
+      const targetFile = files.find(f => String(f.id) === String(fileId));
+
+      if (fs.existsSync(UPLOADS_DIR)) {
+        const allFiles = fs.readdirSync(UPLOADS_DIR);
+        const match = allFiles.find(fname => fname.startsWith(fileId));
+        if (match) {
+          const fullPath = path.join(UPLOADS_DIR, match);
+          return res.download(fullPath, targetFile?.name || match);
+        }
+      }
+
+      if (targetFile?.driveFileUrl && targetFile.driveFileUrl.startsWith("http")) {
+        return res.redirect(targetFile.driveFileUrl);
+      }
+
+      return res.status(404).send("File tidak ditemukan.");
+    } catch (e: any) {
+      return res.status(500).send("Gagal mengunduh file.");
+    }
   });
 
   // API Route: Proxy Sync to Google Sheets (bypasses browser CORS & mobile restrictions)
@@ -258,6 +432,21 @@ async function startServer() {
         ? incoming.deletedFileIds
         : (incoming.deletedFileId ? [incoming.deletedFileId] : []);
       const mergedDeletedFiles = Array.from(new Set([...currentDeletedFiles, ...incomingDeletedFiles]));
+
+      // Remove deleted files from disk if present
+      if (incomingDeletedFiles.length > 0 && fs.existsSync(UPLOADS_DIR)) {
+        try {
+          const filesOnDisk = fs.readdirSync(UPLOADS_DIR);
+          for (const delId of incomingDeletedFiles) {
+            const matches = filesOnDisk.filter(f => f.startsWith(String(delId)));
+            for (const match of matches) {
+              try {
+                fs.unlinkSync(path.join(UPLOADS_DIR, match));
+              } catch (e) {}
+            }
+          }
+        } catch (e) {}
+      }
 
       // Handle schoolFiles with smart merging by ID across multiple devices & browsers
       let mergedFiles: any[] = [];
