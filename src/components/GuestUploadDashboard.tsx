@@ -428,42 +428,116 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
 
     const targetFolder = "Arsip Tamu";
 
+    // Load active webAppUrl dynamically from sync-config
+    let targetWebAppUrl = "https://script.google.com/macros/s/AKfycbx82FotXhPvN0i9hOo_S-bctwcT5JCB6JrvUu5CHtIMEepaJj1EIl5Bf7mxPoW8JuPguA/exec";
+    try {
+      const configRes = await fetch('/api/sync-config');
+      if (configRes.ok) {
+        const configData = await configRes.json();
+        if (configData && configData.webAppUrl) {
+          targetWebAppUrl = configData.webAppUrl;
+        }
+      }
+    } catch (configErr) {
+      console.warn('Could not fetch dynamic sync-config, using default:', configErr);
+    }
+
+    let directDriveUrl = '';
+    let directDriveId = '';
+    let isDirectSuccess = false;
+
+    // Step A: Attempt direct client-side upload to Google Drive for 100% reliability
+    try {
+      console.log('Attempting super-reliable direct client-side upload to:', targetWebAppUrl);
+      const directUploadRes = await fetch(targetWebAppUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8'
+        },
+        body: JSON.stringify({
+          type: "UPLOAD_FILE_TO_DRIVE",
+          fileName: file.name,
+          mimeType: mimeType || "application/octet-stream",
+          base64Data: base64Pure,
+          folderName: targetFolder,
+          description: `Berkas tamu diunggah oleh ${uploader} via Portal Berkas (Direct Browser)`,
+          parentFolderId: "1OFVFI1xhsk45_ONTihtuSHeBVvEOr44m"
+        })
+      });
+
+      if (directUploadRes.ok) {
+        const directText = await directUploadRes.text();
+        const parsedDirect = JSON.parse(directText);
+        if (parsedDirect && parsedDirect.status === 'success') {
+          directDriveUrl = parsedDirect.webViewLink || `https://drive.google.com/file/d/${parsedDirect.id}/view`;
+          directDriveId = parsedDirect.id;
+          isDirectSuccess = true;
+          console.log('Direct client-side upload to Google Drive succeeded!', directDriveUrl);
+        }
+      }
+    } catch (directErr) {
+      console.warn('Direct upload was interrupted or blocked, falling back to server-side upload:', directErr);
+    }
+
+    setQueue((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, progress: 75 } : item))
+    );
+
+    // Step B: Send file or file-metadata to the server to record it in app_data.json/history
     const res = await fetch('/api/upload-file', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: file.name,
         mimeType,
-        base64Data: base64Pure,
+        base64Data: isDirectSuccess ? undefined : base64Pure, // Skip sending heavy binary data to server if direct upload succeeded
         category: targetFolder,
         uploadedBy: uploader,
         uploadedByRole: 'Tamu / Umum',
         description: `Berkas tamu diunggah oleh ${uploader} via Portal Berkas`,
         privacy: 'Public',
-        folderName: targetFolder
+        folderName: targetFolder,
+        onlySaveMetadata: isDirectSuccess,
+        driveFileUrl: directDriveUrl || undefined,
+        driveFolderId: directDriveId || undefined,
+        fileSize: fileToUpload.size
       })
     });
 
     if (!res.ok) {
+      // If direct upload succeeded but server save failed, we still treat it as successful
+      if (isDirectSuccess && directDriveUrl) {
+        setQueue((prev) =>
+          prev.map((item) => (item.id === id ? { 
+            ...item, 
+            status: 'success', 
+            progress: 100,
+            driveUrl: directDriveUrl 
+          } : item))
+        );
+        return directDriveUrl;
+      }
       const errData = await res.json().catch(() => ({}));
       throw new Error(errData.message || `Gagal mengunggah berkas ${file.name}`);
     }
 
     const json = await res.json();
-    if (!json.success) {
+    if (!json.success && !isDirectSuccess) {
       throw new Error(json.message || `Gagal menyimpan berkas ${file.name}`);
     }
+
+    const finalDriveUrl = json.file?.driveFileUrl || directDriveUrl;
 
     setQueue((prev) =>
       prev.map((item) => (item.id === id ? { 
         ...item, 
         status: 'success', 
         progress: 100,
-        driveUrl: json.file?.driveFileUrl 
+        driveUrl: finalDriveUrl 
       } : item))
     );
 
-    return json.file?.driveFileUrl || '';
+    return finalDriveUrl;
   };
 
   const handleExecuteUpload = async () => {

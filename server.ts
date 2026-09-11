@@ -114,7 +114,7 @@ async function startServer() {
     // Fallback to default
     return res.json({
       spreadsheetUrl: "1XmLmshCOhSktRfzW8uG_8RqxlxVCQt5eUVekEFLwj_M",
-      webAppUrl: "https://script.google.com/macros/s/AKfycbyhC26e6a4a0ORdBvnMCz7c1pDR0rQsGkcO_LfVKhxAZGYtBMGle4qbjZoNx6D_uT79/exec",
+      webAppUrl: "https://script.google.com/macros/s/AKfycbx82FotXhPvN0i9hOo_S-bctwcT5JCB6JrvUu5CHtIMEepaJj1EIl5Bf7mxPoW8JuPguA/exec",
       sheetId: "",
       autoSync: true,
       lastSynced: null,
@@ -144,74 +144,95 @@ async function startServer() {
         uploadedByRole,
         description,
         privacy,
-        folderName
+        folderName,
+        onlySaveMetadata,
+        driveFileUrl: providedDriveUrl,
+        driveFolderId: providedFolderId,
+        fileSize: providedSize
       } = req.body || {};
 
-      if (!name || !base64Data) {
-        return res.status(400).json({ success: false, message: "Nama berkas dan data berkas (base64) diperlukan." });
+      if (!name) {
+        return res.status(400).json({ success: false, message: "Nama berkas diperlukan." });
       }
 
-      // Extract raw base64 string
-      let cleanBase64 = String(base64Data);
-      if (cleanBase64.includes(",")) {
-        cleanBase64 = cleanBase64.split(",")[1];
-      }
-
-      const buffer = Buffer.from(cleanBase64, "base64");
-      const fileSize = buffer.length;
       const fileId = `file-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
-      const safeName = path.basename(name).replace(/[^a-zA-Z0-9._-]/g, "_");
-      const storedFileName = `${fileId}_${safeName}`;
-      const localFilePath = path.join(UPLOADS_DIR, storedFileName);
-
-      fs.writeFileSync(localFilePath, buffer);
-
-      const fileUrl = `/uploads/${storedFileName}`;
       const ext = name.split(".").pop()?.toLowerCase() || "dat";
       const nowStr = new Date().toISOString().replace("T", " ").substring(0, 16);
 
-      let driveResult: any = null;
+      let driveFileUrl = providedDriveUrl || "";
+      let driveFolderId = providedFolderId || "1OFVFI1xhsk45_ONTihtuSHeBVvEOr44m";
+      let fileSize = providedSize || 0;
+      let fileUrl = "";
+      let isDriveSynced = Boolean(providedDriveUrl);
 
-      // Try uploading to Google Apps Script (with 12s timeout to avoid mobile browser hang)
-      const savedConfig = safeReadJSON(CONFIG_FILE, null);
-      const webAppUrl = savedConfig?.webAppUrl || "https://script.google.com/macros/s/AKfycbyhC26e6a4a0ORdBvnMCz7c1pDR0rQsGkcO_LfVKhxAZGYtBMGle4qbjZoNx6D_uT79/exec";
+      // If we are only saving metadata from a direct client-side upload
+      if (onlySaveMetadata) {
+        fileUrl = providedDriveUrl || "";
+      } else {
+        if (!base64Data) {
+          return res.status(400).json({ success: false, message: "Data berkas (base64) diperlukan." });
+        }
 
-      if (webAppUrl) {
+        // Extract raw base64 string
+        let cleanBase64 = String(base64Data);
+        if (cleanBase64.includes(",")) {
+          cleanBase64 = cleanBase64.split(",")[1];
+        }
+
+        const buffer = Buffer.from(cleanBase64, "base64");
+        fileSize = buffer.length;
+        const safeName = path.basename(name).replace(/[^a-zA-Z0-9._-]/g, "_");
+        const storedFileName = `${fileId}_${safeName}`;
+        const localFilePath = path.join(UPLOADS_DIR, storedFileName);
+
         try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 30000);
+          fs.writeFileSync(localFilePath, buffer);
+          fileUrl = `/uploads/${storedFileName}`;
+        } catch (fsErr) {
+          console.warn("Local FS write failed, proceeding as memory only:", fsErr);
+          fileUrl = `data:${mimeType || "application/octet-stream"};base64,${cleanBase64.substring(0, 100)}...`;
+        }
 
-          const scriptRes = await fetch(webAppUrl, {
-            method: "POST",
-            headers: { "Content-Type": "text/plain" },
-            body: JSON.stringify({
-              type: "UPLOAD_FILE_TO_DRIVE",
-              fileName: name,
-              mimeType: mimeType || "application/octet-stream",
-              base64Data: cleanBase64,
-              folderName: folderName || category || "Berkas Dapodik",
-              description: description || `Berkas resmi ${category || "Dapodik"}`,
-              parentFolderId: "1OFVFI1xhsk45_ONTihtuSHeBVvEOr44m"
-            }),
-            redirect: "follow",
-            signal: controller.signal
-          });
-          clearTimeout(timeoutId);
+        // Try uploading to Google Apps Script (with 30s timeout to avoid mobile browser hang)
+        const savedConfig = safeReadJSON(CONFIG_FILE, null);
+        const webAppUrl = savedConfig?.webAppUrl || "https://script.google.com/macros/s/AKfycbx82FotXhPvN0i9hOo_S-bctwcT5JCB6JrvUu5CHtIMEepaJj1EIl5Bf7mxPoW8JuPguA/exec";
 
-          const resText = await scriptRes.text();
+        if (webAppUrl) {
           try {
-            const parsed = JSON.parse(resText);
-            if (parsed && parsed.status === "success" && parsed.id) {
-              driveResult = parsed;
-            }
-          } catch (e) {}
-        } catch (scriptErr: any) {
-          console.warn("Apps Script Drive sync warning in /api/upload-file:", scriptErr?.message || scriptErr);
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+            const scriptRes = await fetch(webAppUrl, {
+              method: "POST",
+              headers: { "Content-Type": "text/plain" },
+              body: JSON.stringify({
+                type: "UPLOAD_FILE_TO_DRIVE",
+                fileName: name,
+                mimeType: mimeType || "application/octet-stream",
+                base64Data: cleanBase64,
+                folderName: folderName || category || "Berkas Dapodik",
+                description: description || `Berkas resmi ${category || "Dapodik"}`,
+                parentFolderId: "1OFVFI1xhsk45_ONTihtuSHeBVvEOr44m"
+              }),
+              redirect: "follow",
+              signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+
+            const resText = await scriptRes.text();
+            try {
+              const parsed = JSON.parse(resText);
+              if (parsed && parsed.status === "success" && parsed.id) {
+                driveFileUrl = parsed.webViewLink || `https://drive.google.com/file/d/${parsed.id}/view`;
+                driveFolderId = parsed.folderId || driveFolderId;
+                isDriveSynced = true;
+              }
+            } catch (e) {}
+          } catch (scriptErr: any) {
+            console.warn("Apps Script Drive sync warning in /api/upload-file:", scriptErr?.message || scriptErr);
+          }
         }
       }
-
-      const isDriveSynced = Boolean(driveResult?.id);
-      const driveFileUrl = driveResult?.webViewLink || (driveResult?.id ? `https://drive.google.com/file/d/${driveResult.id}/view` : fileUrl);
 
       const newItem = {
         id: fileId,
@@ -222,12 +243,11 @@ async function startServer() {
         uploadedByRole: uploadedByRole || "Staff Sekolah",
         uploadedAt: nowStr,
         privacy: privacy || "Public",
-        driveFileUrl: driveFileUrl,
-        driveFolderId: driveResult?.folderId || "1OFVFI1xhsk45_ONTihtuSHeBVvEOr44m",
+        driveFileUrl: driveFileUrl || fileUrl,
+        driveFolderId: driveFolderId,
         fileExtension: ext,
         fileType: mimeType || "application/octet-stream",
-        fileUrl: fileUrl,
-        dataUrl: fileSize <= 120000 ? `data:${mimeType};base64,${cleanBase64}` : undefined,
+        fileUrl: fileUrl || driveFileUrl,
         description: description || `Berkas ${category || "Sekolah"}`,
         tags: Array.from(new Set([
           isDriveSynced ? "GoogleDrive" : "Server",
@@ -294,7 +314,7 @@ async function startServer() {
       let { webAppUrl, payload } = req.body || {};
       if (!webAppUrl) {
         const savedConfig = safeReadJSON(CONFIG_FILE, null);
-        webAppUrl = savedConfig?.webAppUrl || "https://script.google.com/macros/s/AKfycbyhC26e6a4a0ORdBvnMCz7c1pDR0rQsGkcO_LfVKhxAZGYtBMGle4qbjZoNx6D_uT79/exec";
+        webAppUrl = savedConfig?.webAppUrl || "https://script.google.com/macros/s/AKfycbx82FotXhPvN0i9hOo_S-bctwcT5JCB6JrvUu5CHtIMEepaJj1EIl5Bf7mxPoW8JuPguA/exec";
       }
       
       const controller = new AbortController();
