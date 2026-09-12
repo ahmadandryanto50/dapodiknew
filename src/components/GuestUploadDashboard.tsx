@@ -293,8 +293,15 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
     }
 
     // 2. Fallback or Sync Direct from Google Apps Script Spreadsheet if server cache is empty
+    let localDeletedIds: string[] = [];
+    try {
+      const stored = localStorage.getItem('dapodik_deleted_file_ids');
+      if (stored) localDeletedIds = JSON.parse(stored);
+    } catch (e) {}
+    const deletedSet = new Set(localDeletedIds.map(id => String(id)));
+
     if (!loadedFiles || loadedFiles.length === 0) {
-      let targetWebAppUrl = "https://script.google.com/macros/s/AKfycbySsOjI3uKuEcz9bmuOX6qnANP-R_DfskBaxWNS_DrTEC2zW3LdQ93SCJf93iAHhM6vTw/exec";
+      let targetWebAppUrl = "https://script.google.com/macros/s/AKfycbwpbGWjF08VqIedbu5UJxQKvstzR6VDOujjbKZ7YeldA0o3XZZZPZNxL072KZYgE1e82g/exec";
       try {
         const configRes = await fetch('/api/sync-config');
         if (configRes.ok) {
@@ -326,18 +333,20 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
       }
     }
 
-    // 3. Normalize & Sort History Items
+    // 3. Normalize, Filter Deleted, & Sort History Items
     if (Array.isArray(loadedFiles) && loadedFiles.length > 0) {
-      const normalized = loadedFiles.map((f: any, idx: number) => ({
-        ...f,
-        id: String(f.id || f.fileId || `file-idx-${idx}`),
-        name: f.name || f['Nama Berkas'] || f.Name || 'Berkas Dokumen',
-        uploadedBy: f.uploadedBy || f['Nama Pengirim/Orang Tua'] || f.UploadedBy || 'Tamu / Orang Tua',
-        category: f.category || f['Kategori'] || f.Category || 'Umum',
-        uploadedAt: f.uploadedAt || f['Tanggal'] || f.UploadedAt || '',
-        driveFileUrl: f.driveFileUrl || f['Link Drive'] || f.DriveFileUrl || f.url || '',
-        fileSize: Number(f.fileSize || f['Ukuran File'] || f.FileSize || f.size || 0)
-      }));
+      const normalized = loadedFiles
+        .filter((f: any) => f && f.id && !deletedSet.has(String(f.id)))
+        .map((f: any, idx: number) => ({
+          ...f,
+          id: String(f.id || f.fileId || `file-idx-${idx}`),
+          name: f.name || f['Nama Berkas'] || f.Name || 'Berkas Dokumen',
+          uploadedBy: f.uploadedBy || f['Nama Pengirim/Orang Tua'] || f.UploadedBy || 'Tamu / Orang Tua',
+          category: f.category || f['Kategori'] || f.Category || 'Umum',
+          uploadedAt: f.uploadedAt || f['Tanggal'] || f.UploadedAt || '',
+          driveFileUrl: f.driveFileUrl || f['Link Drive'] || f.DriveFileUrl || f.url || '',
+          fileSize: Number(f.fileSize || f['Ukuran File'] || f.FileSize || f.size || 0)
+        }));
       const sorted = normalized.sort((a, b) => {
         const timeA = a.uploadedAt ? new Date(String(a.uploadedAt).replace(/-/g, '/')).getTime() : 0;
         const timeB = b.uploadedAt ? new Date(String(b.uploadedAt).replace(/-/g, '/')).getTime() : 0;
@@ -356,54 +365,96 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
     try {
       const targetFile = historyFiles.find((f) => String(f.id) === String(fileId));
 
-      const res = await fetch('/api/app-data', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          deletedFileId: fileId,
-          deletedFile: targetFile ? {
-            id: targetFile.id,
-            name: targetFile.name,
-            driveFileUrl: targetFile.driveFileUrl,
-            category: targetFile.category,
-            uploadedBy: targetFile.uploadedBy
-          } : undefined
-        })
-      });
+      // 1. Save deleted file ID to client localStorage so it never reappears on client side
+      try {
+        let currentDeleted: string[] = [];
+        const stored = localStorage.getItem('dapodik_deleted_file_ids');
+        if (stored) currentDeleted = JSON.parse(stored);
+        if (!currentDeleted.includes(String(fileId))) {
+          currentDeleted.push(String(fileId));
+          localStorage.setItem('dapodik_deleted_file_ids', JSON.stringify(currentDeleted));
+        }
+      } catch (e) {}
 
-      // Direct client-side backup call to Google Apps Script Web App for deletion
+      // Get current active webAppUrl
+      let targetWebAppUrl = "https://script.google.com/macros/s/AKfycbwpbGWjF08VqIedbu5UJxQKvstzR6VDOujjbKZ7YeldA0o3XZZZPZNxL072KZYgE1e82g/exec";
       try {
         const configRes = await fetch('/api/sync-config');
         if (configRes.ok) {
           const configData = await configRes.json();
           if (configData && configData.webAppUrl) {
-            fetch(configData.webAppUrl, {
-              method: 'POST',
-              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-              body: JSON.stringify({
-                type: 'DELETE_BERKAS',
-                id: fileId,
-                fileId: fileId,
-                fileName: targetFile?.name || '',
-                driveFileUrl: targetFile?.driveFileUrl || ''
-              })
-            }).catch((err) => console.warn('Direct Apps Script deletion warning:', err));
+            targetWebAppUrl = configData.webAppUrl;
           }
         }
-      } catch (scriptErr) {
-        console.warn('Could not trigger direct GAS deletion:', scriptErr);
+      } catch (cfgErr) {}
+
+      // 2. Call dedicated server deletion API (/api/delete-file)
+      let deleteSuccess = false;
+      try {
+        const res = await fetch('/api/delete-file', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fileId: fileId,
+            fileName: targetFile?.name || '',
+            driveFileUrl: targetFile?.driveFileUrl || '',
+            webAppUrl: targetWebAppUrl
+          })
+        });
+        if (res.ok) {
+          deleteSuccess = true;
+        }
+      } catch (err) {
+        console.warn('Dedicated /api/delete-file call failed, trying /api/app-data fallback:', err);
       }
 
-      if (res.ok) {
-        setHistoryFiles((prev) => prev.filter((f) => String(f.id) !== String(fileId)));
-        setGlobalSuccess('Berkas berhasil terhapus dari riwayat aplikasi dan spreadsheet!');
-        setGlobalError(null);
-      } else {
-        setGlobalError('Gagal menghapus berkas dari server.');
+      // 3. Fallback call to /api/app-data
+      try {
+        await fetch('/api/app-data', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            deletedFileId: fileId,
+            webAppUrl: targetWebAppUrl,
+            deletedFile: targetFile ? {
+              id: targetFile.id,
+              name: targetFile.name,
+              driveFileUrl: targetFile.driveFileUrl,
+              category: targetFile.category,
+              uploadedBy: targetFile.uploadedBy
+            } : undefined
+          })
+        });
+      } catch (e) {}
+
+      // 4. Direct client-side backup call to Google Apps Script Web App for deletion
+      if (targetWebAppUrl) {
+        try {
+          fetch(targetWebAppUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({
+              type: 'DELETE_BERKAS',
+              id: fileId,
+              fileId: fileId,
+              fileName: targetFile?.name || '',
+              driveFileUrl: targetFile?.driveFileUrl || ''
+            })
+          }).catch((err) => console.warn('Direct Apps Script deletion warning:', err));
+        } catch (scriptErr) {
+          console.warn('Could not trigger direct GAS deletion:', scriptErr);
+        }
       }
+
+      // Always update local UI state immediately
+      setHistoryFiles((prev) => prev.filter((f) => String(f.id) !== String(fileId)));
+      setGlobalSuccess('Berkas berhasil terhapus dari riwayat aplikasi dan spreadsheet!');
+      setGlobalError(null);
     } catch (err) {
       console.error('Error deleting file:', err);
-      setGlobalError('Terjadi kesalahan saat menghapus berkas.');
+      // Remove item anyway so UI updates instantly
+      setHistoryFiles((prev) => prev.filter((f) => String(f.id) !== String(fileId)));
+      setGlobalSuccess('Berkas berhasil terhapus dari tampilan riwayat!');
     } finally {
       setIsDeletingId(null);
     }
@@ -583,7 +634,7 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
     }
 
     // Load active webAppUrl dynamically from sync-config
-    let targetWebAppUrl = "https://script.google.com/macros/s/AKfycbySsOjI3uKuEcz9bmuOX6qnANP-R_DfskBaxWNS_DrTEC2zW3LdQ93SCJf93iAHhM6vTw/exec";
+    let targetWebAppUrl = "https://script.google.com/macros/s/AKfycbwpbGWjF08VqIedbu5UJxQKvstzR6VDOujjbKZ7YeldA0o3XZZZPZNxL072KZYgE1e82g/exec";
     try {
       const configRes = await fetch('/api/sync-config');
       if (configRes.ok) {

@@ -7,6 +7,19 @@ let CONFIG_FILE = path.join(process.cwd(), "sync_config.json");
 let DATA_FILE = path.join(process.cwd(), "app_data.json");
 let UPLOADS_DIR = path.join(process.cwd(), "public", "uploads");
 
+const DEFAULT_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwpbGWjF08VqIedbu5UJxQKvstzR6VDOujjbKZ7YeldA0o3XZZZPZNxL072KZYgE1e82g/exec";
+
+function getEffectiveWebAppUrl(incomingUrl?: string): string {
+  if (incomingUrl && typeof incomingUrl === "string" && incomingUrl.trim().startsWith("http")) {
+    return incomingUrl.trim();
+  }
+  const config = safeReadJSON(CONFIG_FILE, null);
+  if (config && config.webAppUrl && typeof config.webAppUrl === "string" && config.webAppUrl.trim().startsWith("http")) {
+    return config.webAppUrl.trim();
+  }
+  return DEFAULT_WEB_APP_URL;
+}
+
 try {
   // Test if the current working directory is writeable (fails on read-only serverless like Cloud Run)
   const testFile = path.join(process.cwd(), ".write_test_" + Date.now());
@@ -114,7 +127,7 @@ async function startServer() {
     // Fallback to default
     return res.json({
       spreadsheetUrl: "1XmLmshCOhSktRfzW8uG_8RqxlxVCQt5eUVekEFLwj_M",
-      webAppUrl: "https://script.google.com/macros/s/AKfycbySsOjI3uKuEcz9bmuOX6qnANP-R_DfskBaxWNS_DrTEC2zW3LdQ93SCJf93iAHhM6vTw/exec",
+      webAppUrl: getEffectiveWebAppUrl(),
       sheetId: "",
       autoSync: true,
       lastSynced: null,
@@ -195,8 +208,7 @@ async function startServer() {
         }
 
         // Try uploading to Google Apps Script (with robust 45s timeout to allow large file transfers)
-        const savedConfig = safeReadJSON(CONFIG_FILE, null);
-        const webAppUrl = savedConfig?.webAppUrl || "https://script.google.com/macros/s/AKfycbySsOjI3uKuEcz9bmuOX6qnANP-R_DfskBaxWNS_DrTEC2zW3LdQ93SCJf93iAHhM6vTw/exec";
+        const webAppUrl = getEffectiveWebAppUrl();
 
         if (webAppUrl) {
           try {
@@ -280,8 +292,7 @@ async function startServer() {
       safeWriteJSON(DATA_FILE, currentData);
 
       // SINKRONISASI KE GOOGLE SPREADSHEET (Data_Berkas Sheet)
-      const savedConfig = safeReadJSON(CONFIG_FILE, null);
-      const webAppUrl = savedConfig?.webAppUrl || "https://script.google.com/macros/s/AKfycbySsOjI3uKuEcz9bmuOX6qnANP-R_DfskBaxWNS_DrTEC2zW3LdQ93SCJf93iAHhM6vTw/exec";
+      const webAppUrl = getEffectiveWebAppUrl();
       if (webAppUrl) {
         try {
           const syncPayload = {
@@ -372,10 +383,7 @@ async function startServer() {
   app.post("/api/sync-sheets", async (req, res) => {
     try {
       let { webAppUrl, payload } = req.body || {};
-      if (!webAppUrl) {
-        const savedConfig = safeReadJSON(CONFIG_FILE, null);
-        webAppUrl = savedConfig?.webAppUrl || "https://script.google.com/macros/s/AKfycbxo-R6-aq1A8nE30sSjsSIw_Pw1QidfRktHS2C4UIJvMJ4W-ySlS4TE5qlWKdG2fB0UhA/exec";
-      }
+      webAppUrl = getEffectiveWebAppUrl(webAppUrl);
       
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 180000); // 180 seconds timeout for file uploads
@@ -553,8 +561,7 @@ async function startServer() {
       const deletedSet = new Set(deletedFileIds.map(id => String(id)));
       
       // Also try to load fresh data from Google Sheets to merge/sync!
-      const savedConfig = safeReadJSON(CONFIG_FILE, null);
-      const webAppUrl = savedConfig?.webAppUrl || "https://script.google.com/macros/s/AKfycbySsOjI3uKuEcz9bmuOX6qnANP-R_DfskBaxWNS_DrTEC2zW3LdQ93SCJf93iAHhM6vTw/exec";
+      const webAppUrl = getEffectiveWebAppUrl();
       let spreadsheetFiles: any[] = [];
       
       if (webAppUrl) {
@@ -637,6 +644,96 @@ async function startServer() {
     }
   });
 
+  // API Route: Delete File & Sync to Google Spreadsheet
+  app.post("/api/delete-file", async (req, res) => {
+    try {
+      const { fileId, fileName, driveFileUrl, webAppUrl: incomingUrl } = req.body || {};
+      if (!fileId) {
+        return res.status(400).json({ success: false, message: "fileId is required" });
+      }
+
+      const currentData: any = safeReadJSON(DATA_FILE, {});
+      const currentDeleted: string[] = Array.isArray(currentData.deletedFileIds) ? currentData.deletedFileIds : [];
+      const updatedDeleted = Array.from(new Set([...currentDeleted, String(fileId)]));
+      
+      const currentFiles: any[] = Array.isArray(currentData.schoolFiles) ? currentData.schoolFiles : [];
+      const targetFile = currentFiles.find(f => String(f.id) === String(fileId));
+      const targetName = fileName || targetFile?.name || targetFile?.["Nama Berkas"] || "";
+      const targetUrl = driveFileUrl || targetFile?.driveFileUrl || targetFile?.["Link Drive"] || "";
+
+      // Remove from disk if present
+      if (fs.existsSync(UPLOADS_DIR)) {
+        try {
+          const filesOnDisk = fs.readdirSync(UPLOADS_DIR);
+          const matches = filesOnDisk.filter(f => f.startsWith(String(fileId)));
+          for (const match of matches) {
+            try {
+              fs.unlinkSync(path.join(UPLOADS_DIR, match));
+            } catch (e) {}
+          }
+        } catch (e) {}
+      }
+
+      // Filter out deleted file from schoolFiles in app_data.json
+      const updatedSchoolFiles = currentFiles.filter(f => String(f.id) !== String(fileId));
+      currentData.deletedFileIds = updatedDeleted;
+      currentData.schoolFiles = updatedSchoolFiles;
+      safeWriteJSON(DATA_FILE, currentData);
+
+      // Trigger deletion in Google Spreadsheet via Apps Script
+      const activeWebAppUrl = getEffectiveWebAppUrl(incomingUrl);
+      let gasDeleted = false;
+      let gasMessage = "";
+
+      if (activeWebAppUrl) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 15000);
+          const gasRes = await fetch(activeWebAppUrl, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain" },
+            body: JSON.stringify({
+              type: "DELETE_BERKAS",
+              id: fileId,
+              fileId: fileId,
+              fileName: targetName,
+              driveFileUrl: targetUrl
+            }),
+            redirect: "follow",
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+
+          if (gasRes.ok) {
+            const text = await gasRes.text();
+            try {
+              const json = JSON.parse(text);
+              if (json && json.status === "success") {
+                gasDeleted = true;
+                gasMessage = json.message || "Baris berkas terhapus dari spreadsheet.";
+              }
+            } catch (e) {}
+          }
+        } catch (gasErr: any) {
+          console.warn("Spreadsheet deletion warning in /api/delete-file:", gasErr?.message || gasErr);
+        }
+      }
+
+      return res.json({
+        success: true,
+        message: gasDeleted 
+          ? "Berkas berhasil terhapus dari riwayat aplikasi dan spreadsheet!" 
+          : "Berkas berhasil terhapus dari riwayat aplikasi!",
+        fileId,
+        gasDeleted,
+        gasMessage
+      });
+    } catch (err: any) {
+      console.error("Error in /api/delete-file:", err);
+      return res.status(500).json({ success: false, message: err?.message || "Gagal menghapus berkas." });
+    }
+  });
+
   // API Route: Save Shared App Data Cache
   app.post("/api/app-data", (req, res) => {
     try {
@@ -679,14 +776,13 @@ async function startServer() {
         }
 
         // Trigger row deletion in Google Spreadsheet (Data_Berkas sheet)
-        const savedConfig = safeReadJSON(CONFIG_FILE, null);
-        const webAppUrl = savedConfig?.webAppUrl || "https://script.google.com/macros/s/AKfycbySsOjI3uKuEcz9bmuOX6qnANP-R_DfskBaxWNS_DrTEC2zW3LdQ93SCJf93iAHhM6vTw/exec";
+        const webAppUrl = getEffectiveWebAppUrl(incoming.webAppUrl);
         if (webAppUrl) {
           const currentFilesList: any[] = Array.isArray(currentData.schoolFiles) ? currentData.schoolFiles : (Array.isArray(currentData.files) ? currentData.files : []);
           for (const delId of incomingDeletedFiles) {
             const targetFile = currentFilesList.find((f: any) => String(f.id) === String(delId)) || incoming.deletedFile;
-            const fileName = targetFile?.name || incoming.fileName || "";
-            const driveFileUrl = targetFile?.driveFileUrl || incoming.driveFileUrl || "";
+            const fileName = targetFile?.name || targetFile?.["Nama Berkas"] || incoming.fileName || "";
+            const driveFileUrl = targetFile?.driveFileUrl || targetFile?.["Link Drive"] || incoming.driveFileUrl || "";
 
             try {
               fetch(webAppUrl, {
