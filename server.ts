@@ -662,19 +662,50 @@ async function startServer() {
         : (incoming.deletedFileId ? [incoming.deletedFileId] : []);
       const mergedDeletedFiles = Array.from(new Set([...currentDeletedFiles, ...incomingDeletedFiles]));
 
-      // Remove deleted files from disk if present
-      if (incomingDeletedFiles.length > 0 && fs.existsSync(UPLOADS_DIR)) {
-        try {
-          const filesOnDisk = fs.readdirSync(UPLOADS_DIR);
+      // Sync deletion to Google Apps Script Spreadsheet & remove local disk files
+      if (incomingDeletedFiles.length > 0) {
+        if (fs.existsSync(UPLOADS_DIR)) {
+          try {
+            const filesOnDisk = fs.readdirSync(UPLOADS_DIR);
+            for (const delId of incomingDeletedFiles) {
+              const matches = filesOnDisk.filter(f => f.startsWith(String(delId)));
+              for (const match of matches) {
+                try {
+                  fs.unlinkSync(path.join(UPLOADS_DIR, match));
+                } catch (e) {}
+              }
+            }
+          } catch (e) {}
+        }
+
+        // Trigger row deletion in Google Spreadsheet (Data_Berkas sheet)
+        const savedConfig = safeReadJSON(CONFIG_FILE, null);
+        const webAppUrl = savedConfig?.webAppUrl || "https://script.google.com/macros/s/AKfycbySsOjI3uKuEcz9bmuOX6qnANP-R_DfskBaxWNS_DrTEC2zW3LdQ93SCJf93iAHhM6vTw/exec";
+        if (webAppUrl) {
+          const currentFilesList: any[] = Array.isArray(currentData.schoolFiles) ? currentData.schoolFiles : (Array.isArray(currentData.files) ? currentData.files : []);
           for (const delId of incomingDeletedFiles) {
-            const matches = filesOnDisk.filter(f => f.startsWith(String(delId)));
-            for (const match of matches) {
-              try {
-                fs.unlinkSync(path.join(UPLOADS_DIR, match));
-              } catch (e) {}
+            const targetFile = currentFilesList.find((f: any) => String(f.id) === String(delId)) || incoming.deletedFile;
+            const fileName = targetFile?.name || incoming.fileName || "";
+            const driveFileUrl = targetFile?.driveFileUrl || incoming.driveFileUrl || "";
+
+            try {
+              fetch(webAppUrl, {
+                method: "POST",
+                headers: { "Content-Type": "text/plain" },
+                body: JSON.stringify({
+                  type: "DELETE_BERKAS",
+                  id: delId,
+                  fileId: delId,
+                  fileName: fileName,
+                  driveFileUrl: driveFileUrl
+                }),
+                redirect: "follow"
+              }).catch(err => console.warn("Spreadsheet row deletion sync error:", err?.message || err));
+            } catch (syncErr) {
+              console.warn("Could not send spreadsheet row deletion request:", syncErr);
             }
           }
-        } catch (e) {}
+        }
       }
 
       // Handle schoolFiles with smart merging by ID across multiple devices & browsers

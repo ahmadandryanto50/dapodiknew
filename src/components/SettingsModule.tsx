@@ -2612,7 +2612,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                     <h3 className="text-slate-900 font-bold text-sm flex items-center gap-2">
                       <span>Kode Google Apps Script (Code.gs) Terbaru</span>
                       <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                        v3.1 (Pure Google Sheets & Drive Database)
+                        v3.2 (Pure Google Sheets & Drive Auto Row Delete Sync)
                       </span>
                     </h3>
                     <p className="text-xs text-slate-500">
@@ -2678,7 +2678,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                       <div className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
                       <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
                     </div>
-                    <span className="font-mono text-[11px] text-slate-300 ml-2">Code.gs (Dapodik Google Apps Script Endpoint v3.1)</span>
+                    <span className="font-mono text-[11px] text-slate-300 ml-2">Code.gs (Dapodik Google Apps Script Endpoint v3.2)</span>
                   </div>
                   <button
                     type="button"

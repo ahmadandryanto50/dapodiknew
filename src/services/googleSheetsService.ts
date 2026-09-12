@@ -3,7 +3,7 @@ import { Student, TeacherStaff, SarprasItem, StudentReport, SyncConfig, AppDispl
 export const APPS_SCRIPT_TEMPLATE = `/**
  * =========================================================================
  * GOOGLE APPS SCRIPT UNTUK DAPODIK TERINTEGRASI 2026
- * Versi Script: v3.1 (Header Bahasa Indonesia + Direct Google Drive Sync)
+ * Versi Script: v3.2 (Pure Google Sheets & Drive Auto Row Delete Sync)
  * =========================================================================
  * 
  * FUNGSI UTAMA OTORISASI GOOGLE DRIVE (Jalankan ini jika butuh izin ulang):
@@ -125,6 +125,37 @@ function doPost(e) {
     
     // Pastikan seluruh sheet & tabel otomatis terbuat
     checkAndInitializeSheets(ss);
+
+    // Feature: Hapus Baris Berkas dari Spreadsheet Data_Berkas
+    if (data.type === 'DELETE_BERKAS' || data.type === 'DELETE_FILE') {
+      var fileIdToDelete = data.id || data.fileId;
+      var fileNameToDelete = data.fileName || data.name;
+      var driveUrlToDelete = data.driveFileUrl || data.url;
+
+      var sheet = ss.getSheetByName("Data_Berkas");
+      if (sheet) {
+        var lastRow = sheet.getLastRow();
+        if (lastRow > 1) {
+          var values = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
+          for (var i = values.length - 1; i >= 0; i--) {
+            var rowId = String(values[i][0] || "");
+            var rowName = String(values[i][1] || "");
+            var rowLink = String(values[i][10] || values[i][9] || "");
+
+            if (
+              (fileIdToDelete && rowId === String(fileIdToDelete)) ||
+              (fileNameToDelete && rowName === String(fileNameToDelete)) ||
+              (driveUrlToDelete && rowLink && driveUrlToDelete.includes(rowLink))
+            ) {
+              sheet.deleteRow(i + 2); // Hapus baris dari Spreadsheet
+            }
+          }
+        }
+      }
+      return ContentService.createTextOutput(
+        JSON.stringify({ status: "success", message: "Baris berkas berhasil terhapus dari spreadsheet." })
+      ).setMimeType(ContentService.MimeType.JSON);
+    }
 
     if (data.type === 'LOAD_ALL') {
       const result = {

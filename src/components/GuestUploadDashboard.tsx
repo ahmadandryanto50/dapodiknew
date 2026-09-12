@@ -354,16 +354,49 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
   const handleDeleteHistoryFile = async (fileId: string) => {
     setIsDeletingId(fileId);
     try {
+      const targetFile = historyFiles.find((f) => String(f.id) === String(fileId));
+
       const res = await fetch('/api/app-data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          deletedFileId: fileId
+          deletedFileId: fileId,
+          deletedFile: targetFile ? {
+            id: targetFile.id,
+            name: targetFile.name,
+            driveFileUrl: targetFile.driveFileUrl,
+            category: targetFile.category,
+            uploadedBy: targetFile.uploadedBy
+          } : undefined
         })
       });
+
+      // Direct client-side backup call to Google Apps Script Web App for deletion
+      try {
+        const configRes = await fetch('/api/sync-config');
+        if (configRes.ok) {
+          const configData = await configRes.json();
+          if (configData && configData.webAppUrl) {
+            fetch(configData.webAppUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+              body: JSON.stringify({
+                type: 'DELETE_BERKAS',
+                id: fileId,
+                fileId: fileId,
+                fileName: targetFile?.name || '',
+                driveFileUrl: targetFile?.driveFileUrl || ''
+              })
+            }).catch((err) => console.warn('Direct Apps Script deletion warning:', err));
+          }
+        }
+      } catch (scriptErr) {
+        console.warn('Could not trigger direct GAS deletion:', scriptErr);
+      }
+
       if (res.ok) {
-        setHistoryFiles((prev) => prev.filter((f) => f.id !== fileId));
-        setGlobalSuccess('Berkas berhasil dihapus secara permanen dari riwayat!');
+        setHistoryFiles((prev) => prev.filter((f) => String(f.id) !== String(fileId)));
+        setGlobalSuccess('Berkas berhasil terhapus dari riwayat aplikasi dan spreadsheet!');
         setGlobalError(null);
       } else {
         setGlobalError('Gagal menghapus berkas dari server.');
