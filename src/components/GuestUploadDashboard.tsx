@@ -52,6 +52,14 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
     }
   });
 
+  const [sharedCategoryName, setSharedCategoryName] = useState<string>(() => {
+    try {
+      return localStorage.getItem('dapodik_guest_category_name') || '';
+    } catch {
+      return '';
+    }
+  });
+
   const [queue, setQueue] = useState<QueuedFile[]>([]);
   const [historyFiles, setHistoryFiles] = useState<any[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState<boolean>(false);
@@ -221,7 +229,7 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
     }
   };
 
-  // Persistence for sender's name
+  // Persistence for sender's name and shared category name
   useEffect(() => {
     try {
       localStorage.setItem('dapodik_guest_sender_name', senderName);
@@ -229,6 +237,14 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
       console.warn('Could not save sender name to localStorage', e);
     }
   }, [senderName]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('dapodik_guest_category_name', sharedCategoryName);
+    } catch (e) {
+      console.warn('Could not save category name to localStorage', e);
+    }
+  }, [sharedCategoryName]);
 
   // Fetch upload history on mount
   useEffect(() => {
@@ -488,7 +504,11 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
     });
   };
 
-  const uploadSingleFile = async (queuedItem: QueuedFile, uploader: string): Promise<{ driveUrl: string; isDriveSynced: boolean; syncWarning?: string }> => {
+  const uploadSingleFile = async (
+    queuedItem: QueuedFile, 
+    uploader: string,
+    batchCategory: string
+  ): Promise<{ driveUrl: string; isDriveSynced: boolean; syncWarning?: string }> => {
     const { file, id } = queuedItem;
 
     // Update state to uploading
@@ -510,21 +530,24 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
     );
 
     const customTitle = (queuedItem.customTitle || '').trim();
+    const batchTitle = (batchCategory || '').trim();
     const dotIndex = file.name.lastIndexOf('.');
     const ext = dotIndex > -1 ? file.name.substring(dotIndex) : '';
     
-    // Construct final custom file name while preserving original extension
+    // Dynamic folder name inside Google Drive (batchTitle > customTitle > 'Umum')
+    const targetFolder = batchTitle || customTitle || 'Umum';
+
+    // Final file name:
+    // Retain exact original document name (file.name) unless single file upload with explicit customTitle without batchTitle
     let finalFileName = file.name;
-    if (customTitle) {
+    const defaultTitle = dotIndex > -1 ? file.name.substring(0, dotIndex) : file.name;
+    if (!batchTitle && customTitle && customTitle !== defaultTitle && queue.length === 1) {
       if (ext && !customTitle.toLowerCase().endsWith(ext.toLowerCase())) {
         finalFileName = `${customTitle}${ext}`;
       } else {
         finalFileName = customTitle;
       }
     }
-
-    // Dynamic folder name inside Google Drive based on the custom file title
-    const targetFolder = customTitle ? customTitle : 'Umum';
 
     // Load active webAppUrl dynamically from sync-config
     let targetWebAppUrl = "https://script.google.com/macros/s/AKfycbySsOjI3uKuEcz9bmuOX6qnANP-R_DfskBaxWNS_DrTEC2zW3LdQ93SCJf93iAHhM6vTw/exec";
@@ -672,6 +695,7 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
     let hasSyncWarning = false;
     let syncWarningText = '';
     const uploader = senderName.trim();
+    const batchCat = sharedCategoryName.trim();
 
     for (let i = 0; i < queue.length; i++) {
       const item = queue[i];
@@ -681,7 +705,7 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
       }
 
       try {
-        const uploadRes = await uploadSingleFile(item, uploader);
+        const uploadRes = await uploadSingleFile(item, uploader, batchCat);
         if (!uploadRes.isDriveSynced && uploadRes.syncWarning) {
           hasSyncWarning = true;
           syncWarningText = uploadRes.syncWarning;
@@ -742,20 +766,29 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
   return (
     <div className="w-full space-y-6 select-text">
       
-      {/* Welcome Banner Card */}
-      <div className="bg-white/10 backdrop-blur-md rounded-3xl p-6 border border-white/20 text-center space-y-2.5 shadow-xl">
-        <div className="inline-flex items-center justify-center p-3 rounded-2xl bg-amber-400 text-slate-900 shadow-md">
-          <Sparkles className="w-6 h-6 animate-pulse" />
+      {/* Welcome Banner Card - Sleek, Modern, Logo-less Elegant Gradient */}
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border border-indigo-500/20 rounded-3xl p-6 sm:p-8 text-center space-y-3 shadow-2xl relative overflow-hidden">
+        {/* Ambient backlight glow */}
+        <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-gradient-to-b from-sky-500/15 via-indigo-500/10 to-transparent rounded-full blur-3xl pointer-events-none" />
+        
+        <div className="relative z-10 space-y-3">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-[11px] font-extrabold text-sky-200 uppercase tracking-widest shadow-xs">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>PORTAL RESMI BERKAS DIGITAL</span>
+          </div>
+
+          <h2 className="text-xl sm:text-2xl font-black tracking-wider text-slate-100 uppercase">
+            Selamat Datang di Portal Berkas
+          </h2>
+
+          <h1 className="text-2xl sm:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-sky-300 via-teal-200 to-amber-200 tracking-tight drop-shadow-sm">
+            SMP Negeri 11 Palu
+          </h1>
+
+          <p className="text-xs sm:text-sm text-slate-300 max-w-2xl mx-auto font-medium leading-relaxed">
+            Kirim, simpan, dan kelola seluruh berkas penting, tugas sekolah, dokumen PTK, atau dokumen penunjang lainnya langsung ke cloud Google Drive sekolah tanpa ribet.
+          </p>
         </div>
-        <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white uppercase drop-shadow-md">
-          Selamat Datang di Portal Berkas
-        </h2>
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-amber-300 drop-shadow-sm">
-          SMP Negeri 11 Palu
-        </h1>
-        <p className="text-xs sm:text-sm text-sky-100 max-w-2xl mx-auto font-medium leading-relaxed">
-          Kirim, simpan, dan kelola seluruh berkas penting, tugas sekolah, dokumen PTK, atau dokumen penunjang lainnya langsung ke cloud Google Drive sekolah tanpa ribet.
-        </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -763,7 +796,7 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
         {/* Left Card: Upload Interface matching Reference Image */}
         <div className="lg:col-span-7 bg-white rounded-3xl shadow-2xl border border-slate-100 p-5 sm:p-6 text-slate-800 space-y-5">
           
-          {/* Card Header exactly matching image */}
+          {/* Card Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
             <div className="flex items-start gap-3">
               <div className="w-12 h-12 rounded-2xl bg-sky-100 text-sky-600 flex items-center justify-center shrink-0 shadow-sm">
@@ -802,25 +835,51 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
             )}
           </div>
 
-          {/* Sender Identity Input (Important for tracking) */}
-          <div className="space-y-1.5">
-            <label htmlFor="sender-name-input" className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-              Nama Lengkap Pengirim <span className="text-rose-500">*</span>
-            </label>
-            <div className="relative">
-              <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                <User className="w-4 h-4" />
-              </span>
-              <input
-                id="sender-name-input"
-                type="text"
-                placeholder="Masukkan nama Anda (misal: Ahmad, Ibu Guru Maria, dll.)"
-                value={senderName}
-                onChange={(e) => setSenderName(e.target.value)}
-                disabled={isUploadingAll}
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 text-sm font-semibold placeholder:text-slate-400 bg-slate-50 focus:bg-white transition-all text-slate-900"
-              />
+          {/* Sender Identity & Shared File/Category Name Inputs */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            
+            {/* Input 1: Nama Lengkap Pengirim */}
+            <div className="space-y-1.5">
+              <label htmlFor="sender-name-input" className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Nama Lengkap Pengirim <span className="text-rose-500">*</span>
+              </label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                  <User className="w-4 h-4" />
+                </span>
+                <input
+                  id="sender-name-input"
+                  type="text"
+                  placeholder="Masukkan nama Anda (misal: Ahmad, Ibu Maria)"
+                  value={senderName}
+                  onChange={(e) => setSenderName(e.target.value)}
+                  disabled={isUploadingAll}
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 text-sm font-semibold placeholder:text-slate-400 bg-slate-50 focus:bg-white transition-all text-slate-900"
+                />
+              </div>
             </div>
+
+            {/* Input 2: Nama Berkas / Folder (1x isi untuk seluruh berkas) */}
+            <div className="space-y-1.5">
+              <label htmlFor="category-name-input" className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Nama Berkas / Folder <span className="text-sky-600 font-normal text-[10px]">(1x Isi untuk Semua Berkas)</span>
+              </label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                  <Folder className="w-4 h-4" />
+                </span>
+                <input
+                  id="category-name-input"
+                  type="text"
+                  placeholder="Nama berkas (misal: Berkas Pendaftaran Budi, Tugas IPA)"
+                  value={sharedCategoryName}
+                  onChange={(e) => setSharedCategoryName(e.target.value)}
+                  disabled={isUploadingAll}
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 text-sm font-semibold placeholder:text-slate-400 bg-slate-50 focus:bg-white transition-all text-slate-900"
+                />
+              </div>
+            </div>
+
           </div>
 
           {/* Hidden inputs */}
@@ -933,17 +992,21 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
                 {queue.map((item) => (
                   <div
                     key={item.id}
-                    className="p-3 bg-slate-50 rounded-xl border border-slate-150 flex flex-col gap-2 text-xs transition-all"
+                    className="p-3 bg-slate-50 rounded-xl border border-slate-150 flex flex-col gap-1.5 text-xs transition-all"
                   >
                     <div className="flex items-center justify-between gap-2.5">
                       <div className="flex items-center gap-2 overflow-hidden">
                         <FileIcon className="w-4 h-4 text-sky-600 shrink-0" />
                         <div className="overflow-hidden">
-                          <div className="font-medium text-slate-500 truncate max-w-[180px] sm:max-w-xs text-[10px]">
-                            File asli: {item.file.name}
+                          <div className="font-bold text-slate-800 truncate max-w-[180px] sm:max-w-xs text-xs">
+                            {item.file.name}
                           </div>
-                          <div className="text-[10px] text-slate-400 font-semibold">
-                            Ukuran: {formatFileSize(item.file.size)}
+                          <div className="flex items-center gap-2 text-[10px] text-slate-400 font-semibold mt-0.5">
+                            <span>Ukuran: {formatFileSize(item.file.size)}</span>
+                            <span>•</span>
+                            <span className="text-sky-600 font-bold bg-sky-50 px-1.5 py-0.2 rounded border border-sky-100 truncate max-w-[120px]">
+                              Folder: {sharedCategoryName.trim() || item.customTitle || 'Umum'}
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -984,26 +1047,6 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
                           </div>
                         )}
                       </div>
-                    </div>
-
-                    {/* Field Input Nama Berkas / Judul Berkas */}
-                    <div className="space-y-1">
-                      <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider">
-                        Nama Berkas <span className="text-slate-400 font-normal text-[9px]">(Silakan edit manual jika perlu)</span>
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Masukkan nama berkas (contoh: Data siswa, Kartu Keluarga, Raport)"
-                        value={item.customTitle || ''}
-                        disabled={isUploadingAll || item.status === 'success'}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setQueue((prev) =>
-                            prev.map((q) => (q.id === item.id ? { ...q, customTitle: val } : q))
-                          );
-                        }}
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 focus:outline-none focus:ring-1 focus:ring-sky-500 text-xs font-semibold bg-white text-slate-900 disabled:bg-slate-100 disabled:text-slate-500 placeholder:text-slate-400"
-                      />
                     </div>
                   </div>
                 ))}
