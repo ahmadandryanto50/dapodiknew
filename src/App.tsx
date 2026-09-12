@@ -2128,7 +2128,7 @@ export default function App() {
       )}
 
       {/* Main View Router */}
-      <main className="flex-1 relative z-10 pb-20 md:pb-0">
+      <main className={`flex-1 relative z-10 ${currentUser && currentUser.role !== 'Tamu / Umum' ? 'pb-20 md:pb-0' : ''}`}>
         {activeTab === 'home' && (
           <WelcomeHero
             onNavigate={(tab) => {
@@ -2305,16 +2305,18 @@ export default function App() {
         )}
       </main>
       
-      {/* Mobile Bottom Navigation Bar (Khusus Tampilan HP & Android) */}
-      <MobileBottomNav
-        activeTab={activeTab}
-        onSelectTab={(tab) => {
-          setSettingsInitialFilter('all');
-          setActiveTab(tab);
-        }}
-        onOpenMenu={() => setIsMobileMenuOpen(true)}
-        currentUser={currentUser}
-      />
+      {/* Mobile Bottom Navigation Bar (Hanya tampil jika sudah Login ke DAPODIK) */}
+      {currentUser && currentUser.role !== 'Tamu / Umum' && (
+        <MobileBottomNav
+          activeTab={activeTab}
+          onSelectTab={(tab) => {
+            setSettingsInitialFilter('all');
+            setActiveTab(tab);
+          }}
+          onOpenMenu={() => setIsMobileMenuOpen(true)}
+          currentUser={currentUser}
+        />
+      )}
 
       {/* Global Modals */}
 

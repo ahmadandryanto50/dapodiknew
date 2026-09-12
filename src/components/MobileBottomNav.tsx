@@ -32,6 +32,11 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   onOpenMenu,
   currentUser
 }) => {
+  // Hide bottom navigation bar for guests / non-Dapodik logged-in users
+  if (!currentUser || currentUser.role === 'Tamu / Umum') {
+    return null;
+  }
+
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const activeItemRef = useRef<HTMLButtonElement>(null);
 
