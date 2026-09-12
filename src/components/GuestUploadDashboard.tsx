@@ -850,26 +850,26 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
   return (
     <div className="w-full space-y-6 select-text">
       
-      {/* Welcome Banner Card - Sleek, Modern, Logo-less Elegant Gradient */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border border-indigo-500/20 rounded-3xl p-6 sm:p-8 text-center space-y-3 shadow-2xl relative overflow-hidden">
+      {/* Welcome Banner Card - Sleek, Modern, Logo-less Elegant Ocean Blue Gradient matching Gambar 1 */}
+      <div className="bg-gradient-to-r from-[#0c4a6e] via-[#0284c7] to-[#0369a1] border border-sky-400/30 rounded-3xl p-6 sm:p-8 text-center space-y-3 shadow-2xl relative overflow-hidden text-white">
         {/* Ambient backlight glow */}
-        <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-gradient-to-b from-sky-500/15 via-indigo-500/10 to-transparent rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-gradient-to-b from-cyan-400/20 via-sky-400/10 to-transparent rounded-full blur-3xl pointer-events-none" />
         
         <div className="relative z-10 space-y-3">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-[11px] font-extrabold text-sky-200 uppercase tracking-widest shadow-xs">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-emerald-400/20 backdrop-blur-md border border-emerald-300/30 text-[11px] font-extrabold text-emerald-200 uppercase tracking-widest shadow-xs">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             <span>PORTAL RESMI BERKAS DIGITAL</span>
           </div>
 
-          <h2 className="text-xl sm:text-2xl font-black tracking-wider text-slate-100 uppercase">
+          <h2 className="text-xl sm:text-2xl font-black tracking-wider text-white uppercase">
             Selamat Datang di Portal Berkas
           </h2>
 
-          <h1 className="text-2xl sm:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-sky-300 via-teal-200 to-amber-200 tracking-tight drop-shadow-sm">
+          <h1 className="text-2xl sm:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white via-sky-100 to-emerald-200 tracking-tight drop-shadow-sm">
             SMP Negeri 11 Palu
           </h1>
 
-          <p className="text-xs sm:text-sm text-slate-300 max-w-2xl mx-auto font-medium leading-relaxed">
+          <p className="text-xs sm:text-sm text-sky-100 max-w-2xl mx-auto font-medium leading-relaxed">
             Kirim, simpan, dan kelola seluruh berkas penting, tugas sekolah, dokumen PTK, atau dokumen penunjang lainnya langsung ke cloud Google Drive sekolah tanpa ribet.
           </p>
         </div>

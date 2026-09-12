@@ -1897,6 +1897,8 @@ export default function App() {
         schoolProfile={schoolProfile}
         teachers={teachers}
         students={students}
+        sarpras={sarpras}
+        reports={reports}
       />
     );
   }

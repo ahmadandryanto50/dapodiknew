@@ -192,7 +192,7 @@ export const SchoolModule: React.FC<SchoolModuleProps> = ({
           </div>
 
           {/* Quick Stat Pill Widget */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full lg:w-auto shrink-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full lg:w-auto shrink-0">
             <div className="bg-white/95 backdrop-blur-md p-3.5 rounded-2xl border border-sky-100 shadow-xs flex flex-col items-center justify-center text-center">
               <Users className="w-5 h-5 text-sky-600 mb-1" />
               <span className="text-lg font-extrabold text-slate-900">{activeStudents.length}</span>
@@ -205,16 +205,6 @@ export const SchoolModule: React.FC<SchoolModuleProps> = ({
               <span className="text-[10px] font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full mt-1 border border-amber-200/80">
                 {totalGuru} Guru &bull; {totalTendik} Tenaga Kependidikan
               </span>
-            </div>
-            <div className="bg-white/95 backdrop-blur-md p-3.5 rounded-2xl border border-sky-100 shadow-xs flex flex-col items-center justify-center text-center">
-              <Building2 className="w-5 h-5 text-emerald-600 mb-1" />
-              <span className="text-lg font-extrabold text-slate-900">{sarpras.length}</span>
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Sarpras</span>
-            </div>
-            <div className="bg-white/95 backdrop-blur-md p-3.5 rounded-2xl border border-sky-100 shadow-xs flex flex-col items-center justify-center text-center">
-              <Award className="w-5 h-5 text-rose-600 mb-1" />
-              <span className="text-lg font-extrabold text-slate-900">{reports.length}</span>
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Rapor</span>
             </div>
           </div>
         </div>

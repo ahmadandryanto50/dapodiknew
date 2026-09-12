@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { SafeImage } from './SafeImage';
+import { LaporanModule } from './LaporanModule';
 import { 
   User, 
   Lock, 
@@ -28,7 +29,7 @@ import {
   Download,
   Plus
 } from 'lucide-react';
-import { AdminUser, AppDisplayConfig, SyncConfig, TeacherStaff, Student } from '../types';
+import { AdminUser, AppDisplayConfig, SyncConfig, TeacherStaff, Student, SarprasItem, StudentReport } from '../types';
 
 interface LoginScreenProps {
   onLogin: (user: AdminUser) => void;
@@ -37,6 +38,8 @@ interface LoginScreenProps {
   schoolProfile?: any;
   teachers?: TeacherStaff[];
   students?: Student[];
+  sarpras?: SarprasItem[];
+  reports?: StudentReport[];
   syncConfig?: SyncConfig;
   onPullData?: () => Promise<boolean>;
 }
@@ -48,6 +51,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   schoolProfile,
   teachers,
   students,
+  sarpras,
+  reports,
   syncConfig,
   onPullData
 }) => {
@@ -59,6 +64,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
   const [showForgotModal, setShowForgotModal] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const [selectedLang, setSelectedLang] = useState<'ID' | 'EN'>('ID');
 
   // Direct Upload (No Login Required) State
@@ -541,40 +547,19 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   };
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden bg-gradient-to-br from-[#0284c7] via-[#0ea5e9] to-[#0369a1] flex flex-col justify-between select-none">
+    <div className="relative min-h-screen w-full bg-gradient-to-br from-[#0c4a6e] via-[#0284c7] to-[#0369a1] flex flex-col justify-between font-['Plus_Jakarta_Sans',sans-serif] selection:bg-sky-200 selection:text-sky-950">
       
-      {/* Background Graphic Elements & Modern Vectors Matching the Reference Image */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        {/* Soft radial glows */}
-        <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-cyan-300/30 blur-3xl" />
-        <div className="absolute top-1/4 -right-20 w-[30rem] h-[30rem] rounded-full bg-sky-300/25 blur-3xl" />
-        <div className="absolute -bottom-40 left-1/3 w-[36rem] h-[36rem] rounded-full bg-blue-600/30 blur-3xl" />
-
-        {/* Diagonal Soft Abstract Waves */}
-        <svg className="absolute inset-0 w-full h-full opacity-35" preserveAspectRatio="none" viewBox="0 0 1440 900">
-          <path fill="url(#grad-wave-1)" d="M0,192L48,202.7C96,213,192,235,288,218.7C384,203,480,149,576,144C672,139,768,181,864,208C960,235,1056,245,1152,229.3C1248,213,1344,171,1392,149.3L1440,128L1440,900L1392,900C1344,900,1248,900,1152,900C1056,900,960,900,864,900C768,900,672,900,576,900C480,900,384,900,288,900C192,900,96,900,48,900L0,900Z"></path>
-          <defs>
-            <linearGradient id="grad-wave-1" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.25" />
-              <stop offset="100%" stopColor="#0284c7" stopOpacity="0.6" />
-            </linearGradient>
-          </defs>
-        </svg>
-
-        {/* Dots Matrix Pattern on Bottom Left */}
-        <div className="absolute bottom-16 left-8 grid grid-cols-5 gap-2 opacity-50">
-          {Array.from({ length: 20 }).map((_, i) => (
-            <div key={i} className="w-1.5 h-1.5 rounded-full bg-white/70" />
-          ))}
-        </div>
-
+      {/* Background Graphic Elements */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+        <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-cyan-300/20 blur-3xl" />
+        <div className="absolute top-1/4 -right-20 w-[30rem] h-[30rem] rounded-full bg-sky-300/20 blur-3xl" />
+        <div className="absolute -bottom-40 left-1/3 w-[36rem] h-[36rem] rounded-full bg-blue-600/20 blur-3xl" />
       </div>
 
-      {/* Top Header with Dapodik Logo & Kemendikbud */}
-      <header className="relative z-20 w-full px-6 py-5 flex items-center justify-between">
+      {/* Top Header with Brand Logo and Moved Header Navigation Buttons */}
+      <header className="sticky top-0 z-40 bg-[#0c4a6e]/90 backdrop-blur-xl border-b border-white/20 px-4 sm:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4 shadow-lg text-white select-none">
         <div className="flex items-center gap-3">
-          {/* Distinct Dapodik Brand Logo (Arrow Swoosh in Rounded Shield) */}
-          <div className="w-12 h-12 rounded-2xl bg-white p-1.5 shadow-xl shadow-sky-950/20 flex items-center justify-center overflow-hidden shrink-0 border border-white/40">
+          <div className="w-11 h-11 rounded-2xl bg-white p-1.5 shadow-xl shadow-sky-950/20 flex items-center justify-center overflow-hidden shrink-0 border border-white/40">
             <SafeImage 
               src={displayConfig.logoCustomUrl || schoolProfile?.logoSekolah} 
               fallbackSrc="/logo_smpn11palu.jpg"
@@ -583,34 +568,112 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             />
           </div>
           <div>
-            <h1 className="text-xl font-black text-white tracking-wider flex items-center gap-1.5 drop-shadow-md">
-              <span>{displayConfig.appName ?? 'DAPODIK'}</span>
-            </h1>
-            <p className="text-[11px] font-extrabold text-sky-200 tracking-wider uppercase opacity-95">
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-black text-white tracking-wider drop-shadow-sm">
+                {displayConfig.appName ?? 'DAPODIK'}
+              </h1>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-sky-400/20 text-cyan-200 border border-cyan-300/30 flex items-center gap-1">
+                <BarChart3 className="w-3 h-3 text-cyan-300" />
+                Dashboard Publik
+              </span>
+            </div>
+            <p className="text-[11px] font-bold text-sky-200 tracking-wider uppercase opacity-95">
               {schoolProfile?.namaSekolah || 'SMP NEGERI 11 PALU'}
             </p>
           </div>
         </div>
 
-        {/* Database & Quick Demo Login Link */}
-        <div className="flex items-center gap-2">
+        {/* Right Header Navigation Buttons as explicitly requested */}
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {/* Menu "Upload Berkas" */}
+          <button
+            type="button"
+            id="header-btn-guest"
+            onClick={handleGuestLogin}
+            className="px-3.5 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 active:scale-[0.98] text-white font-bold text-xs flex items-center gap-2 transition-all cursor-pointer border border-white/25 shadow-sm hover:shadow"
+            title="Upload Berkas tanpa login"
+          >
+            <Upload className="w-4 h-4 text-cyan-300" />
+            <span className="hidden sm:inline">Upload Berkas</span>
+            <span className="sm:hidden">Upload Berkas</span>
+          </button>
+
+          {/* Menu "LOGIN KE DAPODIK" */}
+          <button
+            type="button"
+            id="header-btn-login-modal"
+            onClick={() => setShowLoginModal(true)}
+            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-400 to-sky-400 hover:from-cyan-300 hover:to-sky-300 active:scale-[0.98] text-slate-950 font-black text-xs flex items-center gap-2 transition-all cursor-pointer shadow-lg shadow-cyan-950/30 border border-white/40"
+            title="Buka Form Login Administrator / Operator / PTK / Siswa"
+          >
+            <KeyRound className="w-4 h-4 text-slate-950" />
+            <span>LOGIN KE DAPODIK</span>
+          </button>
         </div>
       </header>
 
-      {/* Main Content Area: Centered Login Card Faithful to the Reference Image */}
-      <main className="relative z-20 flex-1 flex items-center justify-center px-4 py-4 sm:py-8">
-        <div className="w-full max-w-[430px] sm:max-w-[450px]">
-          
-          {/* Main Pure White Rounded Card */}
-          <div className="bg-white/95 backdrop-blur-2xl rounded-[32px] p-7 sm:p-9 shadow-2xl shadow-sky-950/40 border border-white/80 transition-all">
+      {/* Main Public Content Area: Public Dashboard (Laporan & Rekapitulasi Data Pokok) */}
+      <main className="relative z-20 flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        
+        {/* Banner Informatif Dashboard Publik */}
+        <div className="bg-white/10 backdrop-blur-xl border border-white/20 p-5 sm:p-6 rounded-3xl text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-400/20 text-emerald-200 border border-emerald-300/30 flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" />
+                DAPODIK Live Public Statistics
+              </span>
+            </div>
+            <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white">
+              Laporan &amp; Rekapitulasi Data Pokok Pendidikan
+            </h2>
+            <p className="text-xs sm:text-sm text-sky-100 font-medium max-w-3xl leading-relaxed">
+              Halaman laporan publik berisi informasi statistik agregat data siswa, PTK (pendidik &amp; tenaga kependidikan), rekapitulasi alumni per tahun, demografi tempat tinggal, serta kelaikan sarana &amp; prasarana sekolah.
+            </p>
+          </div>
+        </div>
+
+        {/* Modular LaporanModule Component with hideDownloadButtons={true} */}
+        <div className="bg-slate-50/95 backdrop-blur-2xl rounded-3xl p-4 sm:p-6 border border-white/80 shadow-2xl text-slate-900">
+          <LaporanModule
+            students={students || []}
+            teachers={teachers || []}
+            sarpras={sarpras || []}
+            reports={reports || []}
+            schoolProfile={schoolProfile}
+            displayConfig={displayConfig}
+            hideDownloadButtons={true}
+            hideBackButton={true}
+          />
+        </div>
+
+      </main>
+
+      {/* LOGIN MODAL DIALOG (Appears when "LOGIN KE DAPODIK" is clicked) */}
+      {showLoginModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
+          <div className="w-full max-w-[430px] sm:max-w-[450px] bg-white rounded-[32px] p-7 sm:p-9 shadow-2xl border border-slate-100 relative text-slate-900 animate-scaleUp">
             
+            {/* Close Button */}
+            <button
+              type="button"
+              onClick={() => setShowLoginModal(false)}
+              className="absolute top-5 right-5 p-2 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+              title="Tutup Form Login"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
             {/* Header: Title in Dark Navy Blue */}
-            <div className="text-center mb-7">
+            <div className="text-center mb-6 pr-6">
+              <div className="w-12 h-12 rounded-2xl bg-sky-100 text-sky-600 mx-auto flex items-center justify-center mb-3 shadow-inner">
+                <KeyRound className="w-6 h-6" />
+              </div>
               <h2 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight uppercase">
                 LOGIN KE DAPODIK
               </h2>
               <p className="text-xs text-slate-500 font-medium mt-1">
-                Masukkan Akun Administrator / Operator Sekolah
+                Masukkan Akun Administrator / Operator Sekolah / PTK / Siswa
               </p>
             </div>
 
@@ -686,7 +749,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 <div className="flex justify-end pt-1">
                   <button
                     type="button"
-                    onClick={() => setShowForgotModal(true)}
+                    onClick={() => {
+                      setShowLoginModal(false);
+                      setShowForgotModal(true);
+                    }}
                     className="text-xs font-semibold text-sky-600 hover:text-sky-700 hover:underline transition-all"
                   >
                     Lupa Kata Sandi?
@@ -713,27 +779,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                   </>
                 )}
               </button>
-
-
-
-              {/* Masuk sebagai Tamu Button */}
-              <button
-                type="button"
-                id="btn-login-guest-access"
-                onClick={handleGuestLogin}
-                className="w-full py-2.5 px-4 rounded-2xl bg-slate-100 hover:bg-slate-200 active:scale-[0.98] text-slate-700 hover:text-slate-950 font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer border border-slate-200"
-              >
-                <Globe className="w-4 h-4 text-sky-600" />
-                <span>Masuk sebagai Tamu / Akses Publik (Lihat &amp; Kelola)</span>
-              </button>
-
             </form>
 
           </div>
         </div>
-      </main>
+      )}
 
-      {/* Bottom Footer Bar Matching Reference Image */}
+      {/* Bottom Footer Bar */}
       <footer className="relative z-20 w-full px-6 py-4 flex flex-col sm:flex-row items-center justify-center gap-3 text-xs text-white/90">
         <div className="flex items-center gap-3 font-medium">
           <span>Aplikasi Resmi Dapodik</span>

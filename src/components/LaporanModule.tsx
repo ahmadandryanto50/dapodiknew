@@ -49,9 +49,11 @@ interface LaporanModuleProps {
   teachers: TeacherStaff[];
   sarpras: SarprasItem[];
   reports: StudentReport[];
-  onBackToHome: () => void;
+  onBackToHome?: () => void;
   schoolProfile?: SchoolProfile;
   displayConfig?: AppDisplayConfig;
+  hideDownloadButtons?: boolean;
+  hideBackButton?: boolean;
 }
 
 export const LaporanModule: React.FC<LaporanModuleProps> = ({
@@ -61,7 +63,9 @@ export const LaporanModule: React.FC<LaporanModuleProps> = ({
   reports,
   onBackToHome,
   schoolProfile,
-  displayConfig
+  displayConfig,
+  hideDownloadButtons = false,
+  hideBackButton = false
 }) => {
   // Defensive array checks
   const allStudents = Array.isArray(students) ? students : [];
@@ -93,7 +97,7 @@ export const LaporanModule: React.FC<LaporanModuleProps> = ({
   const activeStudents = allStudents.filter(s => s && (!s.status || s.status === 'Aktif'));
 
   // Alumni / Graduated students statistics by year
-  const alumniStudents = allStudents.filter(s => s && (s.status === 'Lulus' || Boolean(s.tahunLulus && String(s.tahunLulus).trim())));
+  const alumniStudents = allStudents.filter(s => s && (s.status === 'Lulus' || s.status === 'Alumni' || s.alasanKeluar === 'Lulus' || Boolean(s.tahunLulus && String(s.tahunLulus).trim())));
 
   const alumniByYearCounts: Record<string, { total: number; male: number; female: number }> = {};
 
@@ -153,17 +157,39 @@ export const LaporanModule: React.FC<LaporanModuleProps> = ({
     const key = (s.rombel && s.rombel.trim()) ? s.rombel.trim() : 'Belum Terplot';
     rombelCounts[key] = (rombelCounts[key] || 0) + 1;
   });
+  // Helper to extract numeric grade rank for sorting (VII=7, VIII=8, IX=9, etc.)
+  const getGradeRank = (name: string) => {
+    const upper = (name || '').toUpperCase().trim();
+    if (upper === 'BELUM TERPLOT') return 999;
+    if (/^VIII[\.\s\-_]|^KELAS\s*8|^KELAS\s*VIII|^8[\.\s\-_]/.test(upper)) return 8;
+    if (/^VII[\.\s\-_]|^KELAS\s*7|^KELAS\s*VII|^7[\.\s\-_]/.test(upper)) return 7;
+    if (/^IX[\.\s\-_]|^KELAS\s*9|^KELAS\s*IX|^9[\.\s\-_]/.test(upper)) return 9;
+    if (/^X[\.\s\-_]|^KELAS\s*10|^KELAS\s*X|^10[\.\s\-_]/.test(upper)) return 10;
+    if (/^XI[\.\s\-_]|^KELAS\s*11|^KELAS\s*XI|^11[\.\s\-_]/.test(upper)) return 11;
+    if (/^XII[\.\s\-_]|^KELAS\s*12|^KELAS\s*XII|^12[\.\s\-_]/.test(upper)) return 12;
+    return 100;
+  };
+
   const rombelData = Object.keys(rombelCounts).map(rombel => ({
     name: rombel,
     jumlah: rombelCounts[rombel]
-  }));
+  })).sort((a, b) => {
+    const rankA = getGradeRank(a.name);
+    const rankB = getGradeRank(b.name);
+    if (rankA !== rankB) return rankA - rankB;
+    return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+  });
 
-  // Student per-class gender rekapitulasi (X. Moh Hatta L 3 P 8 Jumlah 11)
-  const classGenderRekap: Record<string, { male: number; female: number; total: number }> = {};
+  // Mutasi students calculation
+  const mutasiStudents = allStudents.filter(s => s && (s.status === 'Mutasi' || (s.status === 'Keluar' && s.alasanKeluar !== 'Lulus') || (Boolean(s.alasanKeluar) && s.alasanKeluar !== 'Lulus')) && !s.tahunLulus && s.status !== 'Lulus' && s.status !== 'Alumni');
+
+  // Student per-class gender, mutasi & lulus rekapitulasi
+  const classGenderRekap: Record<string, { male: number; female: number; mutasi: number; lulus: number; total: number }> = {};
+  
   activeStudents.forEach(s => {
     const rName = s.rombel || 'Belum Terplot';
     if (!classGenderRekap[rName]) {
-      classGenderRekap[rName] = { male: 0, female: 0, total: 0 };
+      classGenderRekap[rName] = { male: 0, female: 0, mutasi: 0, lulus: 0, total: 0 };
     }
     if (s.jenisKelamin === 'L') {
       classGenderRekap[rName].male += 1;
@@ -173,9 +199,33 @@ export const LaporanModule: React.FC<LaporanModuleProps> = ({
     classGenderRekap[rName].total += 1;
   });
 
-  const sortedClassNames = Object.keys(classGenderRekap).sort((a, b) =>
-    a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
-  );
+  mutasiStudents.forEach(s => {
+    const rName = s.rombel || s.rombelSaatIni || 'Belum Terplot';
+    if (!classGenderRekap[rName]) {
+      classGenderRekap[rName] = { male: 0, female: 0, mutasi: 0, lulus: 0, total: 0 };
+    }
+    classGenderRekap[rName].mutasi += 1;
+  });
+
+  alumniStudents.forEach(s => {
+    const rName = s.rombel || s.rombelSaatIni || 'Belum Terplot';
+    if (!classGenderRekap[rName]) {
+      classGenderRekap[rName] = { male: 0, female: 0, mutasi: 0, lulus: 0, total: 0 };
+    }
+    classGenderRekap[rName].lulus += 1;
+  });
+
+  const sortedClassNames = Object.keys(classGenderRekap)
+    .filter(rName => {
+      const info = classGenderRekap[rName];
+      return info && (info.total > 0 || info.mutasi > 0);
+    })
+    .sort((a, b) => {
+      const rankA = getGradeRank(a);
+      const rankB = getGradeRank(b);
+      if (rankA !== rankB) return rankA - rankB;
+      return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+    });
 
   // Cumulative grade level calculations
   let kelas7L = 0;
@@ -480,7 +530,7 @@ export const LaporanModule: React.FC<LaporanModuleProps> = ({
       { Kategori: 'Siswa Usia > 15 Tahun', Jumlah: (usiaOver15_Palu_L + usiaOver15_Palu_P + usiaOver15_NonPalu_L + usiaOver15_NonPalu_P), Keterangan: 'Di Atas Usia Standar SMP' },
       { Kategori: 'Total Pendidik & Tenaga Kependidikan (PTK)', Jumlah: teachers.length, Keterangan: `${teachers.filter(t => t.statusSertifikasi === 'Sudah').length} Tersertifikasi` },
       { Kategori: 'Total Sarana & Prasarana', Jumlah: sarpras.length, Keterangan: `${sarpras.filter(s => s.kondisi === 'Baik').length} Kondisi Baik` },
-      { Kategori: 'Total Rapor Tervalidasi', Jumlah: reports.length, Keterangan: 'Semester Genap 2025/2026' }
+      { Kategori: 'Total Rapor Tervalidasi', Jumlah: reports.length, Keterangan: 'Semester Genap' }
     ];
     exportToCSV(summaryData, 'DAPODIK_REKAPITULASI_SEKOLAH');
   };
@@ -490,20 +540,18 @@ export const LaporanModule: React.FC<LaporanModuleProps> = ({
       {/* Header */}
       <div className="sticky top-[57px] z-30 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white/95 backdrop-blur-xl border border-slate-200/80 p-5 rounded-2xl shadow-md transition-all">
         <div className="flex items-center gap-3">
-          <button
-            onClick={onBackToHome}
-            className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors border border-slate-200/60 cursor-pointer"
-            title="Kembali ke Beranda"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
+          {onBackToHome && !hideDownloadButtons && !hideBackButton && (
+            <button
+              onClick={onBackToHome}
+              className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors border border-slate-200/60 cursor-pointer"
+              title="Kembali ke Beranda"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+          )}
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl font-bold text-slate-900">Laporan & Rekapitulasi Data Pokok</h1>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                Validasi 100% Bersih
-              </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
               Statistik agregat sekolah, distribusi demografi, profil PTK, dan indeks kelaikan sarpras
@@ -511,95 +559,97 @@ export const LaporanModule: React.FC<LaporanModuleProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap">
-          {/* Button: Cetak / Unduh PDF */}
-          <button
-            onClick={() => setIsPrintModalOpen(true)}
-            className="px-3.5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm transition-all flex items-center gap-1.5 cursor-pointer hover:shadow"
-            title="Buka pratinjau cetak resmi dan simpan ke file PDF"
-          >
-            <Printer className="w-4 h-4" />
-            <span>Cetak / Unduh PDF</span>
-          </button>
-
-          {/* Button: Unduh Excel */}
-          <button
-            onClick={handleExportExcel}
-            className="px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-all flex items-center gap-1.5 cursor-pointer hover:shadow"
-            title="Unduh seluruh rekapitulasi data dalam format Excel (.xlsx)"
-          >
-            <FileSpreadsheet className="w-4 h-4" />
-            <span>Unduh Excel (.xlsx)</span>
-          </button>
-
-          {/* Dropdown Options */}
-          <div className="relative">
+        {!hideDownloadButtons && (
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {/* Button: Cetak / Unduh PDF */}
             <button
-              onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
-              className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors border border-slate-200 flex items-center gap-1 cursor-pointer"
-              title="Opsi ekspor data lainnya"
+              onClick={() => setIsPrintModalOpen(true)}
+              className="px-3.5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm transition-all flex items-center gap-1.5 cursor-pointer hover:shadow"
+              title="Buka pratinjau cetak resmi dan simpan ke file PDF"
             >
-              <Download className="w-4 h-4" />
-              <ChevronDown className="w-3.5 h-3.5" />
+              <Printer className="w-4 h-4" />
+              <span>Cetak / Unduh PDF</span>
             </button>
 
-            {isExportDropdownOpen && (
-              <div 
-                className="absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-40 animate-fadeIn text-xs"
-                onMouseLeave={() => setIsExportDropdownOpen(false)}
+            {/* Button: Unduh Excel */}
+            <button
+              onClick={handleExportExcel}
+              className="px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-all flex items-center gap-1.5 cursor-pointer hover:shadow"
+              title="Unduh seluruh rekapitulasi data dalam format Excel (.xlsx)"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              <span>Unduh Excel (.xlsx)</span>
+            </button>
+
+            {/* Dropdown Options */}
+            <div className="relative">
+              <button
+                onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
+                className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors border border-slate-200 flex items-center gap-1 cursor-pointer"
+                title="Opsi ekspor data lainnya"
               >
-                <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  Pilih Format Unduhan
+                <Download className="w-4 h-4" />
+                <ChevronDown className="w-3.5 h-3.5" />
+              </button>
+
+              {isExportDropdownOpen && (
+                <div 
+                  className="absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-40 animate-fadeIn text-xs"
+                  onMouseLeave={() => setIsExportDropdownOpen(false)}
+                >
+                  <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    Pilih Format Unduhan
+                  </div>
+                  <button
+                    onClick={() => {
+                      setIsExportDropdownOpen(false);
+                      handleExportExcel();
+                    }}
+                    className="w-full px-3 py-2 text-left text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 flex items-center gap-2 cursor-pointer transition-colors"
+                  >
+                    <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                    <div>
+                      <div className="font-bold">Excel Workbook (.xlsx)</div>
+                      <div className="text-[10px] text-slate-500">Multi-sheet lengkap terformat</div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setIsExportDropdownOpen(false);
+                      setIsPrintModalOpen(true);
+                    }}
+                    className="w-full px-3 py-2 text-left text-slate-700 hover:bg-indigo-50 hover:text-indigo-800 flex items-center gap-2 cursor-pointer transition-colors"
+                  >
+                    <Printer className="w-4 h-4 text-indigo-600" />
+                    <div>
+                      <div className="font-bold">Cetak / Simpan PDF</div>
+                      <div className="text-[10px] text-slate-500">Kop resmi & lembar pengesahan</div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setIsExportDropdownOpen(false);
+                      handleExportCSV();
+                    }}
+                    className="w-full px-3 py-2 text-left text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2 cursor-pointer transition-colors border-t border-slate-100"
+                  >
+                    <Download className="w-4 h-4 text-slate-500" />
+                    <div>
+                      <div className="font-bold">CSV Ringkasan Data</div>
+                      <div className="text-[10px] text-slate-500">Kompatibilitas tabel biasa</div>
+                    </div>
+                  </button>
                 </div>
-                <button
-                  onClick={() => {
-                    setIsExportDropdownOpen(false);
-                    handleExportExcel();
-                  }}
-                  className="w-full px-3 py-2 text-left text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 flex items-center gap-2 cursor-pointer transition-colors"
-                >
-                  <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                  <div>
-                    <div className="font-bold">Excel Workbook (.xlsx)</div>
-                    <div className="text-[10px] text-slate-500">Multi-sheet lengkap terformat</div>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setIsExportDropdownOpen(false);
-                    setIsPrintModalOpen(true);
-                  }}
-                  className="w-full px-3 py-2 text-left text-slate-700 hover:bg-indigo-50 hover:text-indigo-800 flex items-center gap-2 cursor-pointer transition-colors"
-                >
-                  <Printer className="w-4 h-4 text-indigo-600" />
-                  <div>
-                    <div className="font-bold">Cetak / Simpan PDF</div>
-                    <div className="text-[10px] text-slate-500">Kop resmi & lembar pengesahan</div>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setIsExportDropdownOpen(false);
-                    handleExportCSV();
-                  }}
-                  className="w-full px-3 py-2 text-left text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-2 cursor-pointer transition-colors border-t border-slate-100"
-                >
-                  <Download className="w-4 h-4 text-slate-500" />
-                  <div>
-                    <div className="font-bold">CSV Ringkasan Data</div>
-                    <div className="text-[10px] text-slate-500">Kompatibilitas tabel biasa</div>
-                  </div>
-                </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
-      {/* 4 Summary Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Summary Stat Cards */}
+      <div className={`grid grid-cols-1 sm:grid-cols-2 ${hideDownloadButtons ? 'lg:grid-cols-2' : 'lg:grid-cols-4'} gap-4`}>
         <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center gap-3.5">
           <div className="p-3 rounded-xl bg-sky-50 text-sky-600 border border-sky-200">
             <Users className="w-6 h-6" />
@@ -621,29 +671,33 @@ export const LaporanModule: React.FC<LaporanModuleProps> = ({
                 {totalPendidik} Guru &bull; {totalTendik} Tenaga Kependidikan
               </span>
             </div>
-            <div className="text-xs text-slate-500 font-medium">Pendidik & Tenaga Kependidikan (PTK)</div>
+            <div className="text-xs text-slate-500 font-medium">Pendidik &amp; Tenaga Kependidikan (PTK)</div>
           </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center gap-3.5">
-          <div className="p-3 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200">
-            <Building2 className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-2xl font-black text-slate-900">{sarpras.length}</div>
-            <div className="text-xs text-slate-500 font-medium">Aset & Sarpras</div>
-          </div>
-        </div>
+        {!hideDownloadButtons && (
+          <>
+            <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center gap-3.5">
+              <div className="p-3 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200">
+                <Building2 className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="text-2xl font-black text-slate-900">{sarpras.length}</div>
+                <div className="text-xs text-slate-500 font-medium">Aset &amp; Sarpras</div>
+              </div>
+            </div>
 
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center gap-3.5">
-          <div className="p-3 rounded-xl bg-rose-50 text-rose-600 border border-rose-200">
-            <FileText className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-2xl font-black text-slate-900">{reports.length}</div>
-            <div className="text-xs text-slate-500 font-medium">Buku Rapor Selesai</div>
-          </div>
-        </div>
+            <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center gap-3.5">
+              <div className="p-3 rounded-xl bg-rose-50 text-rose-600 border border-rose-200">
+                <FileText className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="text-2xl font-black text-slate-900">{reports.length}</div>
+                <div className="text-xs text-slate-500 font-medium">Buku Rapor Selesai</div>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* HIGHLIGHT: STATISTIK USIA 13-15 TAHUN BERDASARKAN TEMPAT TINGGAL KK */}
@@ -739,7 +793,7 @@ export const LaporanModule: React.FC<LaporanModuleProps> = ({
       </div>
 
       {/* Visual Charts Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className={`grid grid-cols-1 ${hideDownloadButtons ? 'lg:grid-cols-3' : 'lg:grid-cols-2'} gap-6`}>
         
         {/* Gender Distribution Pie */}
         <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-3">
@@ -814,82 +868,84 @@ export const LaporanModule: React.FC<LaporanModuleProps> = ({
         </div>
 
         {/* Sarpras Condition Distribution */}
-        <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <Building2 className="w-4 h-4 text-rose-600" />
-              <span>Kelaikan & Kondisi Fisik Sarpras</span>
-            </h3>
-            <span className="text-[11px] font-mono text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200 font-semibold">
-              Total: {totalSarprasCount} Sarpras
-            </span>
-          </div>
+        {!hideDownloadButtons && (
+          <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-rose-600" />
+                <span>Kelaikan & Kondisi Fisik Sarpras</span>
+              </h3>
+              <span className="text-[11px] font-mono text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200 font-semibold">
+                Total: {totalSarprasCount} Sarpras
+              </span>
+            </div>
 
-          <div className="h-64 w-full relative flex items-center justify-center">
-            {totalSarprasCount > 0 && activeSarprasSlices.length > 0 ? (
-              <>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={activeSarprasSlices}
-                      cx="50%"
-                      cy="48%"
-                      innerRadius={50}
-                      outerRadius={78}
-                      paddingAngle={activeSarprasSlices.length > 1 ? 4 : 0}
-                      dataKey="value"
-                      label={({ name, percent }) => {
-                        const pct = typeof percent === 'number' ? Math.round(percent * 100) : 0;
-                        return pct >= 10 ? `${name} ${pct}%` : '';
-                      }}
-                      labelLine={false}
-                    >
-                      {activeSarprasSlices.map((entry, index) => (
-                        <Cell key={`cell-sarpras-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: '12px', color: '#0f172a', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                      formatter={(val: any, name: any) => [
-                        `${val} unit (${totalSarprasCount > 0 ? Math.round((Number(val) / totalSarprasCount) * 100) : 0}%)`, 
-                        name
-                      ]} 
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-                {/* Center Badge inside Donut Hole */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pb-2">
-                  <span className="text-2xl font-black text-slate-900 font-mono tracking-tight">{totalSarprasCount}</span>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sarpras</span>
-                </div>
-              </>
-            ) : (
-              <div className="flex flex-col items-center justify-center text-center p-6 text-slate-500">
-                <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-2">
-                  <Building2 className="w-6 h-6 text-slate-400" />
-                </div>
-                <p className="text-sm font-semibold text-slate-700">Belum Ada Data Sarpras</p>
-                <p className="text-xs text-slate-400 mt-1 max-w-xs">Data sarpras dapat ditambahkan melalui menu Sarpras untuk menampilkan kelaikan fisik.</p>
-              </div>
-            )}
-          </div>
-
-          {/* Condition Status Badges & Legend */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-100">
-            {sarprasData.map(item => {
-              const pct = totalSarprasCount > 0 ? Math.round((item.value / totalSarprasCount) * 100) : 0;
-              return (
-                <div key={item.name} className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 border border-slate-100">
-                  <span className="w-3 h-3 rounded-md shrink-0" style={{ backgroundColor: item.color }} />
-                  <div className="min-w-0">
-                    <div className="text-[11px] font-semibold text-slate-700 truncate">{item.name}</div>
-                    <div className="text-xs font-mono font-bold text-slate-900">{item.value} <span className="text-[10px] font-normal text-slate-500">({pct}%)</span></div>
+            <div className="h-64 w-full relative flex items-center justify-center">
+              {totalSarprasCount > 0 && activeSarprasSlices.length > 0 ? (
+                <>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={activeSarprasSlices}
+                        cx="50%"
+                        cy="48%"
+                        innerRadius={50}
+                        outerRadius={78}
+                        paddingAngle={activeSarprasSlices.length > 1 ? 4 : 0}
+                        dataKey="value"
+                        label={({ name, percent }) => {
+                          const pct = typeof percent === 'number' ? Math.round(percent * 100) : 0;
+                          return pct >= 10 ? `${name} ${pct}%` : '';
+                        }}
+                        labelLine={false}
+                      >
+                        {activeSarprasSlices.map((entry, index) => (
+                          <Cell key={`cell-sarpras-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: '12px', color: '#0f172a', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                        formatter={(val: any, name: any) => [
+                          `${val} unit (${totalSarprasCount > 0 ? Math.round((Number(val) / totalSarprasCount) * 100) : 0}%)`, 
+                          name
+                        ]} 
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  {/* Center Badge inside Donut Hole */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pb-2">
+                    <span className="text-2xl font-black text-slate-900 font-mono tracking-tight">{totalSarprasCount}</span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sarpras</span>
                   </div>
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center text-center p-6 text-slate-500">
+                  <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-2">
+                    <Building2 className="w-6 h-6 text-slate-400" />
+                  </div>
+                  <p className="text-sm font-semibold text-slate-700">Belum Ada Data Sarpras</p>
+                  <p className="text-xs text-slate-400 mt-1 max-w-xs">Data sarpras dapat ditambahkan melalui menu Sarpras untuk menampilkan kelaikan fisik.</p>
                 </div>
-              );
-            })}
+              )}
+            </div>
+
+            {/* Condition Status Badges & Legend */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-100">
+              {sarprasData.map(item => {
+                const pct = totalSarprasCount > 0 ? Math.round((item.value / totalSarprasCount) * 100) : 0;
+                return (
+                  <div key={item.name} className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 border border-slate-100">
+                    <span className="w-3 h-3 rounded-md shrink-0" style={{ backgroundColor: item.color }} />
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-semibold text-slate-700 truncate">{item.name}</div>
+                      <div className="text-xs font-mono font-bold text-slate-900">{item.value} <span className="text-[10px] font-normal text-slate-500">({pct}%)</span></div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
       </div>
 
@@ -1178,8 +1234,6 @@ export const LaporanModule: React.FC<LaporanModuleProps> = ({
           )}
         </div>
       </div>
-
-      {/* REKAPITULASI DATA POKOK DETAIL (KEREN & KEKINIAN) */}
       <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm space-y-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
           <div className="space-y-1">
@@ -1247,64 +1301,116 @@ export const LaporanModule: React.FC<LaporanModuleProps> = ({
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           
-          {/* Column 1: Siswa per Rombongan Belajar (Rombel) */}
+          {/* Column 1: Siswa per Rombongan Belajar (Rombel) - Gambar 2 Layout */}
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
-                <span className="w-1.5 h-3 bg-sky-600 rounded-full" />
-                Siswa Per Rombongan Belajar (Rombel)
-              </h3>
-              <span className="text-[11px] text-slate-600 font-semibold bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
-                {sortedClassNames.length} Rombel Terdeteksi
-              </span>
-            </div>
+            {/* Top Summary Card (Gambar 2 Style) */}
+            <div className="p-4 rounded-3xl bg-amber-50/40 border border-amber-200/60 shadow-2xs space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-[11px] font-black tracking-wider text-slate-500 uppercase">
+                    SISWA AKTIF
+                  </div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-3xl font-black text-slate-900 font-mono">
+                      {activeStudents.length}
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-xs font-bold border border-emerald-200">
+                      Aktif
+                    </span>
+                  </div>
+                </div>
 
-            <div className="max-h-[380px] overflow-y-auto pr-2 space-y-3 scrollbar-thin">
-              {sortedClassNames.map(className => {
-                const info = classGenderRekap[className];
-                const malePct = info.total > 0 ? (info.male / info.total) * 100 : 0;
-                return (
-                  <div 
-                    key={className} 
-                    className="p-3.5 rounded-2xl bg-slate-50 hover:bg-slate-100/80 border border-slate-200 transition-all shadow-sm flex flex-col gap-2.5"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center text-xs font-bold text-indigo-700 border border-indigo-200">
-                          {className.split('.')[0] || className[0]}
-                        </div>
-                        <span className="font-bold text-slate-900 text-sm">{className}</span>
-                      </div>
-                      
-                      <div className="flex items-center gap-1.5 font-mono text-xs">
-                        <span className="px-2 py-1 bg-sky-100 text-sky-800 rounded-md border border-sky-200 flex items-center gap-1">
-                          <span className="font-bold">L</span> {info.male}
-                        </span>
-                        <span className="px-2 py-1 bg-rose-100 text-rose-800 rounded-md border border-rose-200 flex items-center gap-1">
-                          <span className="font-bold">P</span> {info.female}
-                        </span>
-                        <span className="px-2 py-1 bg-slate-200 text-slate-800 rounded-md font-bold">
-                          Total: <strong className="text-slate-900 font-black">{info.total}</strong>
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Stacked Percentage Bar */}
-                    <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden flex">
-                      <div 
-                        style={{ width: `${malePct}%` }} 
-                        className="h-full bg-sky-500 transition-all duration-500" 
-                        title={`Laki-laki: ${info.male}`}
-                      />
-                      <div 
-                        style={{ width: `${100 - malePct}%` }} 
-                        className="h-full bg-rose-500 transition-all duration-500" 
-                        title={`Perempuan: ${info.female}`}
-                      />
+                {/* Stat Boxes L & P (Replaced Putra/Putri with L & P) */}
+                <div className="flex items-center gap-2">
+                  <div className="px-3.5 py-1.5 rounded-2xl bg-white border border-sky-200 text-center min-w-[64px] shadow-2xs">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">L</div>
+                    <div className="text-base font-black text-sky-600 font-mono">
+                      {activeStudents.filter(s => s.jenisKelamin === 'L').length}
                     </div>
                   </div>
-                );
-              })}
+                  <div className="px-3.5 py-1.5 rounded-2xl bg-white border border-rose-200 text-center min-w-[64px] shadow-2xs">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">P</div>
+                    <div className="text-base font-black text-rose-600 font-mono">
+                      {activeStudents.filter(s => s.jenisKelamin === 'P').length}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Badges row */}
+              <div className="flex items-center gap-2 pt-2 border-t border-amber-200/40">
+                <span className="px-2.5 py-0.5 rounded-xl bg-amber-100/70 text-amber-900 text-xs font-bold border border-amber-200/80">
+                  Mutasi: {mutasiStudents.length}
+                </span>
+              </div>
+            </div>
+
+            {/* Table: JUMLAH SISWA PER KELAS / ROMBEL */}
+            <div className="bg-white border border-slate-200 rounded-3xl p-4 shadow-2xs space-y-3">
+              <div className="flex items-center justify-between px-1">
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                  <span className="w-1.5 h-3 bg-sky-600 rounded-full" />
+                  JUMLAH SISWA PER KELAS
+                </h4>
+                <span className="text-[11px] text-slate-500 font-semibold">
+                  {sortedClassNames.length} Rombel
+                </span>
+              </div>
+
+              <div className="overflow-x-auto border border-slate-200 rounded-2xl">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-amber-50/50 text-slate-700 font-bold border-b border-slate-200">
+                      <th className="py-2.5 px-3.5 font-bold">Kelas</th>
+                      <th className="py-2.5 px-3 text-center font-bold text-sky-700">L</th>
+                      <th className="py-2.5 px-3 text-center font-bold text-rose-700">P</th>
+                      <th className="py-2.5 px-3 text-center font-bold text-amber-800">Mutasi</th>
+                      <th className="py-2.5 px-3.5 text-center font-bold text-slate-900 bg-slate-100/60">Aktif</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {sortedClassNames.map((className) => {
+                      const info = classGenderRekap[className];
+                      return (
+                        <tr key={className} className="hover:bg-slate-50 transition-colors">
+                          <td className="py-2.5 px-3.5 font-bold text-slate-800">
+                            {className}
+                          </td>
+                          <td className="py-2.5 px-3 text-center font-mono font-bold text-sky-600">
+                            {info.male}
+                          </td>
+                          <td className="py-2.5 px-3 text-center font-mono font-bold text-rose-600">
+                            {info.female}
+                          </td>
+                          <td className={`py-2.5 px-3 text-center font-mono font-bold ${info.mutasi > 0 ? 'text-amber-800 font-extrabold' : 'text-slate-400'}`}>
+                            {info.mutasi || 0}
+                          </td>
+                          <td className="py-2.5 px-3.5 text-center font-mono font-black text-slate-900 bg-slate-50/50">
+                            {info.total}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-amber-50/40 font-black text-slate-900 border-t border-slate-200">
+                      <td className="py-3 px-3.5 font-black">Total Aktif</td>
+                      <td className="py-3 px-3 text-center font-mono text-sky-600 font-black text-sm">
+                        {activeStudents.filter(s => s.jenisKelamin === 'L').length}
+                      </td>
+                      <td className="py-3 px-3 text-center font-mono text-rose-600 font-black text-sm">
+                        {activeStudents.filter(s => s.jenisKelamin === 'P').length}
+                      </td>
+                      <td className={`py-3 px-3 text-center font-mono font-black text-sm ${mutasiStudents.length > 0 ? 'text-amber-800' : 'text-slate-500'}`}>
+                        {mutasiStudents.length}
+                      </td>
+                      <td className="py-3 px-3.5 text-center font-mono font-black text-slate-900 bg-amber-100/60 text-sm">
+                        {activeStudents.length}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
             </div>
           </div>
 
