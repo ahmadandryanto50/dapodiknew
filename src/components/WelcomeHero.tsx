@@ -154,7 +154,7 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
       id: 'laporan' as ActiveTab,
       label: 'Laporan',
       icon: BarChart3,
-      count: `${Math.round(((activeStudents.length + teachers.length + sarpras.length) / 50) * 100)}%`,
+      count: null,
       desc: 'Rekapitulasi & Statistik',
       color: 'from-indigo-500/20 to-blue-500/20 border-indigo-400/30 text-indigo-300'
     },
@@ -387,9 +387,11 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
                           </div>
                           
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-white/20 text-sky-100 group-hover:bg-cyan-400 group-hover:text-slate-900 transition-colors">
-                              {item.count}
-                            </span>
+                            {item.count !== null && item.count !== undefined && item.count !== '' && (
+                              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-white/20 text-sky-100 group-hover:bg-cyan-400 group-hover:text-slate-900 transition-colors">
+                                {item.count}
+                              </span>
+                            )}
                             <ChevronRight className="w-4 h-4 text-white/50 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
                           </div>
                         </button>
