@@ -61,7 +61,7 @@ const iconMap: Record<string, React.ComponentType<any>> = {
   Settings
 };
 
-const defaultAplikasiLinks: AplikasiLink[] = [
+export const defaultAplikasiLinks: AplikasiLink[] = [
   { id: '1', label: 'Login Dapodik', url: 'https://sp.datadik.kemdikbud.go.id/', icon: 'Laptop', color: 'from-indigo-500 to-indigo-600', category: 'main' },
   { id: '2', label: 'PTK Datadik', url: 'https://ptk.datadik.kemdikbud.go.id/', icon: 'Database', color: 'from-pink-500 to-pink-600', category: 'main' },
   { id: '3', label: 'Area Member', url: 'https://daftarpemberi.kemdikbud.go.id/', icon: 'Globe', color: 'from-indigo-600 to-purple-600', category: 'main' },
@@ -131,44 +131,27 @@ export const AplikasiModule: React.FC<AplikasiModuleProps> = ({
   onSaveLinks
 }) => {
   const [links, setLinks] = useState<AplikasiLink[]>(() => {
-    let list: AplikasiLink[] = [];
-    if (aplikasiLinks && aplikasiLinks.length > 0) {
-      list = aplikasiLinks;
-    } else {
-      const saved = localStorage.getItem('dapodik_aplikasi_links');
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            list = parsed;
-          }
-        } catch (e) {
-          // Fallback
+    if (Array.isArray(aplikasiLinks)) {
+      return aplikasiLinks.map(l => ({ ...l, category: l.category || 'main' }));
+    }
+    const saved = localStorage.getItem('dapodik_aplikasi_links');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.map((l: any) => ({ ...l, category: l.category || 'main' }));
         }
+      } catch (e) {
+        // Fallback
       }
     }
-
-    if (list.length === 0) {
-      return [...defaultAplikasiLinks, ...defaultOtherAplikasiLinks];
-    }
-    const filteredList = list.filter(l => l.category !== ('embedded' as any));
-    const hasOther = filteredList.some(l => l.category === 'other');
-    if (!hasOther) {
-      return [...filteredList, ...defaultOtherAplikasiLinks];
-    }
-    return filteredList;
+    return [...defaultAplikasiLinks, ...defaultOtherAplikasiLinks];
   });
 
   // Watch for external updates (e.g., loaded from database on startup)
   React.useEffect(() => {
-    if (aplikasiLinks && aplikasiLinks.length > 0) {
-      const cleanList = aplikasiLinks.filter(l => l.category !== ('embedded' as any));
-      const hasOther = cleanList.some(l => l.category === 'other');
-      if (!hasOther) {
-        setLinks([...cleanList, ...defaultOtherAplikasiLinks]);
-      } else {
-        setLinks(cleanList);
-      }
+    if (Array.isArray(aplikasiLinks)) {
+      setLinks(aplikasiLinks.map(l => ({ ...l, category: l.category || 'main' })));
     }
   }, [aplikasiLinks]);
 
@@ -399,26 +382,48 @@ export const AplikasiModule: React.FC<AplikasiModuleProps> = ({
               </div>
               <button
                 type="button"
-                onClick={() => handleAddLink('main')}
+                onClick={() => handleAddLink(settingsCategoryTab)}
                 className="px-3.5 py-2 bg-sky-600 hover:bg-sky-700 text-white text-xs font-black rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm shrink-0"
               >
                 <Plus className="w-3.5 h-3.5 stroke-[3px]" />
-                <span>Tambah Pintasan Utama</span>
+                <span>Tambah {settingsCategoryTab === 'other' ? 'Aplikasi Lain' : 'Pintasan Utama'}</span>
               </button>
             </div>
 
-            {/* Category Header */}
+            {/* Category Header Tabs */}
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
-              <div className="px-3 py-1.5 bg-sky-50 text-sky-700 border border-sky-200 rounded-xl text-xs font-bold flex items-center gap-2">
-                <Laptop className="w-4 h-4 text-sky-600" />
-                <span>Daftar Pintasan Utama Dapodik ({editLinks.filter(l => l.category !== 'other').length})</span>
+              <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-xl border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setSettingsCategoryTab('main')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
+                    settingsCategoryTab === 'main'
+                      ? 'bg-white text-sky-700 shadow-sm border border-slate-200/80 font-black'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Laptop className="w-3.5 h-3.5 text-sky-600" />
+                  <span>Pintasan Utama ({editLinks.filter(l => l.category !== 'other').length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSettingsCategoryTab('other')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
+                    settingsCategoryTab === 'other'
+                      ? 'bg-white text-purple-700 shadow-sm border border-slate-200/80 font-black'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Globe className="w-3.5 h-3.5 text-purple-600" />
+                  <span>Layanan Lainnya ({editLinks.filter(l => l.category === 'other').length})</span>
+                </button>
               </div>
             </div>
 
             {/* Settings Cards List */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[60vh] overflow-y-auto pr-1">
               {editLinks
-                .filter(lnk => lnk.category !== 'other')
+                .filter(lnk => settingsCategoryTab === 'other' ? lnk.category === 'other' : lnk.category !== 'other')
                 .map((lnk, idx) => {
                   const IconComp = iconMap[lnk.icon] || Laptop;
                   const isOther = lnk.category === 'other';

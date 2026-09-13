@@ -125,8 +125,18 @@
   }
 
   /* When printing document modal, show only the print container */
+  body.printing-rekap {
+    overflow: visible !important;
+    height: auto !important;
+  }
+
   body.printing-rekap * {
     visibility: hidden;
+  }
+
+  body.printing-rekap div {
+    max-height: none !important;
+    overflow: visible !important;
   }
 
   body.printing-rekap #printable-rekap-document,
@@ -142,9 +152,10 @@
     left: 0;
     top: 0;
     width: 100% !important;
+    max-width: none !important;
     margin: 0 !important;
     padding: 0 !important;
-    background: transparent !important;
+    background: #ffffff !important;
     box-shadow: none !important;
     border: none !important;
   }

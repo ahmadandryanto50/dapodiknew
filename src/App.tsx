@@ -34,7 +34,7 @@ import { SarprasModule } from './components/SarprasModule';
 import { RaporModule } from './components/RaporModule';
 import { LaporanModule } from './components/LaporanModule';
 import { SettingsModule } from './components/SettingsModule';
-import { AplikasiModule } from './components/AplikasiModule';
+import { AplikasiModule, defaultAplikasiLinks, defaultOtherAplikasiLinks } from './components/AplikasiModule';
 import { GuestUploadDashboard } from './components/GuestUploadDashboard';
 import { QuickSearchModal } from './components/QuickSearchModal';
 import { NotificationDrawer } from './components/NotificationDrawer';
@@ -443,12 +443,13 @@ export default function App() {
     const saved = localStorage.getItem('dapodik_aplikasi_links');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
       } catch (e) {
-        // Fallback to default in module
+        // Fallback to default
       }
     }
-    return [];
+    return [...defaultAplikasiLinks, ...defaultOtherAplikasiLinks];
   });
 
   const [customFolders, setCustomFolders] = useState<string[]>(() => {
@@ -1063,37 +1064,21 @@ export default function App() {
   };
 
   const buildAplikasiPayload = () => {
-    if (aplikasiLinks && aplikasiLinks.length > 0) {
+    if (Array.isArray(aplikasiLinks)) {
       return aplikasiLinks;
     }
     const saved = localStorage.getItem('dapodik_aplikasi_links');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           return parsed;
         }
       } catch (e) {
         // Fallback default
       }
     }
-    return [
-      { id: '1', label: 'Login Dapodik', url: 'https://sp.datadik.kemdikbud.go.id/', icon: 'Laptop', color: 'from-indigo-500 to-indigo-600' },
-      { id: '2', label: 'PTK Datadik', url: 'https://ptk.datadik.kemdikbud.go.id/', icon: 'Database', color: 'from-pink-500 to-pink-600' },
-      { id: '3', label: 'Area Member', url: 'https://daftarpemberi.kemdikbud.go.id/', icon: 'Globe', color: 'from-indigo-600 to-purple-600' },
-      { id: '4', label: 'SP Datadik', url: 'https://sp.datadik.kemdikbud.go.id/', icon: 'School', color: 'from-blue-500 to-blue-600' },
-      { id: '5', label: 'Info GTK', url: 'https://info.gtk.kemdikbud.go.id/', icon: 'Info', color: 'from-cyan-400 to-cyan-500' },
-      { id: '6', label: 'Prefill 1', url: 'https://dapo.kemdikbud.go.id/unduh', icon: 'Archive', color: 'from-blue-600 to-blue-700' },
-      { id: '7', label: 'Verval PD', url: 'https://vervalpd.data.kemdikbud.go.id/', icon: 'Users', color: 'from-pink-600 to-rose-600' },
-      { id: '8', label: 'NISN', url: 'https://nisn.data.kemdikbud.go.id/', icon: 'FileText', color: 'from-orange-500 to-orange-600' },
-      { id: '9', label: 'Prefill 2', url: 'https://dapo.kemdikbud.go.id/unduh', icon: 'Archive', color: 'from-blue-500 to-sky-600' },
-      { id: '10', label: 'Verval PTK', url: 'https://vervalptk.data.kemdikbud.go.id/', icon: 'UserCheck', color: 'from-amber-500 to-amber-600' },
-      { id: '11', label: 'BOSP Salur', url: 'https://bos.kemdikbud.go.id/', icon: 'Wallet', color: 'from-teal-500 to-emerald-600' },
-      { id: '12', label: 'Login SDM', url: 'https://sdm.data.kemdikbud.go.id/', icon: 'ShieldCheck', color: 'from-cyan-500 to-blue-500' },
-      { id: '13', label: 'Verval SP', url: 'https://vervalsp.data.kemdikbud.go.id/', icon: 'ShieldCheck', color: 'from-indigo-500 to-blue-600' },
-      { id: '14', label: 'RSDM', url: 'https://sdm.data.kemdikbud.go.id/', icon: 'Box', color: 'from-orange-600 to-amber-700' },
-      { id: '15', label: 'Web Dapodik', url: 'https://dapo.kemdikbud.go.id/', icon: 'Laptop', color: 'from-red-500 to-red-600' }
-    ];
+    return [...defaultAplikasiLinks, ...defaultOtherAplikasiLinks];
   };
 
   // Real-time Cloud Sync Trigger:

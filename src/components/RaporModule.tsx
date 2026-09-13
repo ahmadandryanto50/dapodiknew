@@ -24,7 +24,8 @@ import {
 } from 'lucide-react';
 import { StudentReport, Student, SubjectScore, ExtraScore, CustomDataField, SchoolProfile } from '../types';
 import { exportToCSV } from '../services/googleSheetsService';
-import { printElement } from '../utils/printHelper';
+import { printElement, exportElementToPdf } from '../utils/printHelper';
+import { generateSingleStudentReportPdf, exportSingleStudentReportToWord } from '../utils/pdfExportHelper';
 
 interface RaporModuleProps {
   reports: StudentReport[];
@@ -156,6 +157,7 @@ export const RaporModule: React.FC<RaporModuleProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingReport, setEditingReport] = useState<StudentReport | null>(null);
   const [activeTabForm, setActiveTabForm] = useState<'identitas' | 'nilai' | 'ekstra' | 'catatan' | 'ttd' | 'tambahData'>('identitas');
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState<Omit<StudentReport, 'id'>>({
@@ -525,8 +527,8 @@ export const RaporModule: React.FC<RaporModuleProps> = ({
 
       {/* Editor Modal Add / Edit Student Report */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 pt-14 md:pt-6 pb-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-4xl max-h-[calc(100vh-3.5rem)] sm:max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
             {/* Modal Header */}
             <div className="flex items-center justify-between px-6 py-4 bg-slate-900 text-white">
               <div className="flex items-center gap-3">
@@ -1264,10 +1266,10 @@ export const RaporModule: React.FC<RaporModuleProps> = ({
 
       {/* Official Printed Report Modal (Matching PDF Sample Exactly) */}
       {selectedReportForPrint && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white text-slate-900 border border-slate-200 rounded-3xl w-full max-w-5xl max-h-[96vh] flex flex-col shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 pt-14 md:pt-6 pb-4 bg-slate-900/65 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white text-slate-900 border border-slate-200 rounded-3xl w-full max-w-5xl max-h-[calc(100vh-3.5rem)] sm:max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
             {/* Modal Print Top Bar */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50 no-print">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-white no-print shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-rose-600 rounded-xl flex items-center justify-center text-white font-extrabold text-sm shadow-sm">
                   PDF
@@ -1282,24 +1284,67 @@ export const RaporModule: React.FC<RaporModuleProps> = ({
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
                 <button
                   onClick={() => {
                     handleEditReport(selectedReportForPrint);
                     setSelectedReportForPrint(null);
                   }}
-                  className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition-all flex items-center gap-1.5 border border-slate-300"
+                  className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition-all flex items-center gap-1.5 border border-slate-300"
                 >
                   <Edit3 className="w-4 h-4 text-rose-600" />
-                  <span>Edit Data Rapor Ini</span>
+                  <span className="hidden sm:inline">Edit Data Rapor</span>
                 </button>
 
                 <button
-                  onClick={() => printElement('printable-rapor-content', `Rapor_Kurikulum_Merdeka_${selectedReportForPrint.studentName}`)}
-                  className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold shadow-md transition-all flex items-center gap-2"
+                  onClick={() => {
+                    try {
+                      printElement('printable-rapor-content', `Rapor_Kurikulum_Merdeka_${selectedReportForPrint.studentName}`);
+                    } catch (err) {
+                      console.error('Print execution error:', err);
+                    }
+                  }}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold shadow-sm transition-all flex items-center gap-1.5 border border-slate-700"
+                  title="Cetak via printer atau Simpan via Cetak Browser"
                 >
-                  <Printer className="w-4 h-4" />
-                  <span>Cetak / Simpan PDF Resmi</span>
+                  <Printer className="w-4 h-4 text-rose-400" />
+                  <span>Cetak Dokumen</span>
+                </button>
+
+                <button
+                  onClick={async () => {
+                    if (isExportingPdf) return;
+                    setIsExportingPdf(true);
+                    try {
+                      // Instant, non-freezing native jsPDF generation
+                      const success = generateSingleStudentReportPdf(selectedReportForPrint, schoolProfile);
+                      if (!success) {
+                        // Fallback to html2pdf if needed
+                        await exportElementToPdf('printable-rapor-content', `Rapor_Kurikulum_Merdeka_${selectedReportForPrint.studentName}`);
+                      }
+                    } catch (err) {
+                      console.error('PDF export error:', err);
+                    } finally {
+                      setIsExportingPdf(false);
+                    }
+                  }}
+                  disabled={isExportingPdf}
+                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:bg-rose-400 text-white text-xs font-extrabold shadow-md transition-all flex items-center gap-2"
+                  title="Unduh langsung sebagai file .pdf ke HP / Laptop"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>{isExportingPdf ? 'Mengunduh PDF...' : 'Unduh PDF'}</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    exportSingleStudentReportToWord(selectedReportForPrint, schoolProfile);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold shadow-md transition-all flex items-center gap-2"
+                  title="Unduh file Microsoft Word (.doc) yang dapat diedit"
+                >
+                  <FileText className="w-4 h-4 text-indigo-200" />
+                  <span>Unduh Word (.doc)</span>
                 </button>
 
                 <button
@@ -1312,22 +1357,13 @@ export const RaporModule: React.FC<RaporModuleProps> = ({
             </div>
 
             {/* Printable Preview Sheet Area */}
-            <div className="p-4 sm:p-8 overflow-y-auto bg-slate-200/80 flex justify-center">
+            <div className="p-3 sm:p-6 overflow-y-auto bg-white flex flex-col items-center flex-1 w-full">
               <div
                 id="printable-rapor-content"
-                className="w-full flex flex-col items-center gap-8 text-black font-sans text-xs leading-relaxed"
+                className="w-full max-w-[210mm] bg-white text-black p-6 sm:p-10 shadow-md border border-slate-200 relative select-text flex flex-col gap-8 print:shadow-none print:border-none print:p-0 print:m-0 print:w-full print:max-w-none"
                 style={{ fontFamily: "'Plus Jakarta Sans', Arial, sans-serif" }}
               >
-                {/* SHEET / PAGE 1 */}
-                <div className="bg-white text-black p-8 sm:p-12 w-full max-w-[210mm] min-h-[297mm] shadow-xl border border-slate-300 relative select-text flex flex-col justify-between print:shadow-none print:border-none print:p-0 print:m-0 print:w-full print:max-w-none print:min-h-0">
-                  {/* Background Watermark Logo */}
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.03] select-none">
-                    <div className="w-96 h-96 rounded-full border-[16px] border-black flex items-center justify-center text-8xl font-black">
-                      SMPN 11
-                    </div>
-                  </div>
-
-                  {/* PAGE 1 CONTENT */}
+                {/* PAGE 1 CONTENT */}
                   <div className="relative z-10 space-y-6 bg-white text-black flex-1">
                     {/* Header Student & School Info Box (Page 1) */}
                     <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-[11px] pb-3 border-b border-black bg-white text-black">
@@ -1431,7 +1467,6 @@ export const RaporModule: React.FC<RaporModuleProps> = ({
                         </tbody>
                       </table>
                     </div>
-                  </div>
 
                   {/* Page 1 Footer Line */}
                   <div className="pt-4 mt-6 border-t border-black/40 flex justify-between items-center text-[10px] font-bold text-black relative z-10 bg-white">
@@ -1442,26 +1477,16 @@ export const RaporModule: React.FC<RaporModuleProps> = ({
                   </div>
                 </div>
 
-                {/* PAGE BREAK SEPARATOR (NO PRINT) */}
-                <div className="no-print w-full max-w-[210mm] flex items-center justify-center gap-4 py-2">
-                  <div className="h-[1px] bg-slate-300 flex-1"></div>
-                  <span className="bg-slate-200 text-slate-700 px-4 py-1 rounded-full text-[10px] font-bold border border-slate-300 shadow-xs">
-                    --- Batas Halaman 2 (Lembar Berikutnya) ---
-                  </span>
-                  <div className="h-[1px] bg-slate-300 flex-1"></div>
+                {/* PAGE BREAK SEPARATOR (INLINE WITHIN WHITE SHEET) */}
+                <div className="no-print my-6 py-2.5 border-y border-dashed border-slate-300 bg-white flex items-center justify-center gap-3 text-[10.5px] font-bold text-slate-500 rounded-lg select-none">
+                  <div className="h-px bg-slate-300 flex-1"></div>
+                  <span>--- Batas Halaman 2 (Lembar Berikutnya Saat Dicetak) ---</span>
+                  <div className="h-px bg-slate-300 flex-1"></div>
                 </div>
 
-                {/* SHEET / PAGE 2 */}
-                <div className="bg-white text-black p-8 sm:p-12 w-full max-w-[210mm] min-h-[297mm] shadow-xl border border-slate-300 relative select-text flex flex-col justify-between print:shadow-none print:border-none print:p-0 print:m-0 print:w-full print:max-w-none print:min-h-0 print:page-break-before">
-                  {/* Background Watermark Logo */}
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.03] select-none">
-                    <div className="w-96 h-96 rounded-full border-[16px] border-black flex items-center justify-center text-8xl font-black">
-                      SMPN 11
-                    </div>
-                  </div>
-
-                  <div className="relative z-10 space-y-5 bg-white text-black flex-1">
-                    {/* PAGE 2 HEADER (Student Info) */}
+                {/* PAGE 2 CONTENT */}
+                <div className="page-break-before print:page-break-before relative z-10 space-y-5 bg-white text-black flex-1 pt-2">
+                  {/* PAGE 2 HEADER (Student Info) */}
                     <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-[11px] pb-3 border-b border-black bg-white text-black">
                       <div className="space-y-1">
                         <div className="flex">
@@ -1640,7 +1665,6 @@ export const RaporModule: React.FC<RaporModuleProps> = ({
                         </div>
                       </div>
                     </div>
-                  </div>
 
                   {/* Page 2 Footer Line */}
                   <div className="pt-4 mt-6 border-t border-black/40 flex justify-between items-center text-[10px] font-bold text-black relative z-10 bg-white">

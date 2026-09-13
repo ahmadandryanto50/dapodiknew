@@ -1,3 +1,5 @@
+import html2pdf from 'html2pdf.js';
+
 /**
  * Utility to print any DOM element cleanly with styling isolation.
  * Works seamlessly in sandboxed preview iframes and standalone windows.
@@ -5,49 +7,56 @@
 export async function printElement(elementId: string, title: string = 'Laporan Rekapitulasi DAPODIK'): Promise<void> {
   const element = document.getElementById(elementId);
   if (!element) {
-    console.warn(`Element with id ${elementId} not found for printing, invoking standard window.print().`);
+    console.warn(`Element with id ${elementId} not found, invoking window.print().`);
     window.focus();
     window.print();
     return;
   }
 
-  try {
-    const printIframe = document.createElement('iframe');
-    printIframe.setAttribute('id', 'temp-print-frame');
-    printIframe.style.position = 'fixed';
-    printIframe.style.right = '0';
-    printIframe.style.bottom = '0';
-    printIframe.style.width = '0';
-    printIframe.style.height = '0';
-    printIframe.style.border = '0';
-    printIframe.style.visibility = 'hidden';
-    document.body.appendChild(printIframe);
+  // Add body print class safely for CSS rules
+  document.body.classList.add('printing-rekap');
 
-    const pri = printIframe.contentWindow;
-    if (pri) {
-      const allStyles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+  const cleanup = () => {
+    document.body.classList.remove('printing-rekap');
+  };
+
+  try {
+    // Create an isolated printing iframe to render ONLY the clean A4 element
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0px';
+    iframe.style.height = '0px';
+    iframe.style.border = '0';
+    iframe.style.visibility = 'hidden';
+    document.body.appendChild(iframe);
+
+    const frameDoc = iframe.contentWindow?.document;
+    if (frameDoc) {
+      const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
         .map(style => style.outerHTML)
         .join('\n');
 
-      pri.document.open();
-      pri.document.write(`
+      frameDoc.open();
+      frameDoc.write(`
         <!DOCTYPE html>
         <html lang="id">
           <head>
             <meta charset="utf-8">
             <title>${title}</title>
-            ${allStyles}
+            ${styles}
             <style>
               @page {
                 size: A4 portrait;
-                margin: 10mm 12mm 15mm 12mm;
+                margin: 8mm 10mm 10mm 10mm;
               }
               body {
                 background: #ffffff !important;
                 color: #000000 !important;
                 margin: 0 !important;
-                padding: 10px !important;
-                font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif !important;
+                padding: 5px !important;
+                font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
               }
@@ -57,15 +66,9 @@ export async function printElement(elementId: string, title: string = 'Laporan R
               table {
                 width: 100% !important;
                 border-collapse: collapse !important;
-                page-break-inside: auto !important;
               }
-              tr {
-                page-break-inside: avoid !important;
-                page-break-after: auto !important;
-              }
-              .page-break-avoid {
-                break-inside: avoid !important;
-                page-break-inside: avoid !important;
+              table, th, td {
+                border-color: #000000 !important;
               }
               .page-break-before {
                 page-break-before: always !important;
@@ -78,37 +81,71 @@ export async function printElement(elementId: string, title: string = 'Laporan R
           </body>
         </html>
       `);
-      pri.document.close();
+      frameDoc.close();
 
       setTimeout(() => {
         try {
-          pri.focus();
-          pri.print();
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
         } catch (e) {
-          console.warn('Iframe print error, falling back to window.print', e);
-          document.body.classList.add('printing-rekap');
+          console.warn('Iframe print warning, using window.print fallback:', e);
           window.focus();
           window.print();
-          setTimeout(() => document.body.classList.remove('printing-rekap'), 1000);
         } finally {
           setTimeout(() => {
-            if (document.body.contains(printIframe)) {
-              document.body.removeChild(printIframe);
+            if (document.body.contains(iframe)) {
+              document.body.removeChild(iframe);
             }
-          }, 3000);
+            cleanup();
+          }, 1000);
         }
-      }, 500);
+      }, 400);
       return;
     }
   } catch (err) {
-    console.warn('Iframe print error, falling back:', err);
+    console.warn('Print element error, fallback to window.print:', err);
   }
 
-  // Fallback to window.print with body class
-  document.body.classList.add('printing-rekap');
+  // Direct fallback
   window.focus();
   window.print();
-  setTimeout(() => {
-    document.body.classList.remove('printing-rekap');
-  }, 1000);
+  setTimeout(cleanup, 500);
 }
+
+/**
+ * Utility to export a DOM element directly as a downloaded PDF file using html2pdf.js.
+ */
+export async function exportElementToPdf(elementId: string, filename: string = 'Rapor_Kurikulum_Merdeka'): Promise<boolean> {
+  const element = document.getElementById(elementId);
+  if (!element) {
+    console.warn(`Element with id ${elementId} not found for PDF export.`);
+    return false;
+  }
+
+  try {
+    const cleanFilename = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
+    const opt = {
+      margin: [8, 8, 12, 8] as [number, number, number, number], // top, left, bottom, right in mm
+      filename: cleanFilename,
+      image: { type: 'jpeg' as const, quality: 0.95 },
+      html2canvas: {
+        scale: 1.5,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        windowWidth: 1024
+      },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
+      pagebreak: { mode: ['css', 'legacy'], before: '.page-break-before' }
+    };
+
+    // Execute html2pdf conversion without freezing or fallback looping
+    await html2pdf().set(opt).from(element).save();
+    return true;
+  } catch (err) {
+    console.error('Error exporting element to PDF via html2pdf:', err);
+    return false;
+  }
+}
+
+

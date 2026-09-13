@@ -514,3 +514,648 @@ export function generateOfficialRekapPdf({
     return false;
   }
 }
+
+/**
+ * Generates a clean 2-page Rapor Kurikulum Merdeka PDF for a single student instantly with jsPDF
+ */
+export function generateSingleStudentReportPdf(
+  report: StudentReport,
+  schoolProfile?: SchoolProfile
+): boolean {
+  try {
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4',
+    });
+
+    const studentName = report.studentName || 'Siswa';
+    const nis = report.nis || '3899';
+    const nisn = report.nisn || '-';
+    const namaSekolah = report.namaSekolah || schoolProfile?.namaSekolah || 'SMP NEGERI 11 PALU';
+    const alamat = report.alamat || schoolProfile?.alamat || 'Jl. Keramik';
+    const rombel = report.rombel || '7 A';
+    const fase = report.fase || 'D';
+    const semester = String(report.semester || '2');
+    const tahunAjaran = report.tahunAjaran || '2025/2026';
+
+    const marginX = 14;
+    let currentY = 15;
+
+    // Helper to draw student info header
+    const drawHeaderBox = () => {
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(0.2);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      doc.setTextColor(0, 0, 0);
+
+      // Left Column
+      doc.text('Nama Murid', marginX, currentY);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`: ${studentName}`, marginX + 28, currentY);
+
+      currentY += 4.5;
+      doc.setFont('helvetica', 'normal');
+      doc.text('NIS/NISN', marginX, currentY);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`: ${nis} / ${nisn}`, marginX + 28, currentY);
+
+      currentY += 4.5;
+      doc.setFont('helvetica', 'normal');
+      doc.text('Sekolah', marginX, currentY);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`: ${namaSekolah}`, marginX + 28, currentY);
+
+      currentY += 4.5;
+      doc.setFont('helvetica', 'normal');
+      doc.text('Alamat', marginX, currentY);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`: ${alamat}`, marginX + 28, currentY);
+
+      // Right Column
+      let rightY = currentY - 13.5;
+      const rightX = 120;
+      doc.setFont('helvetica', 'normal');
+      doc.text('Kelas', rightX, rightY);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`: ${rombel}`, rightX + 25, rightY);
+
+      rightY += 4.5;
+      doc.setFont('helvetica', 'normal');
+      doc.text('Fase', rightX, rightY);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`: ${fase}`, rightX + 25, rightY);
+
+      rightY += 4.5;
+      doc.setFont('helvetica', 'normal');
+      doc.text('Semester', rightX, rightY);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`: ${semester}`, rightX + 25, rightY);
+
+      rightY += 4.5;
+      doc.setFont('helvetica', 'normal');
+      doc.text('Tahun Ajaran', rightX, rightY);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`: ${tahunAjaran}`, rightX + 25, rightY);
+
+      currentY += 4;
+      doc.setLineWidth(0.4);
+      doc.line(marginX, currentY, 210 - marginX, currentY);
+      currentY += 5;
+    };
+
+    // PAGE 1
+    drawHeaderBox();
+
+    // Main Title
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.text('LAPORAN HASIL BELAJAR', 105, currentY, { align: 'center' });
+    currentY += 6;
+
+    // Table Scores
+    const scores = report.scores || [];
+    const groupA = scores.filter(sc => !sc.kelompok || sc.kelompok === 'Kelompok A');
+    const groupB = scores.filter(sc => sc.kelompok === 'Kelompok B');
+
+    const tableBody: any[] = [];
+    tableBody.push([{ content: 'Kelompok A', colSpan: 4, styles: { fillColor: [240, 240, 240], fontStyle: 'bold' } }]);
+    groupA.forEach((sc, idx) => {
+      tableBody.push([
+        idx + 1,
+        sc.mapel,
+        sc.nilaiAkhir ?? sc.nilaiPengetahuan ?? 75,
+        sc.catatan || 'Mencapai Kompetensi dengan baik.'
+      ]);
+    });
+
+    tableBody.push([{ content: 'Kelompok B', colSpan: 4, styles: { fillColor: [240, 240, 240], fontStyle: 'bold' } }]);
+    groupB.forEach((sc, idx) => {
+      tableBody.push([
+        idx + 1,
+        sc.mapel,
+        sc.nilaiAkhir ?? sc.nilaiPengetahuan ?? 75,
+        sc.catatan || 'Mencapai Kompetensi dengan baik.'
+      ]);
+    });
+
+    autoTable(doc, {
+      startY: currentY,
+      head: [['No', 'Mata Pelajaran', 'Nilai Akhir', 'Capaian Kompetensi']],
+      body: tableBody,
+      theme: 'grid',
+      styles: { lineColor: [0, 0, 0], lineWidth: 0.3 },
+      headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 8.5, halign: 'center', lineColor: [0, 0, 0], lineWidth: 0.3 },
+      bodyStyles: { fontSize: 8, textColor: [0, 0, 0], cellPadding: 2, lineColor: [0, 0, 0], lineWidth: 0.3 },
+      columnStyles: {
+        0: { halign: 'center', cellWidth: 10, fontStyle: 'bold' },
+        1: { cellWidth: 45, fontStyle: 'bold' },
+        2: { halign: 'center', cellWidth: 20, fontStyle: 'bold' },
+        3: { cellWidth: 'auto' },
+      },
+      margin: { left: marginX, right: marginX },
+    });
+
+    // Page 1 Footer
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.text(`${rombel}  |  ${studentName}  |  ${nis}`, marginX, 285);
+    doc.text('Halaman : 1', 210 - marginX, 285, { align: 'right' });
+
+    // PAGE 2
+    doc.addPage();
+    currentY = 15;
+    drawHeaderBox();
+
+    // Kokurikuler Box
+    const kokurikulerText = report.kokurikuler ||
+      'Pada semester ini, ananda menunjukkan capaian yang cukup baik dalam penguatan profil lulusan, yang ditunjukkan melalui kegiatan kokurikuler Literasi dan Numerasi.\nPada dimensi penalaran kritis, ananda berkembang dalam subdimensi penyampaian argumentasi.';
+
+    autoTable(doc, {
+      startY: currentY,
+      head: [['Kokurikuler']],
+      body: [[kokurikulerText]],
+      theme: 'grid',
+      styles: { lineColor: [0, 0, 0], lineWidth: 0.3 },
+      headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 8.5, halign: 'center', lineColor: [0, 0, 0], lineWidth: 0.3 },
+      bodyStyles: { fontSize: 8, textColor: [0, 0, 0], cellPadding: 3, lineColor: [0, 0, 0], lineWidth: 0.3 },
+      margin: { left: marginX, right: marginX },
+    });
+    currentY = (doc as any).lastAutoTable.finalY + 4;
+
+    // Ekstrakurikuler Table
+    const ekstraList = report.ekstrakurikuler && report.ekstrakurikuler.length > 0
+      ? report.ekstrakurikuler
+      : [{ namaEkstra: 'Pramuka', keterangan: 'Mampu dalam menerapkan nilai-nilai Dasa Darma dan Trisatya, selalu hadir tepat waktu, aktif membantu teman dalam regu, serta menunjukkan perkembangan yang baik dalam memahami pengetahuan kepramukaan.' }];
+
+    const ekstraRows = ekstraList.map((ex, idx) => [idx + 1, ex.namaEkstra, ex.keterangan]);
+
+    autoTable(doc, {
+      startY: currentY,
+      head: [['No', 'Ekstrakurikuler', 'Keterangan']],
+      body: ekstraRows,
+      theme: 'grid',
+      styles: { lineColor: [0, 0, 0], lineWidth: 0.3 },
+      headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 8.5, halign: 'center', lineColor: [0, 0, 0], lineWidth: 0.3 },
+      bodyStyles: { fontSize: 8, textColor: [0, 0, 0], cellPadding: 2, lineColor: [0, 0, 0], lineWidth: 0.3 },
+      columnStyles: {
+        0: { halign: 'center', cellWidth: 10, fontStyle: 'bold' },
+        1: { cellWidth: 40, fontStyle: 'bold' },
+        2: { cellWidth: 'auto' },
+      },
+      margin: { left: marginX, right: marginX },
+    });
+    currentY = (doc as any).lastAutoTable.finalY + 4;
+
+    // Ketidakhadiran & Catatan Wali Kelas
+    const sakit = report.kehadiran?.sakit ?? 1;
+    const izin = report.kehadiran?.izin ?? 1;
+    const alpa = report.kehadiran?.alpa ?? 1;
+    const catatanWali = report.catatanWaliKelas || 'Perlu meningkatkan motivasi belajar, kedisiplinan, dan tanggung jawab dalam mengikuti pembelajaran, Partisipasi dalam kegiatan belajar masih perlu ditingkatkan.';
+
+    autoTable(doc, {
+      startY: currentY,
+      head: [['Ketidakhadiran', 'Catatan Wali Kelas']],
+      body: [
+        [
+          `Sakit : ${sakit} hari\nIzin : ${izin} hari\nTanpa Keterangan : ${alpa} hari`,
+          catatanWali
+        ]
+      ],
+      theme: 'grid',
+      styles: { lineColor: [0, 0, 0], lineWidth: 0.3 },
+      headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 8.5, halign: 'center', lineColor: [0, 0, 0], lineWidth: 0.3 },
+      bodyStyles: { fontSize: 8, textColor: [0, 0, 0], cellPadding: 2.5, lineColor: [0, 0, 0], lineWidth: 0.3 },
+      columnStyles: {
+        0: { cellWidth: 55 },
+        1: { cellWidth: 'auto' },
+      },
+      margin: { left: marginX, right: marginX },
+    });
+    currentY = (doc as any).lastAutoTable.finalY + 4;
+
+    // Status Kenaikan Kelas
+    const statusKenaikan = report.statusKenaikan || 'Naik ke kelas VIII';
+    autoTable(doc, {
+      startY: currentY,
+      body: [[`Keterangan Kenaikan Kelas : ${statusKenaikan}`]],
+      theme: 'grid',
+      styles: { lineColor: [0, 0, 0], lineWidth: 0.3 },
+      bodyStyles: { fontSize: 8.5, fontStyle: 'bold', textColor: [0, 0, 0], halign: 'center', cellPadding: 2.5, lineColor: [0, 0, 0], lineWidth: 0.3 },
+      margin: { left: marginX, right: marginX },
+    });
+    currentY = (doc as any).lastAutoTable.finalY + 4;
+
+    // Tanggapan Orang Tua
+    autoTable(doc, {
+      startY: currentY,
+      head: [['Tanggapan Orang Tua/Wali Murid']],
+      body: [[report.tanggapanOrangTua || '\n\n']],
+      theme: 'grid',
+      styles: { lineColor: [0, 0, 0], lineWidth: 0.3 },
+      headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 8.5, halign: 'center', lineColor: [0, 0, 0], lineWidth: 0.3 },
+      bodyStyles: { fontSize: 8, textColor: [0, 0, 0], cellPadding: 2.5, lineColor: [0, 0, 0], lineWidth: 0.3 },
+      margin: { left: marginX, right: marginX },
+    });
+    currentY = (doc as any).lastAutoTable.finalY + 6;
+
+    // Custom Fields if any
+    if (report.customFields && report.customFields.length > 0) {
+      report.customFields.forEach(cf => {
+        autoTable(doc, {
+          startY: currentY,
+          head: [[cf.judul || 'Catatan / Data Tambahan']],
+          body: [[cf.isi]],
+          theme: 'grid',
+          styles: { lineColor: [0, 0, 0], lineWidth: 0.3 },
+          headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 8.5, halign: 'center', lineColor: [0, 0, 0], lineWidth: 0.3 },
+          bodyStyles: { fontSize: 8, textColor: [0, 0, 0], cellPadding: 2.5, lineColor: [0, 0, 0], lineWidth: 0.3 },
+          margin: { left: marginX, right: marginX },
+        });
+        currentY = (doc as any).lastAutoTable.finalY + 4;
+      });
+    }
+
+    // Signatures
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(0, 0, 0);
+
+    const tempatTgl = report.tempatTanggalCetak || 'Palu, 22 Juni 2026';
+    doc.text(tempatTgl, 210 - marginX - 10, currentY, { align: 'right' });
+    currentY += 5;
+
+    const colWidth = (210 - marginX * 2) / 3;
+    const x1 = marginX + colWidth / 2;
+    const x2 = marginX + colWidth + colWidth / 2;
+    const x3 = marginX + colWidth * 2 + colWidth / 2;
+
+    doc.text('Orang Tua Murid', x1, currentY, { align: 'center' });
+    doc.text('Kepala Sekolah', x2, currentY, { align: 'center' });
+    doc.text('Wali Kelas', x3, currentY, { align: 'center' });
+
+    currentY += 16;
+
+    const kepsek = report.namaKepalaSekolah || schoolProfile?.kepalaSekolah || 'Martha Taewa, S.Pd';
+    const nipKepsek = report.nipKepalaSekolah || 'NIP 197103192007012011';
+    const wali = report.namaWaliKelas || 'RINA, S.Pd., M.Pd';
+    const nipWali = report.nipWaliKelas || 'NIP 9740817200932003';
+
+    doc.setFont('helvetica', 'bold');
+    doc.text('......................................', x1, currentY, { align: 'center' });
+    doc.text(kepsek, x2, currentY, { align: 'center' });
+    doc.text(wali, x3, currentY, { align: 'center' });
+
+    currentY += 4;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.text(nipKepsek, x2, currentY, { align: 'center' });
+    doc.text(nipWali, x3, currentY, { align: 'center' });
+
+    // Page 2 Footer
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.text(`${rombel}  |  ${studentName}  |  ${nis}`, marginX, 285);
+    doc.text('Halaman : 2', 210 - marginX, 285, { align: 'right' });
+
+    const cleanName = studentName.replace(/[^a-zA-Z0-9]/g, '_');
+    doc.save(`Rapor_Kurikulum_Merdeka_${cleanName}.pdf`);
+    return true;
+  } catch (error) {
+    console.error('Error generating single student report PDF:', error);
+    return false;
+  }
+}
+
+/**
+ * Generates an editable Microsoft Word (.doc) document for a single student report
+ */
+export function exportSingleStudentReportToWord(
+  report: StudentReport,
+  schoolProfile?: SchoolProfile
+): boolean {
+  try {
+    const studentName = report.studentName || 'Siswa';
+    const nis = report.nis || '-';
+    const nisn = report.nisn || '-';
+    const namaSekolah = report.namaSekolah || schoolProfile?.namaSekolah || 'SMP NEGERI 11 PALU';
+    const alamat = report.alamat || schoolProfile?.alamat || 'Jl. Keramik';
+    const rombel = report.rombel || '7 A';
+    const fase = report.fase || 'D';
+    const semester = String(report.semester || '2');
+    const tahunAjaran = report.tahunAjaran || '2025/2026';
+
+    const scores = report.scores || [];
+    const groupA = scores.filter(sc => !sc.kelompok || sc.kelompok === 'Kelompok A');
+    const groupB = scores.filter(sc => sc.kelompok === 'Kelompok B');
+
+    let groupARowsHtml = '';
+    groupA.forEach((sc, idx) => {
+      groupARowsHtml += `
+        <tr>
+          <td style="text-align: center; font-weight: bold;">${idx + 1}</td>
+          <td style="font-weight: bold;">${sc.mapel}</td>
+          <td style="text-align: center; font-weight: bold;">${sc.nilaiAkhir ?? sc.nilaiPengetahuan ?? 75}</td>
+          <td>${sc.catatan || 'Mencapai Kompetensi dengan baik.'}</td>
+        </tr>
+      `;
+    });
+
+    let groupBRowsHtml = '';
+    groupB.forEach((sc, idx) => {
+      groupBRowsHtml += `
+        <tr>
+          <td style="text-align: center; font-weight: bold;">${idx + 1}</td>
+          <td style="font-weight: bold;">${sc.mapel}</td>
+          <td style="text-align: center; font-weight: bold;">${sc.nilaiAkhir ?? sc.nilaiPengetahuan ?? 75}</td>
+          <td>${sc.catatan || 'Mencapai Kompetensi dengan baik.'}</td>
+        </tr>
+      `;
+    });
+
+    const kokurikulerText = report.kokurikuler ||
+      'Pada semester ini, ananda menunjukkan capaian yang cukup baik dalam penguatan profil lulusan, yang ditunjukkan melalui kegiatan kokurikuler Literasi dan Numerasi.\nPada dimensi penalaran kritis, ananda berkembang dalam subdimensi penyampaian argumentasi.';
+
+    const ekstraList = report.ekstrakurikuler && report.ekstrakurikuler.length > 0
+      ? report.ekstrakurikuler
+      : [{ namaEkstra: 'Pramuka', keterangan: 'Mampu dalam menerapkan nilai-nilai Dasa Darma dan Trisatya, selalu hadir tepat waktu, aktif membantu teman dalam regu, serta menunjukkan perkembangan yang baik dalam memahami pengetahuan kepramukaan.' }];
+
+    let ekstraRowsHtml = '';
+    ekstraList.forEach((ex, idx) => {
+      ekstraRowsHtml += `
+        <tr>
+          <td style="text-align: center; font-weight: bold;">${idx + 1}</td>
+          <td style="font-weight: bold;">${ex.namaEkstra}</td>
+          <td>${ex.keterangan}</td>
+        </tr>
+      `;
+    });
+
+    const sakit = report.kehadiran?.sakit ?? 1;
+    const izin = report.kehadiran?.izin ?? 1;
+    const alpa = report.kehadiran?.alpa ?? 1;
+    const catatanWali = report.catatanWaliKelas || 'Perlu meningkatkan motivasi belajar, kedisiplinan, dan tanggung jawab dalam mengikuti pembelajaran, Partisipasi dalam kegiatan belajar masih perlu ditingkatkan.';
+    const statusKenaikan = report.statusKenaikan || 'Naik ke kelas VIII';
+    const tempatTgl = report.tempatTanggalCetak || 'Palu, 22 Juni 2026';
+
+    const kepsek = report.namaKepalaSekolah || schoolProfile?.kepalaSekolah || 'Martha Taewa, S.Pd';
+    const nipKepsek = report.nipKepalaSekolah || 'NIP 197103192007012011';
+    const wali = report.namaWaliKelas || 'RINA, S.Pd., M.Pd';
+    const nipWali = report.nipWaliKelas || 'NIP 9740817200932003';
+
+    let customFieldsHtml = '';
+    if (report.customFields && report.customFields.length > 0) {
+      report.customFields.forEach(cf => {
+        customFieldsHtml += `
+          <table style="width: 100%; border-collapse: collapse; margin-top: 10pt; border: 1px solid #000000;">
+            <thead>
+              <tr style="background-color: #f0f0f0;">
+                <th style="border: 1px solid #000000; padding: 6pt; text-align: center; font-weight: bold;">${cf.judul || 'Catatan Tambahan'}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="border: 1px solid #000000; padding: 6pt;">${cf.isi}</td>
+              </tr>
+            </tbody>
+          </table>
+        `;
+      });
+    }
+
+    const htmlContent = `
+      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+      <head>
+        <meta charset='utf-8'>
+        <title>Rapor Kurikulum Merdeka - ${studentName}</title>
+        <style>
+          @page WordSection1 { size: 210mm 297mm; margin: 15mm 15mm 15mm 15mm; }
+          div.WordSection1 { page: WordSection1; font-family: 'Times New Roman', Times, serif; font-size: 11pt; color: #000000; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 10pt; border: 1px solid #000000; }
+          th, td { border: 1px solid #000000; padding: 5pt 6pt; vertical-align: top; font-size: 10pt; }
+          th { background-color: #f2f2f2; font-weight: bold; text-align: center; }
+          .header-table { border: none !important; width: 100%; margin-bottom: 12pt; }
+          .header-table td { border: none !important; padding: 2pt 4pt; font-size: 10pt; }
+          .title-box { text-align: center; font-weight: bold; font-size: 12pt; margin: 10pt 0; text-transform: uppercase; }
+          .page-break { page-break-before: always; }
+          .sig-table { border: none !important; margin-top: 20pt; }
+          .sig-table td { border: none !important; text-align: center; padding: 4pt; }
+        </style>
+      </head>
+      <body>
+        <div class="WordSection1">
+          <!-- HALAMAN 1 -->
+          <table class="header-table">
+            <tr>
+              <td style="width: 18%;">Nama Murid</td>
+              <td style="width: 32%;">: <strong>${studentName}</strong></td>
+              <td style="width: 18%;">Kelas</td>
+              <td style="width: 32%;">: <strong>${rombel}</strong></td>
+            </tr>
+            <tr>
+              <td>NIS / NISN</td>
+              <td>: <strong>${nis} / ${nisn}</strong></td>
+              <td>Fase</td>
+              <td>: <strong>${fase}</strong></td>
+            </tr>
+            <tr>
+              <td>Sekolah</td>
+              <td>: <strong>${namaSekolah}</strong></td>
+              <td>Semester</td>
+              <td>: <strong>${semester}</strong></td>
+            </tr>
+            <tr>
+              <td>Alamat</td>
+              <td>: <strong>${alamat}</strong></td>
+              <td>Tahun Ajaran</td>
+              <td>: <strong>${tahunAjaran}</strong></td>
+            </tr>
+          </table>
+
+          <hr style="border: 1px solid #000; margin-bottom: 10pt;" />
+
+          <div class="title-box">LAPORAN HASIL BELAJAR</div>
+
+          <table>
+            <thead>
+              <tr style="background-color: #f0f0f0;">
+                <th style="width: 5%;">No</th>
+                <th style="width: 30%;">Mata Pelajaran</th>
+                <th style="width: 12%;">Nilai Akhir</th>
+                <th style="width: 53%;">Capaian Kompetensi</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="background-color: #f9f9f9;">
+                <td colspan="4" style="font-weight: bold;">Kelompok A</td>
+              </tr>
+              ${groupARowsHtml}
+              <tr style="background-color: #f9f9f9;">
+                <td colspan="4" style="font-weight: bold;">Kelompok B</td>
+              </tr>
+              ${groupBRowsHtml}
+            </tbody>
+          </table>
+
+          <div style="text-align: right; font-size: 9pt; font-weight: bold; margin-top: 10pt;">
+            ${rombel} | ${studentName} | ${nis} &nbsp;&nbsp;&nbsp;&nbsp; Halaman: 1
+          </div>
+
+          <!-- HALAMAN 2 -->
+          <div class="page-break"></div>
+
+          <table class="header-table" style="margin-top: 15pt;">
+            <tr>
+              <td style="width: 18%;">Nama Murid</td>
+              <td style="width: 32%;">: <strong>${studentName}</strong></td>
+              <td style="width: 18%;">Kelas</td>
+              <td style="width: 32%;">: <strong>${rombel}</strong></td>
+            </tr>
+            <tr>
+              <td>NIS / NISN</td>
+              <td>: <strong>${nis} / ${nisn}</strong></td>
+              <td>Fase</td>
+              <td>: <strong>${fase}</strong></td>
+            </tr>
+            <tr>
+              <td>Sekolah</td>
+              <td>: <strong>${namaSekolah}</strong></td>
+              <td>Semester</td>
+              <td>: <strong>${semester}</strong></td>
+            </tr>
+            <tr>
+              <td>Alamat</td>
+              <td>: <strong>${alamat}</strong></td>
+              <td>Tahun Ajaran</td>
+              <td>: <strong>${tahunAjaran}</strong></td>
+            </tr>
+          </table>
+
+          <hr style="border: 1px solid #000; margin-bottom: 10pt;" />
+
+          <!-- Kokurikuler -->
+          <table>
+            <thead>
+              <tr style="background-color: #f0f0f0;">
+                <th>Kokurikuler</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="padding: 8pt; text-align: justify;">${kokurikulerText.replace(/\n/g, '<br/>')}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <!-- Ekstrakurikuler -->
+          <table>
+            <thead>
+              <tr style="background-color: #f0f0f0;">
+                <th style="width: 6%;">No</th>
+                <th style="width: 30%;">Ekstrakurikuler</th>
+                <th style="width: 64%;">Keterangan</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${ekstraRowsHtml}
+            </tbody>
+          </table>
+
+          <!-- Ketidakhadiran & Catatan -->
+          <table>
+            <thead>
+              <tr style="background-color: #f0f0f0;">
+                <th style="width: 35%;">Ketidakhadiran</th>
+                <th style="width: 65%;">Catatan Wali Kelas</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  Sakit : ${sakit} hari<br/>
+                  Izin : ${izin} hari<br/>
+                  Tanpa Keterangan : ${alpa} hari
+                </td>
+                <td style="text-align: justify;">${catatanWali}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <!-- Kenaikan Kelas -->
+          <table>
+            <tbody>
+              <tr style="background-color: #f9f9f9;">
+                <td style="text-align: center; font-weight: bold; padding: 6pt;">
+                  Keterangan Kenaikan Kelas : ${statusKenaikan}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <!-- Tanggapan Orang Tua -->
+          <table>
+            <thead>
+              <tr style="background-color: #f0f0f0;">
+                <th>Tanggapan Orang Tua/Wali Murid</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="min-height: 40pt; height: 40pt; vertical-align: top;">${report.tanggapanOrangTua || ''}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          ${customFieldsHtml}
+
+          <!-- Tanda Tangan -->
+          <div style="text-align: right; font-size: 10pt; margin-top: 15pt;">
+            ${tempatTgl}
+          </div>
+
+          <table class="sig-table">
+            <tr>
+              <td style="width: 33%;">Orang Tua Murid</td>
+              <td style="width: 33%;">Kepala Sekolah</td>
+              <td style="width: 34%;">Wali Kelas</td>
+            </tr>
+            <tr style="height: 50pt;">
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>......................................</strong></td>
+              <td><strong>${kepsek}</strong><br/><span style="font-size: 9pt;">${nipKepsek}</span></td>
+              <td><strong>${wali}</strong><br/><span style="font-size: 9pt;">${nipWali}</span></td>
+            </tr>
+          </table>
+
+          <div style="text-align: right; font-size: 9pt; font-weight: bold; margin-top: 15pt;">
+            ${rombel} | ${studentName} | ${nis} &nbsp;&nbsp;&nbsp;&nbsp; Halaman: 2
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob(['\ufeff', htmlContent], {
+      type: 'application/msword;charset=utf-8'
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const cleanName = studentName.replace(/[^a-zA-Z0-9]/g, '_');
+    link.href = url;
+    link.download = `Rapor_Kurikulum_Merdeka_${cleanName}.doc`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    return true;
+  } catch (err) {
+    console.error('Error exporting single report to Word:', err);
+    return false;
+  }
+}

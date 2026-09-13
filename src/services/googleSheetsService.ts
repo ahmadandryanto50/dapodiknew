@@ -87,7 +87,8 @@ const HEADERS_MAP = {
   'Data_Rapor': ['id', 'studentId', 'nisn', 'studentName', 'rombel', 'semester', 'tahunAjaran', 'scores', 'kehadiran', 'catatanWaliKelas', 'statusKenaikan'],
   'Notifikasi': ['id', 'title', 'message', 'time', 'type', 'read'],
   'Permintaan_Akses_Berkas': ['id', 'fileId', 'fileName', 'requesterName', 'requesterRole', 'requesterEmail', 'requestedAt', 'reason', 'status', 'reviewedBy', 'reviewedAt', 'reviewNotes'],
-  'Data_Berkas': ['id', 'Nama Berkas', 'Nama Pengirim/Orang Tua', 'Kategori', 'Tanggal', 'Link Drive', 'Ukuran File']
+  'Data_Berkas': ['id', 'Nama Berkas', 'Nama Pengirim/Orang Tua', 'Kategori', 'Tanggal', 'Link Drive', 'Ukuran File'],
+  'Data_Aplikasi': ['id', 'label', 'url', 'icon', 'color', 'category', 'desc', 'tag']
 };
 
 function doGet(e) {
@@ -188,7 +189,7 @@ function doPost(e) {
       if (data.pengaturan !== undefined) saveSheetData(ss, 'Data_Pengaturan', data.pengaturan);
       if (data.administrator !== undefined) saveSheetData(ss, 'Administrator', data.administrator);
       if (data.profilSekolah !== undefined) saveSheetData(ss, 'Profil_Sekolah', data.profilSekolah);
-      if (data.aplikasi !== undefined) saveSheetData(ss, 'Data_Aplikasi', data.aplikasi);
+      if (data.aplikasi !== undefined) saveSheetData(ss, 'Data_Aplikasi', data.aplikasi, HEADERS_MAP['Data_Aplikasi']);
       if (data.notifikasi !== undefined) saveSheetData(ss, 'Notifikasi', data.notifikasi, HEADERS_MAP['Notifikasi']);
       if (data.berkas !== undefined) appendOrMergeSheetData(ss, 'Data_Berkas', data.berkas, HEADERS_MAP['Data_Berkas']);
     } else if (data.type === 'SYNC_SISWA') {
@@ -338,7 +339,7 @@ function doPost(e) {
     } else if (data.type === 'SYNC_PROFIL_SEKOLAH') {
       saveSheetData(ss, 'Profil_Sekolah', data.payload);
     } else if (data.type === 'SYNC_APLIKASI') {
-      saveSheetData(ss, 'Data_Aplikasi', data.payload);
+      saveSheetData(ss, 'Data_Aplikasi', data.payload, HEADERS_MAP['Data_Aplikasi']);
     }
     
     return ContentService.createTextOutput(JSON.stringify({ 
@@ -604,22 +605,26 @@ function checkAndInitializeSheets(ss) {
       ['operatorAvatarUrl', '']
     ],
     'Data_Aplikasi': [
-      ['id', 'label', 'url', 'icon', 'color'],
-      ['1', 'Login Dapodik', 'https://sp.datadik.kemdikbud.go.id/', 'Laptop', 'from-indigo-500 to-indigo-600'],
-      ['2', 'PTK Datadik', 'https://ptk.datadik.kemdikbud.go.id/', 'Database', 'from-pink-500 to-pink-600'],
-      ['3', 'Area Member', 'https://daftarpemberi.kemdikbud.go.id/', 'Globe', 'from-indigo-600 to-purple-600'],
-      ['4', 'SP Datadik', 'https://sp.datadik.kemdikbud.go.id/', 'School', 'from-blue-500 to-blue-600'],
-      ['5', 'Info GTK', 'https://info.gtk.kemdikbud.go.id/', 'Info', 'from-cyan-400 to-cyan-500'],
-      ['6', 'Prefill 1', 'https://dapo.kemdikbud.go.id/unduh', 'Archive', 'from-blue-600 to-blue-700'],
-      ['7', 'Verval PD', 'https://vervalpd.data.kemdikbud.go.id/', 'Users', 'from-pink-600 to-rose-600'],
-      ['8', 'NISN', 'https://nisn.data.kemdikbud.go.id/', 'FileText', 'from-orange-500 to-orange-600'],
-      ['9', 'Prefill 2', 'https://dapo.kemdikbud.go.id/unduh', 'Archive', 'from-blue-500 to-sky-600'],
-      ['10', 'Verval PTK', 'https://vervalptk.data.kemdikbud.go.id/', 'UserCheck', 'from-amber-500 to-amber-600'],
-      ['11', 'BOSP Salur', 'https://bos.kemdikbud.go.id/', 'Wallet', 'from-teal-500 to-emerald-600'],
-      ['12', 'Login SDM', 'https://sdm.data.kemdikbud.go.id/', 'ShieldCheck', 'from-cyan-500 to-blue-500'],
-      ['13', 'Verval SP', 'https://vervalsp.data.kemdikbud.go.id/', 'ShieldCheck', 'from-indigo-500 to-blue-600'],
-      ['14', 'RSDM', 'https://sdm.data.kemdikbud.go.id/', 'Box', 'from-orange-600 to-amber-700'],
-      ['15', 'Web Dapodik', 'https://dapo.kemdikbud.go.id/', 'Laptop', 'from-red-500 to-red-600']
+      ['id', 'label', 'url', 'icon', 'color', 'category', 'desc', 'tag'],
+      ['1', 'Login Dapodik', 'https://sp.datadik.kemdikbud.go.id/', 'Laptop', 'from-indigo-500 to-indigo-600', 'main', '', ''],
+      ['2', 'PTK Datadik', 'https://ptk.datadik.kemdikbud.go.id/', 'Database', 'from-pink-500 to-pink-600', 'main', '', ''],
+      ['3', 'Area Member', 'https://daftarpemberi.kemdikbud.go.id/', 'Globe', 'from-indigo-600 to-purple-600', 'main', '', ''],
+      ['4', 'SP Datadik', 'https://sp.datadik.kemdikbud.go.id/', 'School', 'from-blue-500 to-blue-600', 'main', '', ''],
+      ['5', 'Info GTK', 'https://info.gtk.kemdikbud.go.id/', 'Info', 'from-cyan-400 to-cyan-500', 'main', '', ''],
+      ['6', 'Prefill 1', 'https://dapo.kemdikbud.go.id/unduh', 'Archive', 'from-blue-600 to-blue-700', 'main', '', ''],
+      ['7', 'Verval PD', 'https://vervalpd.data.kemdikbud.go.id/', 'Users', 'from-pink-600 to-rose-600', 'main', '', ''],
+      ['8', 'NISN', 'https://nisn.data.kemdikbud.go.id/', 'FileText', 'from-orange-500 to-orange-600', 'main', '', ''],
+      ['9', 'Prefill 2', 'https://dapo.kemdikbud.go.id/unduh', 'Archive', 'from-blue-500 to-sky-600', 'main', '', ''],
+      ['10', 'Verval PTK', 'https://vervalptk.data.kemdikbud.go.id/', 'UserCheck', 'from-amber-500 to-amber-600', 'main', '', ''],
+      ['11', 'BOSP Salur', 'https://bos.kemdikbud.go.id/', 'Wallet', 'from-teal-500 to-emerald-600', 'main', '', ''],
+      ['12', 'Login SDM', 'https://sdm.data.kemdikbud.go.id/', 'ShieldCheck', 'from-cyan-500 to-blue-500', 'main', '', ''],
+      ['13', 'Verval SP', 'https://vervalsp.data.kemdikbud.go.id/', 'ShieldCheck', 'from-indigo-500 to-blue-600', 'main', '', ''],
+      ['14', 'RSDM', 'https://sdm.data.kemdikbud.go.id/', 'Box', 'from-orange-600 to-amber-700', 'main', '', ''],
+      ['15', 'Web Dapodik', 'https://dapo.kemdikbud.go.id/', 'Laptop', 'from-red-500 to-red-600', 'main', '', ''],
+      ['other-1', 'Rapor Pendidikan', 'https://raporpendidikan.kemdikbud.go.id/', 'FileText', 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/30', 'other', 'Evaluasi Mutu & Satuan Pendidikan', 'Evaluasi'],
+      ['other-2', 'Merdeka Mengajar (PMM)', 'https://guru.kemdikbud.go.id/', 'School', 'bg-sky-500/20 text-sky-300 border-sky-500/30 hover:bg-sky-500/30', 'other', 'Platform Perangkat Ajar & Guru', 'Pelatihan'],
+      ['other-3', 'Canva Pendidikan', 'https://www.canva.com/education/', 'Laptop', 'bg-purple-500/20 text-purple-300 border-purple-500/30 hover:bg-purple-500/30', 'other', 'Desain Grafis Media Pembelajaran', 'Kreatif'],
+      ['other-4', 'Sistem Perbukuan (SIBI)', 'https://buku.kemdikbud.go.id/', 'Archive', 'bg-amber-500/20 text-amber-300 border-amber-500/30 hover:bg-amber-500/30', 'other', 'Katalog Buku Teks & Kurikulum', 'Buku Ajar']
     ]
   };
 
