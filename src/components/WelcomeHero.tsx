@@ -59,6 +59,7 @@ interface WelcomeHeroProps {
   onQuickSync: () => void;
   currentUser?: AdminUser | null;
   onLogout?: () => void;
+  hasTopBanner?: boolean;
 }
 
 export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
@@ -78,7 +79,8 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
   isSyncing,
   onQuickSync,
   currentUser,
-  onLogout
+  onLogout,
+  hasTopBanner = false
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isOperatorModalOpen, setIsOperatorModalOpen] = useState(false);
@@ -192,7 +194,7 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
   return (
     <div id="welcome-hero-container" className="relative min-h-[calc(100vh-4rem)] w-full bg-gradient-to-br from-[#0c4a6e] via-[#0284c7] to-[#0369a1] text-white flex flex-col justify-between select-none overflow-x-clip">
       {/* Background Static Bokeh & Gradients (Optimized for old phones and laptops) */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
         {/* Soft Radial glows */}
         <div className="absolute -top-24 -left-24 w-96 h-96 bg-cyan-400/20 rounded-full blur-3xl" />
         <div className="absolute top-1/3 -right-20 w-[32rem] h-[32rem] bg-blue-400/25 rounded-full blur-3xl" />
@@ -219,26 +221,12 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
           <circle cx="30%" cy="70%" r="5" fill="#38bdf8" />
           <circle cx="85%" cy="80%" r="4" fill="#ffffff" />
         </svg>
-
-        {/* Decorative Grid Patterns */}
-        <div className="absolute left-6 bottom-16 opacity-30 flex gap-2">
-          <div className="grid grid-cols-4 gap-1.5">
-            {Array.from({ length: 16 }).map((_, i) => (
-              <div key={i} className="w-1.5 h-1.5 rounded-full bg-white/70" />
-            ))}
-          </div>
-        </div>
-        <div className="absolute right-6 top-48 opacity-30 flex gap-2">
-          <div className="grid grid-cols-3 gap-1.5">
-            {Array.from({ length: 12 }).map((_, i) => (
-              <div key={i} className="w-1.5 h-1.5 rounded-full bg-white/70" />
-            ))}
-          </div>
-        </div>
       </div>
 
       {/* Sticky Top Header Bar (Persists position on scroll) */}
-      <header id="welcome-hero-sticky-header" className="sticky top-0 z-30 w-full bg-[#0c4a6e]/85 backdrop-blur-xl border-b border-white/15 shadow-md">
+      <header id="welcome-hero-sticky-header" className={`sticky z-30 w-full bg-[#0c4a6e]/85 backdrop-blur-xl border-b border-white/15 shadow-md transition-all ${
+        hasTopBanner ? 'top-10' : 'top-0'
+      }`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-4">
           {/* Logo Brand */}
           <div className="flex items-center gap-3.5 group relative">

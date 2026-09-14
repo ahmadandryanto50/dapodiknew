@@ -1,4 +1,4 @@
-import { Student, TeacherStaff, SarprasItem, StudentReport, NotificationItem, AdminUser } from '../types';
+import { Student, TeacherStaff, SarprasItem, StudentReport, NotificationItem, AdminUser, SchoolAccount } from '../types';
 
 export const initialStudents: Student[] = [];
 
@@ -9,6 +9,28 @@ export const initialSarpras: SarprasItem[] = [];
 export const initialReports: StudentReport[] = [];
 
 export const initialNotifications: NotificationItem[] = [];
+
+export const initialSchoolAccounts: SchoolAccount[] = [
+  {
+    id: 'school-40203578',
+    npsn: '40203578',
+    namaSekolah: 'SMP NEGERI 11 PALU',
+    password: 'alalal123',
+    status: 'Aktif',
+    role: 'Administrator',
+    bentukPendidikan: 'Sekolah Menengah Pertama (SMP)',
+    kepalaSekolah: 'Drs. Bambang Sudarsono, M.Pd.',
+    nipKepalaSekolah: '197805122005011002',
+    alamat: 'Jl. Keramik, Kelurahan Duyu, Kecamatan Tatanga',
+    kabupatenKota: 'Kota Palu',
+    provinsi: 'Sulawesi Tengah',
+    spreadsheetUrl: '1XmLmshCOhSktRfzW8uG_8RqxlxVCQt5eUVekEFLwj_M',
+    kontakAdmin: '081234567890 (Ahmad Andryanto)',
+    catatan: 'Sekolah Induk / Utama (Administrator Pembuat Aplikasi)',
+    createdAt: '01/08/2026',
+    lastLogin: '14/09/2026 10:00'
+  }
+];
 
 export const initialAdministrators: AdminUser[] = [
   {

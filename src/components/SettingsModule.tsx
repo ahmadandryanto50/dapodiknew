@@ -56,8 +56,9 @@ import {
   Code2,
   Terminal
 } from 'lucide-react';
-import { SyncConfig, AppDisplayConfig, SchoolProfile, AdminUser } from '../types';
+import { SyncConfig, AppDisplayConfig, SchoolProfile, AdminUser, SchoolAccount } from '../types';
 import { APPS_SCRIPT_TEMPLATE } from '../services/googleSheetsService';
+import { MultiSchoolManager } from './MultiSchoolManager';
 
 interface SettingsModuleProps {
   syncConfig: SyncConfig;
@@ -70,6 +71,11 @@ interface SettingsModuleProps {
   initialComponentFilter?: 'all' | '1' | '2' | '3' | '4' | '5';
   administrators?: AdminUser[];
   onSaveAdministrators?: (admins: AdminUser[]) => void;
+  schoolAccounts?: SchoolAccount[];
+  onSaveSchoolAccounts?: (accounts: SchoolAccount[]) => void;
+  activeSchoolNpsn?: string;
+  onSwitchSchoolWorkspace?: (school: SchoolAccount) => void;
+  onResetToMainSchool?: () => void;
   currentUser?: AdminUser | null;
   onLogout?: () => void;
   isSyncing?: boolean;
@@ -89,6 +95,11 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   initialComponentFilter = 'all',
   administrators = [],
   onSaveAdministrators,
+  schoolAccounts = [],
+  onSaveSchoolAccounts,
+  activeSchoolNpsn,
+  onSwitchSchoolWorkspace,
+  onResetToMainSchool,
   currentUser,
   onLogout,
   isSyncing = false,
@@ -96,8 +107,18 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
   onSaveSyncConfig,
   onClearOfflineCache
 }) => {
+  // Check if current user is Super Administrator (App Creator / SMP NEGERI 11 PALU Master Admin)
+  const isSuperAdmin = currentUser?.role === 'Administrator' && (!currentUser?.schoolNpsn || currentUser?.schoolNpsn === '40203578');
+
   const [activeSubTab, setActiveSubTab] = useState<'display' | 'admins' | 'school' | 'sync'>('display');
   const [activeComponentFilter, setActiveComponentFilter] = useState<'all' | '1' | '2' | '3' | '4' | '5'>(initialComponentFilter);
+
+  // Automatically ensure guest/other schools cannot access restricted tabs
+  useEffect(() => {
+    if (!isSuperAdmin && (activeSubTab === 'sync' || activeSubTab === 'admins')) {
+      setActiveSubTab('display');
+    }
+  }, [isSuperAdmin, activeSubTab]);
 
   // Sync config form state
   const [localSyncConfig, setLocalSyncConfig] = useState<SyncConfig>(syncConfig);
@@ -310,18 +331,20 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
           <span>🎨 Edit 5 Komponen Gambar & Tampilan</span>
         </button>
 
-        <button
-          type="button"
-          onClick={() => setActiveSubTab('admins')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
-            activeSubTab === 'admins'
-              ? 'bg-sky-600 text-white shadow-sm'
-              : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200/60'
-          }`}
-        >
-          <Shield className="w-4 h-4" />
-          <span>👥 Kelola Administrator</span>
-        </button>
+        {isSuperAdmin && (
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('admins')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
+              activeSubTab === 'admins'
+                ? 'bg-sky-600 text-white shadow-sm'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200/60'
+            }`}
+          >
+            <Shield className="w-4 h-4" />
+            <span>👥 Kelola Administrator</span>
+          </button>
+        )}
 
         <button
           type="button"
@@ -336,24 +359,27 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
           <span>Profil Satuan Pendidikan</span>
         </button>
 
-        <button
-          type="button"
-          onClick={() => setActiveSubTab('sync')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
-            activeSubTab === 'sync'
-              ? 'bg-sky-600 text-white shadow-sm'
-              : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200/60'
-          }`}
-        >
-          <Globe className="w-4 h-4" />
-          <span>Integrasi Database Cloud</span>
-        </button>
+        {isSuperAdmin && (
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('sync')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
+              activeSubTab === 'sync'
+                ? 'bg-sky-600 text-white shadow-sm'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200/60'
+            }`}
+          >
+            <Globe className="w-4 h-4" />
+            <span>Integrasi Database Cloud</span>
+          </button>
+        )}
+
       </div>
 
       {/* Main Content Area */}
-      <form onSubmit={handleSaveAll}>
+      <div className="space-y-4">
         {activeSubTab === 'display' && (
-          <div className="space-y-4">
+          <form onSubmit={handleSaveAll} className="space-y-4">
             
             {/* Quick Filter Pill Buttons to focus on specific component */}
             <div className="flex flex-wrap items-center gap-2 bg-slate-100 p-2.5 rounded-xl border border-slate-200 text-xs">
@@ -1087,10 +1113,10 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
               </div>
 
             </div>
-          </div>
+          </form>
         )}
 
-        {activeSubTab === 'admins' && (
+        {isSuperAdmin && activeSubTab === 'admins' && (
           <div className="space-y-4">
             {/* Header & Actions */}
             <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -1590,7 +1616,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
         )}
 
         {activeSubTab === 'school' && (
-          <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-6">
+          <form onSubmit={handleSaveAll} className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-200 gap-3">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center font-bold border border-sky-200">
@@ -2417,10 +2443,10 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                 </button>
               </div>
             </div>
-          </div>
+          </form>
         )}
 
-        {activeSubTab === 'sync' && (
+        {isSuperAdmin && activeSubTab === 'sync' && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               <div className="lg:col-span-8 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-5">
@@ -2696,7 +2722,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
             </div>
           </div>
         )}
-      </form>
+      </div>
 
     </div>
   );

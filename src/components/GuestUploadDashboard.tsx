@@ -635,12 +635,16 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
 
     // Load active webAppUrl dynamically from sync-config
     let targetWebAppUrl = "https://script.google.com/macros/s/AKfycbwpbGWjF08VqIedbu5UJxQKvstzR6VDOujjbKZ7YeldA0o3XZZZPZNxL072KZYgE1e82g/exec";
+    let targetSpreadsheetUrl = "";
     try {
       const configRes = await fetch('/api/sync-config');
       if (configRes.ok) {
         const configData = await configRes.json();
         if (configData && configData.webAppUrl) {
           targetWebAppUrl = configData.webAppUrl;
+        }
+        if (configData && configData.spreadsheetUrl) {
+          targetSpreadsheetUrl = configData.spreadsheetUrl;
         }
       }
     } catch (configErr) {
@@ -671,7 +675,8 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
           uploadedBy: uploader,
           uploadedByRole: 'Tamu / Umum',
           description: `Berkas tamu diunggah oleh ${uploader} via Portal Berkas (Direct Browser)`,
-          parentFolderId: "1OFVFI1xhsk45_ONTihtuSHeBVvEOr44m"
+          parentFolderId: "1OFVFI1xhsk45_ONTihtuSHeBVvEOr44m",
+          spreadsheetUrl: targetSpreadsheetUrl
         }),
         signal: controller.signal
       });

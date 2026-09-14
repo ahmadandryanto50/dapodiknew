@@ -429,18 +429,25 @@ async function startServer() {
   // API Route: Proxy Load from Google Sheets
   app.post("/api/load-sheets", async (req, res) => {
     try {
-      const { webAppUrl } = req.body;
+      const { webAppUrl, spreadsheetUrl } = req.body;
       if (!webAppUrl) {
         return res.status(400).json({ success: false, message: "webAppUrl is required" });
       }
 
       let data: any = null;
 
+      // Append spreadsheetUrl as query parameter for GET requests
+      let getUrl = webAppUrl;
+      if (spreadsheetUrl) {
+        const separator = getUrl.includes('?') ? '&' : '?';
+        getUrl = `${getUrl}${separator}spreadsheetUrl=${encodeURIComponent(spreadsheetUrl)}`;
+      }
+
       // 1. Try GET first with 60s timeout
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 seconds timeout
-        const response = await fetch(webAppUrl, {
+        const response = await fetch(getUrl, {
           method: "GET",
           redirect: "follow",
           signal: controller.signal
@@ -464,7 +471,7 @@ async function startServer() {
           const postRes = await fetch(webAppUrl, {
             method: "POST",
             headers: { "Content-Type": "text/plain" },
-            body: JSON.stringify({ type: "LOAD_ALL" }),
+            body: JSON.stringify({ type: "LOAD_ALL", spreadsheetUrl }),
             redirect: "follow",
             signal: controller.signal
           });
@@ -578,8 +585,13 @@ async function startServer() {
           clearTimeout(timeoutId);
           if (sheetsRes.ok) {
             const sheetsData = await sheetsRes.json();
-            if (sheetsData && sheetsData.status === "success" && Array.isArray(sheetsData.berkas)) {
-              spreadsheetFiles = sheetsData.berkas;
+            if (sheetsData && sheetsData.status === "success") {
+              if (Array.isArray(sheetsData.berkas)) {
+                spreadsheetFiles = sheetsData.berkas;
+              }
+              if (Array.isArray(sheetsData.schoolAccounts) && sheetsData.schoolAccounts.length > 0) {
+                data.schoolAccounts = sheetsData.schoolAccounts;
+              }
             }
           }
         } catch (e: any) {
@@ -862,6 +874,7 @@ async function startServer() {
       const finalData = {
         ...currentData,
         ...incoming,
+        schoolAccounts: incoming.schoolAccounts !== undefined ? incoming.schoolAccounts : (currentData.schoolAccounts || []),
         deletedNotifIds: mergedDeleted,
         deletedPermintaanAksesIds: mergedDeletedReqs,
         deletedFileIds: mergedDeletedFiles,

@@ -14,7 +14,8 @@ import {
   NotificationItem,
   AppDisplayConfig,
   SchoolProfile,
-  AdminUser
+  AdminUser,
+  SchoolAccount
 } from './types';
 import { 
   initialStudents, 
@@ -22,7 +23,8 @@ import {
   initialSarpras, 
   initialReports, 
   initialNotifications,
-  initialAdministrators
+  initialAdministrators,
+  initialSchoolAccounts
 } from './data/mockData';
 
 import { LoginScreen } from './components/LoginScreen';
@@ -61,7 +63,9 @@ import {
   Laptop,
   FolderLock,
   Menu,
-  X
+  X,
+  Eye,
+  AlertCircle
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -241,6 +245,19 @@ export default function App() {
     return getCleanAdministrators(list);
   });
 
+  const [schoolAccounts, setSchoolAccounts] = useState<SchoolAccount[]>(() => {
+    const saved = localStorage.getItem('dapodik_school_accounts');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {}
+    }
+    return initialSchoolAccounts;
+  });
+
+  const [activeSchoolNpsn, setActiveSchoolNpsn] = useState<string>('40203578');
+
   const [currentUser, setCurrentUser] = useState<AdminUser | null>(() => {
     const saved = localStorage.getItem('dapodik_current_user');
     return saved ? JSON.parse(saved) : null;
@@ -253,6 +270,12 @@ export default function App() {
   // Ref to prevent background polling from overwriting local state right after user operations
   const lastLocalMutationRef = useRef<number>(0);
   const isSyncingFromServerRef = useRef<boolean>(false);
+  const loadedSchoolNpsnRef = useRef<string>(localStorage.getItem('dapodik_active_school_npsn') || '40203578');
+
+  const getStorageKey = (baseKey: string, npsn = activeSchoolNpsn) => {
+    if (npsn === '40203578') return baseKey;
+    return `${baseKey}_${npsn}`;
+  };
 
   // State Initialization from LocalStorage with automatic obsolete offline cache purge
   const [activeTab, setActiveTab] = useState<ActiveTab>('home');
@@ -497,7 +520,8 @@ export default function App() {
     customAdministrators = administrators,
     customNotifications = notificationsRef.current,
     customAplikasiLinks = aplikasiLinks,
-    customDeletedNotifIds = getDeletedNotifIds()
+    customDeletedNotifIds = getDeletedNotifIds(),
+    customSchoolAccounts = schoolAccounts
   ) => {
     if (!isInitialized) return;
     try {
@@ -514,7 +538,8 @@ export default function App() {
           administrators: customAdministrators,
           notifications: customNotifications,
           aplikasiLinks: customAplikasiLinks,
-          deletedNotifIds: customDeletedNotifIds
+          deletedNotifIds: customDeletedNotifIds,
+          schoolAccounts: customSchoolAccounts
         })
       });
     } catch (err) {
@@ -536,6 +561,149 @@ export default function App() {
     }
   };
 
+  const loadSchoolWorkspaceData = (npsn: string) => {
+    isSyncingFromServerRef.current = true;
+    try {
+      if (npsn === '40203578') {
+        const sS = localStorage.getItem('dapodik_students');
+        setStudents(sS ? sanitizeStudentDates(JSON.parse(sS)) : initialStudents);
+
+        const sT = localStorage.getItem('dapodik_teachers');
+        setTeachers(sT ? sanitizeTeacherDates(JSON.parse(sT)) : initialTeachers);
+
+        const sSar = localStorage.getItem('dapodik_sarpras');
+        setSarpras(sSar ? JSON.parse(sSar) : initialSarpras);
+
+        const sR = localStorage.getItem('dapodik_reports');
+        setReports(sR ? sanitizeReports(JSON.parse(sR)) : sanitizeReports(initialReports));
+
+        const sP = localStorage.getItem('dapodik_school_profile');
+        if (sP) {
+          setSchoolProfile(sanitizeSchoolProfileDates(JSON.parse(sP)));
+        } else {
+          setSchoolProfile({
+            npsn: '40203578',
+            namaSekolah: 'SMP NEGERI 11 PALU',
+            logoSekolah: '/logo_smpn11palu.jpg',
+            bentukPendidikan: 'Sekolah Menengah Pertama (SMP)',
+            statusSekolah: 'Negeri',
+            alamat: 'Jl. Keramik, Kelurahan Duyu, Kecamatan Tatanga',
+            desaKelurahan: 'Duyu',
+            kecamatan: 'Tatanga',
+            kabupatenKota: 'Kota Palu',
+            provinsi: 'Sulawesi Tengah',
+            kepalaSekolah: 'Drs. Bambang Sudarsono, M.Pd.',
+            nipKepalaSekolah: '197805122005011002',
+            pangkatGolongan: 'Pembina Tk. I / IV-b',
+            tmtMenjabat: '01 Juli 2021',
+            fotoKepalaSekolah: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=300&auto=format&fit=crop&q=80',
+            akreditasi: 'A (Unggul)',
+            kurikulum: 'Kurikulum Merdeka',
+            luasTanah: '12.500 m²',
+            luasBangunan: '4.850 m²',
+            dayaTampung: '384 Siswa (12 Rombel)',
+            jumlahRombel: '12 Rombel',
+            keterangan: 'Sekolah Ramah Anak, Adiwiyata Mandiri, dan Sekolah Penggerak Angkatan I'
+          });
+        }
+
+        const sD = localStorage.getItem('dapodik_display_config');
+        if (sD) {
+          setDisplayConfig(JSON.parse(sD));
+        } else {
+          setDisplayConfig({
+            appName: 'DAPODIK',
+            appVersion: '2026.b',
+            appSubtitle: '',
+            logoCustomUrl: '/logo_smpn11palu.jpg',
+            welcomeGreeting: 'SELAMAT DATANG',
+            welcomeTitle: 'DI DAPODIK',
+            welcomeSubtitle: 'DATA POKOK PENDIDIKAN',
+            welcomeCustomIconUrl: '/logo_smpn11palu.jpg',
+            operatorTitle: 'Operator Sekolah',
+            operatorName: 'Ahmad Andryanto, S.Pd.',
+            operatorAvatarUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=300&auto=format&fit=crop&q=80',
+            curriculumBadge: 'Kurikulum Merdeka Ready',
+            footerVersionText: 'Dapodik Cloud 2026.a (Next.js & Vercel Ready)'
+          });
+        }
+      } else {
+        const activeSch = schoolAccounts.find(s => s.npsn === npsn);
+
+        const sS = localStorage.getItem(`dapodik_students_${npsn}`);
+        setStudents(sS ? sanitizeStudentDates(JSON.parse(sS)) : []);
+
+        const sT = localStorage.getItem(`dapodik_teachers_${npsn}`);
+        setTeachers(sT ? sanitizeTeacherDates(JSON.parse(sT)) : []);
+
+        const sSar = localStorage.getItem(`dapodik_sarpras_${npsn}`);
+        setSarpras(sSar ? JSON.parse(sSar) : []);
+
+        const sR = localStorage.getItem(`dapodik_reports_${npsn}`);
+        setReports(sR ? sanitizeReports(JSON.parse(sR)) : []);
+
+        const sP = localStorage.getItem(`dapodik_school_profile_${npsn}`);
+        if (sP) {
+          setSchoolProfile(sanitizeSchoolProfileDates(JSON.parse(sP)));
+        } else if (activeSch) {
+          const blankProfile: SchoolProfile = {
+            npsn: activeSch.npsn,
+            namaSekolah: activeSch.namaSekolah,
+            bentukPendidikan: activeSch.bentukPendidikan || 'Sekolah Menengah Pertama (SMP)',
+            statusSekolah: 'Swasta',
+            alamat: activeSch.alamat || '',
+            desaKelurahan: '',
+            kecamatan: '',
+            kabupatenKota: activeSch.kabupatenKota || '',
+            provinsi: activeSch.provinsi || 'Sulawesi Tengah',
+            kepalaSekolah: activeSch.kepalaSekolah || '',
+            nipKepalaSekolah: activeSch.nipKepalaSekolah || '',
+            pangkatGolongan: '',
+            tmtMenjabat: '',
+            logoSekolah: '',
+            fotoKepalaSekolah: '',
+            akreditasi: 'Belum Terakreditasi',
+            kurikulum: 'Kurikulum Merdeka',
+            luasTanah: '',
+            luasBangunan: '',
+            dayaTampung: '',
+            jumlahRombel: '',
+            keterangan: activeSch.catatan || ''
+          };
+          setSchoolProfile(blankProfile);
+        }
+
+        const sD = localStorage.getItem(`dapodik_display_config_${npsn}`);
+        if (sD) {
+          setDisplayConfig(JSON.parse(sD));
+        } else if (activeSch) {
+          setDisplayConfig({
+            appName: 'DAPODIK',
+            appVersion: '2026.b',
+            appSubtitle: activeSch.namaSekolah.toUpperCase(),
+            logoCustomUrl: '',
+            welcomeGreeting: 'SELAMAT DATANG',
+            welcomeTitle: 'DI PORTAL',
+            welcomeSubtitle: activeSch.namaSekolah.toUpperCase(),
+            welcomeCustomIconUrl: '',
+            operatorTitle: 'Operator Sekolah',
+            operatorName: activeSch.kepalaSekolah || 'Operator',
+            operatorAvatarUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=300&auto=format&fit=crop&q=80',
+            curriculumBadge: 'Kurikulum Merdeka Ready',
+            footerVersionText: `Dapodik Cloud 2026.a - ${activeSch.namaSekolah}`
+          });
+        }
+      }
+      loadedSchoolNpsnRef.current = npsn;
+    } catch (e) {
+      console.error('Error loading school workspace data:', e);
+    } finally {
+      setTimeout(() => {
+        isSyncingFromServerRef.current = false;
+      }, 300);
+    }
+  };
+
   const addNotification = (title: string, message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info'): NotificationItem[] => {
     lastLocalMutationRef.current = Date.now();
     const newNotif: NotificationItem = {
@@ -550,104 +718,128 @@ export default function App() {
     notificationsRef.current = updated;
     setNotifications(updated);
     localStorage.setItem('dapodik_notifications', JSON.stringify(updated));
-    saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, updated, aplikasiLinks);
+    saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, updated, aplikasiLinks, getDeletedNotifIds(), schoolAccounts);
     return updated;
   };
 
   // Save to LocalStorage & Server Cache
   useEffect(() => {
     if (!isInitialized) return;
-    localStorage.setItem('dapodik_students', JSON.stringify(students));
+    if (loadedSchoolNpsnRef.current !== activeSchoolNpsn) return;
+    localStorage.setItem(getStorageKey('dapodik_students'), JSON.stringify(students));
     if (!isSyncingFromServerRef.current) {
       lastLocalMutationRef.current = Date.now();
-      saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks);
+      saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks, getDeletedNotifIds(), schoolAccounts);
     }
-  }, [students, isInitialized]);
+  }, [students, isInitialized, activeSchoolNpsn]);
 
   useEffect(() => {
     if (!isInitialized) return;
-    localStorage.setItem('dapodik_teachers', JSON.stringify(teachers));
+    if (loadedSchoolNpsnRef.current !== activeSchoolNpsn) return;
+    localStorage.setItem(getStorageKey('dapodik_teachers'), JSON.stringify(teachers));
     if (!isSyncingFromServerRef.current) {
       lastLocalMutationRef.current = Date.now();
-      saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks);
+      saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks, getDeletedNotifIds(), schoolAccounts);
     }
-  }, [teachers, isInitialized]);
+  }, [teachers, isInitialized, activeSchoolNpsn]);
 
   useEffect(() => {
     if (!isInitialized) return;
-    localStorage.setItem('dapodik_sarpras', JSON.stringify(sarpras));
+    if (loadedSchoolNpsnRef.current !== activeSchoolNpsn) return;
+    localStorage.setItem(getStorageKey('dapodik_sarpras'), JSON.stringify(sarpras));
     if (!isSyncingFromServerRef.current) {
       lastLocalMutationRef.current = Date.now();
-      saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks);
+      saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks, getDeletedNotifIds(), schoolAccounts);
     }
-  }, [sarpras, isInitialized]);
+  }, [sarpras, isInitialized, activeSchoolNpsn]);
 
   useEffect(() => {
     if (!isInitialized) return;
-    localStorage.setItem('dapodik_reports', JSON.stringify(reports));
+    if (loadedSchoolNpsnRef.current !== activeSchoolNpsn) return;
+    localStorage.setItem(getStorageKey('dapodik_reports'), JSON.stringify(reports));
     if (!isSyncingFromServerRef.current) {
       lastLocalMutationRef.current = Date.now();
-      saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks);
+      saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks, getDeletedNotifIds(), schoolAccounts);
     }
-  }, [reports, isInitialized]);
+  }, [reports, isInitialized, activeSchoolNpsn]);
 
   useEffect(() => {
     if (!isInitialized) return;
-    localStorage.setItem('dapodik_display_config', JSON.stringify(displayConfig));
+    if (loadedSchoolNpsnRef.current !== activeSchoolNpsn) return;
+    localStorage.setItem(getStorageKey('dapodik_display_config'), JSON.stringify(displayConfig));
     if (!isSyncingFromServerRef.current) {
       lastLocalMutationRef.current = Date.now();
-      saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks);
+      saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks, getDeletedNotifIds(), schoolAccounts);
     }
-  }, [displayConfig, isInitialized]);
+  }, [displayConfig, isInitialized, activeSchoolNpsn]);
 
   useEffect(() => {
     if (!isInitialized) return;
     localStorage.setItem('dapodik_administrators', JSON.stringify(administrators));
     if (!isSyncingFromServerRef.current) {
       lastLocalMutationRef.current = Date.now();
-      saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks);
+      saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks, getDeletedNotifIds(), schoolAccounts);
     }
   }, [administrators, isInitialized]);
 
   useEffect(() => {
     if (!isInitialized) return;
-    localStorage.setItem('dapodik_school_profile', JSON.stringify(schoolProfile));
+    localStorage.setItem('dapodik_school_accounts', JSON.stringify(schoolAccounts));
     if (!isSyncingFromServerRef.current) {
       lastLocalMutationRef.current = Date.now();
-      saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks);
+      saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks, getDeletedNotifIds(), schoolAccounts);
     }
-  }, [schoolProfile, isInitialized]);
+  }, [schoolAccounts, isInitialized]);
 
   useEffect(() => {
     if (!isInitialized) return;
-    localStorage.setItem('dapodik_sync_config', JSON.stringify(syncConfig));
+    if (loadedSchoolNpsnRef.current !== activeSchoolNpsn) return;
+    localStorage.setItem(getStorageKey('dapodik_school_profile'), JSON.stringify(schoolProfile));
+    if (!isSyncingFromServerRef.current) {
+      lastLocalMutationRef.current = Date.now();
+      saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks, getDeletedNotifIds(), schoolAccounts);
+    }
+  }, [schoolProfile, isInitialized, activeSchoolNpsn]);
+
+  useEffect(() => {
+    if (!isInitialized) return;
+    localStorage.setItem(getStorageKey('dapodik_sync_config'), JSON.stringify(syncConfig));
     saveSyncConfigToServer(syncConfig);
-  }, [syncConfig, isInitialized]);
+  }, [syncConfig, isInitialized, activeSchoolNpsn]);
 
   useEffect(() => {
     if (!isInitialized) return;
-    localStorage.setItem('dapodik_notifications', JSON.stringify(notifications));
+    if (loadedSchoolNpsnRef.current !== activeSchoolNpsn) return;
+    localStorage.setItem(getStorageKey('dapodik_notifications'), JSON.stringify(notifications));
     if (!isSyncingFromServerRef.current) {
       lastLocalMutationRef.current = Date.now();
-      saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notifications, aplikasiLinks);
+      saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notifications, aplikasiLinks, getDeletedNotifIds(), schoolAccounts);
     }
-  }, [notifications, isInitialized]);
+  }, [notifications, isInitialized, activeSchoolNpsn]);
 
   useEffect(() => {
     if (!isInitialized) return;
-    localStorage.setItem('dapodik_aplikasi_links', JSON.stringify(aplikasiLinks));
+    if (loadedSchoolNpsnRef.current !== activeSchoolNpsn) return;
+    localStorage.setItem(getStorageKey('dapodik_aplikasi_links'), JSON.stringify(aplikasiLinks));
     if (!isSyncingFromServerRef.current) {
       lastLocalMutationRef.current = Date.now();
-      saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks, getDeletedNotifIds());
+      saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks, getDeletedNotifIds(), schoolAccounts);
     }
-  }, [aplikasiLinks, isInitialized]);
+  }, [aplikasiLinks, isInitialized, activeSchoolNpsn]);
 
   // Auth Handlers
-  const handleLogin = (user: AdminUser) => {
+  const handleLogin = (user: AdminUser, school?: SchoolAccount) => {
     setCurrentUser(user);
     setIsAuthenticated(true);
     localStorage.setItem('dapodik_current_user', JSON.stringify(user));
     localStorage.setItem('dapodik_authenticated', 'true');
+    if (user.schoolNpsn) {
+      setActiveSchoolNpsn(user.schoolNpsn);
+      localStorage.setItem('dapodik_active_school_npsn', user.schoolNpsn);
+    } else {
+      setActiveSchoolNpsn('40203578');
+      localStorage.setItem('dapodik_active_school_npsn', '40203578');
+    }
     showToast(`Selamat datang kembali, ${user.nama}!`);
     handlePullFromSheets(true);
   };
@@ -658,6 +850,44 @@ export default function App() {
     localStorage.removeItem('dapodik_authenticated');
     localStorage.removeItem('dapodik_current_user');
     showToast('Anda telah keluar dari sistem.');
+  };
+
+  const handleSaveSchoolAccounts = (newAccounts: SchoolAccount[]) => {
+    setSchoolAccounts(newAccounts);
+    localStorage.setItem('dapodik_school_accounts', JSON.stringify(newAccounts));
+    
+    lastLocalMutationRef.current = Date.now();
+    showToast('Data akun multi-sekolah berhasil diperbarui...');
+    triggerAutoSync(
+      students,
+      teachers,
+      sarpras,
+      reports,
+      displayConfig,
+      schoolProfile,
+      administrators,
+      true,
+      notificationsRef.current,
+      {
+        title: 'Update Akun Sekolah',
+        message: 'Data akun multi-sekolah berhasil diperbarui di database.',
+        type: 'info'
+      },
+      aplikasiLinks,
+      newAccounts
+    );
+  };
+
+  const handleSwitchSchoolWorkspace = (targetSchool: SchoolAccount) => {
+    setActiveSchoolNpsn(targetSchool.npsn);
+    localStorage.setItem('dapodik_active_school_npsn', targetSchool.npsn);
+    showToast(`Beralih ke mode pantau: ${targetSchool.namaSekolah} (${targetSchool.npsn})`);
+  };
+
+  const handleResetToMainSchool = () => {
+    setActiveSchoolNpsn('40203578');
+    localStorage.setItem('dapodik_active_school_npsn', '40203578');
+    showToast('Kembali ke ruang kerja Sekolah Utama (SMP NEGERI 11 PALU).');
   };
 
   const handleSaveAdministrators = (newAdmins: AdminUser[]) => {
@@ -703,15 +933,31 @@ export default function App() {
     );
   };
 
+  const getEffectiveSyncConfig = (): SyncConfig => {
+    const mainCfg = syncConfigRef.current || syncConfig;
+    const activeSch = schoolAccounts.find(s => s.npsn === activeSchoolNpsn);
+    if (activeSchoolNpsn !== '40203578' && activeSch) {
+      return {
+        ...mainCfg,
+        spreadsheetUrl: activeSch.spreadsheetUrl || '',
+        webAppUrl: activeSch.webAppUrl || '',
+        sheetId: ''
+      };
+    }
+    return mainCfg;
+  };
+
   const handlePullFromSheets = async (silent = false) => {
     setIsSyncing(true);
     try {
-      const currentCfg = syncConfigRef.current || syncConfig;
+      const currentCfg = getEffectiveSyncConfig();
+      const isMainSchool = activeSchoolNpsn === '40203578';
+      
       if (currentCfg && currentCfg.webAppUrl) {
         const result = await loadFromGoogleSheets(currentCfg);
         if (result && result.success && result.data) {
           const {
-            siswa, ptk, sarpras, rapor, administrator, pengaturan, profilSekolah, aplikasi, notifikasi
+            siswa, ptk, sarpras, rapor, administrator, pengaturan, profilSekolah, aplikasi, notifikasi, schoolAccounts: pulledSchoolAccounts
           } = result.data;
 
           isSyncingFromServerRef.current = true;
@@ -719,21 +965,21 @@ export default function App() {
           if (Array.isArray(siswa)) {
             const clean = sanitizeStudentDates(siswa);
             setStudents(clean);
-            localStorage.setItem('dapodik_students', JSON.stringify(clean));
+            localStorage.setItem(getStorageKey('dapodik_students'), JSON.stringify(clean));
           }
           if (Array.isArray(ptk)) {
             const clean = sanitizeTeacherDates(ptk);
             setTeachers(clean);
-            localStorage.setItem('dapodik_teachers', JSON.stringify(clean));
+            localStorage.setItem(getStorageKey('dapodik_teachers'), JSON.stringify(clean));
           }
           if (Array.isArray(sarpras)) {
             setSarpras(sarpras);
-            localStorage.setItem('dapodik_sarpras', JSON.stringify(sarpras));
+            localStorage.setItem(getStorageKey('dapodik_sarpras'), JSON.stringify(sarpras));
           }
           if (Array.isArray(rapor)) {
             const clean = sanitizeReports(rapor);
             setReports(clean);
-            localStorage.setItem('dapodik_reports', JSON.stringify(clean));
+            localStorage.setItem(getStorageKey('dapodik_reports'), JSON.stringify(clean));
           }
           if (Array.isArray(administrator)) {
             const cleanAdmins = getCleanAdministrators(administrator);
@@ -744,11 +990,15 @@ export default function App() {
             const mergedNotifs = mergeNotifications(notificationsRef.current, notifikasi);
             setNotifications(mergedNotifs);
             notificationsRef.current = mergedNotifs;
-            localStorage.setItem('dapodik_notifications', JSON.stringify(mergedNotifs));
+            localStorage.setItem(getStorageKey('dapodik_notifications'), JSON.stringify(mergedNotifs));
           }
           if (Array.isArray(aplikasi)) {
             setAplikasiLinks(aplikasi);
-            localStorage.setItem('dapodik_aplikasi_links', JSON.stringify(aplikasi));
+            localStorage.setItem(getStorageKey('dapodik_aplikasi_links'), JSON.stringify(aplikasi));
+          }
+          if (Array.isArray(pulledSchoolAccounts) && pulledSchoolAccounts.length > 0) {
+            setSchoolAccounts(pulledSchoolAccounts);
+            localStorage.setItem('dapodik_school_accounts', JSON.stringify(pulledSchoolAccounts));
           }
           let pulledDisplayConfig = displayConfig;
           if (Array.isArray(pengaturan) && pengaturan.length > 0) {
@@ -760,7 +1010,7 @@ export default function App() {
             });
             pulledDisplayConfig = newCfgObj;
             setDisplayConfig(newCfgObj);
-            localStorage.setItem('dapodik_display_config', JSON.stringify(newCfgObj));
+            localStorage.setItem(getStorageKey('dapodik_display_config'), JSON.stringify(newCfgObj));
           }
 
           let pulledSchoolProfile = schoolProfile;
@@ -774,7 +1024,7 @@ export default function App() {
             const cleanProf = sanitizeSchoolProfileDates(newProf);
             pulledSchoolProfile = cleanProf;
             setSchoolProfile(cleanProf);
-            localStorage.setItem('dapodik_school_profile', JSON.stringify(cleanProf));
+            localStorage.setItem(getStorageKey('dapodik_school_profile'), JSON.stringify(cleanProf));
           }
 
           // Update server cache with updated displayConfig & schoolProfile
@@ -788,13 +1038,14 @@ export default function App() {
             Array.isArray(administrator) ? administrator : administrators,
             Array.isArray(notifikasi) ? notifikasi : notificationsRef.current,
             Array.isArray(aplikasi) ? aplikasi : aplikasiLinks,
-            getDeletedNotifIds()
+            getDeletedNotifIds(),
+            Array.isArray(pulledSchoolAccounts) && pulledSchoolAccounts.length > 0 ? pulledSchoolAccounts : schoolAccounts
           );
 
           const nowStr = new Date().toLocaleString('id-ID');
           const updatedSyncCfg = { ...currentCfg, lastSynced: nowStr };
           setSyncConfig(updatedSyncCfg);
-          localStorage.setItem('dapodik_sync_config', JSON.stringify(updatedSyncCfg));
+          localStorage.setItem(getStorageKey('dapodik_sync_config'), JSON.stringify(updatedSyncCfg));
           saveSyncConfigToServer(updatedSyncCfg);
 
           setTimeout(() => {
@@ -808,61 +1059,117 @@ export default function App() {
           }
           return true;
         }
+      } else {
+        // No webAppUrl - newly registered school account!
+        if (!isMainSchool) {
+          isSyncingFromServerRef.current = true;
+          setStudents([]);
+          localStorage.setItem(getStorageKey('dapodik_students'), JSON.stringify([]));
+          setTeachers([]);
+          localStorage.setItem(getStorageKey('dapodik_teachers'), JSON.stringify([]));
+          setSarpras([]);
+          localStorage.setItem(getStorageKey('dapodik_sarpras'), JSON.stringify([]));
+          setReports([]);
+          localStorage.setItem(getStorageKey('dapodik_reports'), JSON.stringify([]));
+
+          // Set default school profile using the registered school account info
+          const activeSch = schoolAccounts.find(s => s.npsn === activeSchoolNpsn);
+          if (activeSch) {
+            const blankProfile: SchoolProfile = {
+              npsn: activeSch.npsn,
+              namaSekolah: activeSch.namaSekolah,
+              bentukPendidikan: activeSch.bentukPendidikan || 'Sekolah Menengah Pertama (SMP)',
+              statusSekolah: 'Swasta',
+              alamat: activeSch.alamat || '',
+              desaKelurahan: '',
+              kecamatan: '',
+              kabupatenKota: activeSch.kabupatenKota || '',
+              provinsi: activeSch.provinsi || 'Sulawesi Tengah',
+              kepalaSekolah: activeSch.kepalaSekolah || '',
+              nipKepalaSekolah: activeSch.nipKepalaSekolah || '',
+              pangkatGolongan: '',
+              tmtMenjabat: '',
+              logoSekolah: '',
+              fotoKepalaSekolah: '',
+              akreditasi: 'Belum Terakreditasi',
+              kurikulum: 'Kurikulum Merdeka',
+              luasTanah: '',
+              luasBangunan: '',
+              dayaTampung: '',
+              jumlahRombel: '',
+              keterangan: activeSch.catatan || ''
+            };
+            setSchoolProfile(blankProfile);
+            localStorage.setItem(getStorageKey('dapodik_school_profile'), JSON.stringify(blankProfile));
+          }
+
+          setTimeout(() => {
+            isSyncingFromServerRef.current = false;
+          }, 400);
+          setIsSyncing(false);
+          return true;
+        }
       }
 
-      // Fallback: server cache
-      const cacheRes = await fetch(`/api/app-data?t=${Date.now()}`);
-      setIsSyncing(false);
-      if (cacheRes.ok) {
-        const serverData = await cacheRes.json();
-        if (serverData) {
-          if (serverData.students && Array.isArray(serverData.students)) {
-            const clean = sanitizeStudentDates(serverData.students);
-            setStudents(clean);
-            localStorage.setItem('dapodik_students', JSON.stringify(clean));
+      // Fallback: server cache (only for main school)
+      if (isMainSchool) {
+        const cacheRes = await fetch(`/api/app-data?t=${Date.now()}`);
+        setIsSyncing(false);
+        if (cacheRes.ok) {
+          const serverData = await cacheRes.json();
+          if (serverData) {
+            if (serverData.students && Array.isArray(serverData.students)) {
+              const clean = sanitizeStudentDates(serverData.students);
+              setStudents(clean);
+              localStorage.setItem('dapodik_students', JSON.stringify(clean));
+            }
+            if (serverData.teachers && Array.isArray(serverData.teachers)) {
+              const clean = sanitizeTeacherDates(serverData.teachers);
+              setTeachers(clean);
+              localStorage.setItem('dapodik_teachers', JSON.stringify(clean));
+            }
+            if (serverData.sarpras && Array.isArray(serverData.sarpras)) {
+              setSarpras(serverData.sarpras);
+              localStorage.setItem('dapodik_sarpras', JSON.stringify(serverData.sarpras));
+            }
+            if (serverData.reports && Array.isArray(serverData.reports)) {
+              const clean = sanitizeReports(serverData.reports);
+              setReports(clean);
+              localStorage.setItem('dapodik_reports', JSON.stringify(clean));
+            }
+            if (serverData.administrators && Array.isArray(serverData.administrators)) {
+              const cleanAdmins = getCleanAdministrators(serverData.administrators);
+              setAdministrators(cleanAdmins);
+              localStorage.setItem('dapodik_administrators', JSON.stringify(cleanAdmins));
+            }
+            if (serverData.aplikasiLinks && Array.isArray(serverData.aplikasiLinks)) {
+              setAplikasiLinks(serverData.aplikasiLinks);
+              localStorage.setItem('dapodik_aplikasi_links', JSON.stringify(serverData.aplikasiLinks));
+            }
+            if (serverData.notifications && Array.isArray(serverData.notifications)) {
+              setNotifications(serverData.notifications);
+              notificationsRef.current = serverData.notifications;
+              localStorage.setItem('dapodik_notifications', JSON.stringify(serverData.notifications));
+            }
+            if (serverData.displayConfig) {
+              setDisplayConfig(serverData.displayConfig);
+              localStorage.setItem('dapodik_display_config', JSON.stringify(serverData.displayConfig));
+            }
+            if (serverData.schoolProfile) {
+              setSchoolProfile(serverData.schoolProfile);
+              localStorage.setItem('dapodik_school_profile', JSON.stringify(serverData.schoolProfile));
+            }
+            if (serverData.schoolAccounts && Array.isArray(serverData.schoolAccounts)) {
+              setSchoolAccounts(serverData.schoolAccounts);
+              localStorage.setItem('dapodik_school_accounts', JSON.stringify(serverData.schoolAccounts));
+            }
           }
-          if (serverData.teachers && Array.isArray(serverData.teachers)) {
-            const clean = sanitizeTeacherDates(serverData.teachers);
-            setTeachers(clean);
-            localStorage.setItem('dapodik_teachers', JSON.stringify(clean));
+          
+          if (!silent) {
+            showToast('✅ Data disinkronkan dari server cache!');
           }
-          if (serverData.sarpras && Array.isArray(serverData.sarpras)) {
-            setSarpras(serverData.sarpras);
-            localStorage.setItem('dapodik_sarpras', JSON.stringify(serverData.sarpras));
-          }
-          if (serverData.reports && Array.isArray(serverData.reports)) {
-            const clean = sanitizeReports(serverData.reports);
-            setReports(clean);
-            localStorage.setItem('dapodik_reports', JSON.stringify(clean));
-          }
-          if (serverData.administrators && Array.isArray(serverData.administrators)) {
-            const cleanAdmins = getCleanAdministrators(serverData.administrators);
-            setAdministrators(cleanAdmins);
-            localStorage.setItem('dapodik_administrators', JSON.stringify(cleanAdmins));
-          }
-          if (serverData.aplikasiLinks && Array.isArray(serverData.aplikasiLinks)) {
-            setAplikasiLinks(serverData.aplikasiLinks);
-            localStorage.setItem('dapodik_aplikasi_links', JSON.stringify(serverData.aplikasiLinks));
-          }
-          if (serverData.notifications && Array.isArray(serverData.notifications)) {
-            setNotifications(serverData.notifications);
-            notificationsRef.current = serverData.notifications;
-            localStorage.setItem('dapodik_notifications', JSON.stringify(serverData.notifications));
-          }
-          if (serverData.displayConfig) {
-            setDisplayConfig(serverData.displayConfig);
-            localStorage.setItem('dapodik_display_config', JSON.stringify(serverData.displayConfig));
-          }
-          if (serverData.schoolProfile) {
-            setSchoolProfile(serverData.schoolProfile);
-            localStorage.setItem('dapodik_school_profile', JSON.stringify(serverData.schoolProfile));
-          }
+          return true;
         }
-        
-        if (!silent) {
-          showToast('✅ Data disinkronkan dari server cache!');
-        }
-        return true;
       }
     } catch (e) {
       console.error(e);
@@ -891,16 +1198,17 @@ export default function App() {
               if (Array.isArray(serverData.customFolders) && serverData.customFolders.length > 0) {
                 setCustomFolders(serverData.customFolders);
               }
+              if (Array.isArray(serverData.schoolAccounts) && serverData.schoolAccounts.length > 0) {
+                setSchoolAccounts(serverData.schoolAccounts);
+                localStorage.setItem('dapodik_school_accounts', JSON.stringify(serverData.schoolAccounts));
+              }
             }
           }
         } catch (e) {}
 
-        const currentCfg = syncConfigRef.current || syncConfig;
-        if (currentCfg && currentCfg.webAppUrl) {
-          await handlePullFromSheets(true);
-        }
+        // Pulling is now handled centrally by the activeSchoolNpsn useEffect below
       } catch (err) {
-        console.error('Failed to pull from Google Sheets on init:', err);
+        console.error('Failed to init app state:', err);
       } finally {
         if (isMounted) setIsInitialized(true);
       }
@@ -913,17 +1221,24 @@ export default function App() {
     };
   }, []);
 
+  // Pull data automatically whenever activeSchoolNpsn changes or once initialized
+  useEffect(() => {
+    if (!isInitialized) return;
+    loadSchoolWorkspaceData(activeSchoolNpsn);
+    handlePullFromSheets(true);
+  }, [activeSchoolNpsn, isInitialized]);
+
   // Periodic 2-way background polling from Google Sheets (every 60 seconds)
   useEffect(() => {
     if (!isInitialized) return;
     const interval = setInterval(() => {
-      const currentCfg = syncConfigRef.current || syncConfig;
+      const currentCfg = getEffectiveSyncConfig();
       if (currentCfg && currentCfg.webAppUrl && document.visibilityState === 'visible') {
         handlePullFromSheets(true);
       }
     }, 60000);
     return () => clearInterval(interval);
-  }, [isInitialized]);
+  }, [isInitialized, activeSchoolNpsn]);
 
 
 
@@ -1098,7 +1413,8 @@ export default function App() {
       message: string;
       type?: 'info' | 'success' | 'warning' | 'error';
     },
-    customAplikasiLinks = aplikasiLinks
+    customAplikasiLinks = aplikasiLinks,
+    customSchoolAccounts = schoolAccounts
   ) => {
     // Persiapkan notifikasi terbaru jika ada pendingNotification
     let activeNotifs = customNotifications || [];
@@ -1125,11 +1441,12 @@ export default function App() {
       customAdministrators,
       activeNotifs,
       currentAplikasi,
-      getDeletedNotifIds()
+      getDeletedNotifIds(),
+      customSchoolAccounts
     );
 
     // Otomatis simpan & sync perubahan ke Google Spreadsheet
-    const currentCfg = syncConfigRef.current || syncConfig;
+    const currentCfg = getEffectiveSyncConfig();
     if (currentCfg && currentCfg.webAppUrl && currentCfg.autoSync !== false) {
       const pengaturanArray = Object.entries(customDisplayConfig || {}).map(([key, value]) => ({
         key,
@@ -1149,7 +1466,8 @@ export default function App() {
         profilSekolah: profilSekolahArray,
         administrator: customAdministrators,
         notifikasi: activeNotifs,
-        aplikasi: currentAplikasi
+        aplikasi: currentAplikasi,
+        schoolAccounts: customSchoolAccounts
       }).then(res => {
         if (res && res.success) {
           const nowStr = new Date().toLocaleString('id-ID');
@@ -1870,6 +2188,10 @@ export default function App() {
     );
   };
 
+  // Active School Account (for multi-tenancy & monitoring)
+  const activeSchool = schoolAccounts.find(s => s.npsn === activeSchoolNpsn) || schoolAccounts[0];
+  const isMonitoringOtherSchool = activeSchoolNpsn !== '40203578' && Boolean(activeSchool && activeSchool.npsn !== '40203578');
+
   // If user is not authenticated, show the LoginScreen
   if (!isAuthenticated) {
     return (
@@ -1884,12 +2206,41 @@ export default function App() {
         students={students}
         sarpras={sarpras}
         reports={reports}
+        schoolAccounts={schoolAccounts}
+        onUpdateSchoolAccounts={handleSaveSchoolAccounts}
       />
     );
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0c4a6e] via-[#0284c7] to-[#0369a1] text-white flex flex-col font-['Plus_Jakarta_Sans',sans-serif] relative selection:bg-sky-200 selection:text-sky-950">
+      
+      {/* Sticky Top Container for Banner & Submodule Headers to prevent overlaps */}
+      <div className="sticky top-0 z-40 w-full flex flex-col">
+        {/* Multi-School Monitoring Mode Banner */}
+        {isMonitoringOtherSchool && activeSchool && (
+          <div className="h-10 bg-amber-500 text-slate-950 px-4 shadow-md flex items-center justify-between text-xs font-bold border-b border-amber-600 animate-in fade-in slide-in-from-top-2 select-none">
+            <div className="flex items-center gap-2">
+              <span className="p-1 rounded-md bg-slate-950 text-amber-400">
+                <Eye className="w-3.5 h-3.5" />
+              </span>
+              <span>
+                MODE PEMANTAUAN MULTI-SEKOLAH: <strong>{activeSchool.namaSekolah}</strong> (NPSN: <span className="font-mono">{activeSchool.npsn}</span>)
+              </span>
+              <span className="hidden sm:inline-block px-2 py-0.5 rounded-full bg-slate-900/10 text-[10px] font-semibold">
+                Status: {activeSchool.status}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleResetToMainSchool}
+              className="px-3 py-1 rounded-lg bg-slate-950 hover:bg-slate-800 text-white text-[11px] font-extrabold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+            >
+              <span>Kembali ke Sekolah Utama</span>
+              <span>✕</span>
+            </button>
+          </div>
+        )}
       
       {/* Background Static Bokeh, Auroras & Constellation matching Beranda for All Pages */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
@@ -1918,22 +2269,6 @@ export default function App() {
           <circle cx="30%" cy="70%" r="5" fill="#38bdf8" />
           <circle cx="85%" cy="80%" r="4" fill="#ffffff" />
         </svg>
-
-        {/* Decorative Grid Patterns */}
-        <div className="absolute top-12 left-1/3 opacity-30">
-          <div className="grid grid-cols-4 gap-1.5">
-            {Array.from({ length: 16 }).map((_, i) => (
-              <div key={i} className="w-1.5 h-1.5 rounded-full bg-white/70" />
-            ))}
-          </div>
-        </div>
-        <div className="absolute bottom-20 right-1/4 opacity-25">
-          <div className="grid grid-cols-3 gap-1.5">
-            {Array.from({ length: 12 }).map((_, i) => (
-              <div key={i} className="w-1.5 h-1.5 rounded-full bg-white/70" />
-            ))}
-          </div>
-        </div>
       </div>
       
       {/* Toast Notification */}
@@ -1946,7 +2281,7 @@ export default function App() {
 
       {/* Global Top Navbar when inside Submodules */}
       {activeTab !== 'home' && (
-        <header className="sticky top-0 z-40 bg-[#0c4a6e]/85 backdrop-blur-xl border-b border-white/15 px-4 sm:px-6 py-3 flex items-center justify-between shadow-md text-white select-none">
+        <header className="bg-[#0c4a6e]/85 backdrop-blur-xl border-b border-white/15 px-4 sm:px-6 py-3 flex items-center justify-between shadow-md text-white select-none">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setActiveTab('home')}
@@ -2071,7 +2406,7 @@ export default function App() {
                 <FolderLock className="w-3.5 h-3.5" />
                 <span>Berkas</span>
               </button>
-              {(currentUser?.role === 'Administrator' || currentUser?.role === 'Operator') && (
+              {(currentUser?.role === 'Administrator' || currentUser?.role === 'Operator') && !(currentUser?.schoolNpsn && currentUser?.schoolNpsn !== '40203578') && (
                 <button
                   onClick={() => setActiveTab('pengaturan')}
                   className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
@@ -2111,6 +2446,7 @@ export default function App() {
           </div>
         </header>
       )}
+      </div>
 
       {/* Main View Router */}
       <main className={`flex-1 relative z-10 ${currentUser && currentUser.role !== 'Tamu / Umum' ? 'pb-20 md:pb-0' : ''}`}>
@@ -2136,6 +2472,7 @@ export default function App() {
             onQuickSync={handleManualSync}
             currentUser={currentUser}
             onLogout={handleLogout}
+            hasTopBanner={isMonitoringOtherSchool}
           />
         )}
 
@@ -2274,6 +2611,11 @@ export default function App() {
               initialComponentFilter={settingsInitialFilter}
               administrators={administrators}
               onSaveAdministrators={handleSaveAdministrators}
+              schoolAccounts={schoolAccounts}
+              onSaveSchoolAccounts={handleSaveSchoolAccounts}
+              activeSchoolNpsn={activeSchoolNpsn}
+              onSwitchSchoolWorkspace={handleSwitchSchoolWorkspace}
+              onResetToMainSchool={handleResetToMainSchool}
               currentUser={currentUser}
               onLogout={handleLogout}
               isSyncing={isSyncing}
@@ -2409,7 +2751,7 @@ export default function App() {
                 { id: 'laporan' as ActiveTab, label: 'Laporan & Statistik', icon: BarChart3, desc: 'Rekapitulasi grafik & analisis' },
                 { id: 'aplikasi' as ActiveTab, label: 'Portal Aplikasi', icon: Laptop, desc: 'Tautan eksternal & pintasan' },
                 { id: 'berkas' as ActiveTab, label: 'Portal Berkas', icon: FolderLock, desc: 'Kelola & upload berkas sekolah' },
-                ...(currentUser?.role === 'Administrator' || currentUser?.role === 'Operator' ? [
+                ...((currentUser?.role === 'Administrator' || currentUser?.role === 'Operator') && !(currentUser?.schoolNpsn && currentUser?.schoolNpsn !== '40203578') ? [
                   { id: 'pengaturan' as ActiveTab, label: 'Pengaturan Database', icon: Settings, desc: 'Konfigurasi cloud & akun' }
                 ] : [])
               ].map((item) => {

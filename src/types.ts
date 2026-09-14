@@ -289,6 +289,27 @@ export interface NotificationItem {
   read: boolean;
 }
 
+export interface SchoolAccount {
+  id: string;
+  npsn: string;
+  namaSekolah: string;
+  password: string;
+  status: 'Aktif' | 'Nonaktif' | 'Suspended';
+  role?: string;
+  bentukPendidikan?: string;
+  kepalaSekolah?: string;
+  nipKepalaSekolah?: string;
+  alamat?: string;
+  kabupatenKota?: string;
+  provinsi?: string;
+  spreadsheetUrl?: string;
+  webAppUrl?: string;
+  kontakAdmin?: string;
+  catatan?: string;
+  createdAt: string;
+  lastLogin?: string;
+}
+
 export interface AdminUser {
   id: string;
   username: string;
@@ -299,6 +320,7 @@ export interface AdminUser {
   noHp?: string;
   status: 'Aktif' | 'Nonaktif' | 'Tidak Aktif' | string;
   lastLogin?: string;
+  schoolNpsn?: string;
 }
 
 export type ActiveTab = 'home' | 'sekolah' | 'siswa' | 'ptk' | 'sarpras' | 'rapor' | 'laporan' | 'aplikasi' | 'berkas' | 'pengaturan' | 'sheets';

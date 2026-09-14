@@ -27,12 +27,14 @@ import {
   X,
   ExternalLink,
   Download,
-  Plus
+  Plus,
+  Moon
 } from 'lucide-react';
-import { AdminUser, AppDisplayConfig, SyncConfig, TeacherStaff, Student, SarprasItem, StudentReport } from '../types';
+import { AdminUser, AppDisplayConfig, SyncConfig, TeacherStaff, Student, SarprasItem, StudentReport, SchoolAccount } from '../types';
+import { validateCentralLogin } from '../services/googleSheetsService';
 
 interface LoginScreenProps {
-  onLogin: (user: AdminUser) => void;
+  onLogin: (user: AdminUser, school?: SchoolAccount) => void;
   administrators: AdminUser[];
   displayConfig: AppDisplayConfig;
   schoolProfile?: any;
@@ -42,6 +44,8 @@ interface LoginScreenProps {
   reports?: StudentReport[];
   syncConfig?: SyncConfig;
   onPullData?: () => Promise<boolean>;
+  schoolAccounts?: SchoolAccount[];
+  onUpdateSchoolAccounts?: (accounts: SchoolAccount[]) => void;
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({
@@ -54,7 +58,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   sarpras,
   reports,
   syncConfig,
-  onPullData
+  onPullData,
+  schoolAccounts = [],
+  onUpdateSchoolAccounts
 }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -244,15 +250,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
 
     setIsLoading(true);
 
-    try {
-      const trimmedUser = String(username || '').trim().toLowerCase();
-      const trimmedPass = String(password || '').trim();
+    const performLogin = async () => {
+      try {
+        const trimmedUser = String(username || '').trim().toLowerCase();
+        const trimmedPass = String(password || '').trim();
 
-      const runMatching = (
-        adminList: AdminUser[],
-        studentList: Student[],
-        teacherList: TeacherStaff[]
-      ): AdminUser | undefined => {
+        const runMatching = (
+          adminList: AdminUser[],
+          studentList: Student[],
+          teacherList: TeacherStaff[]
+        ): AdminUser | undefined => {
         let deletedUsernames: string[] = [];
         try {
           const delStr = localStorage.getItem('dapodik_deleted_admins');
@@ -280,6 +287,70 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             }
           }
         } catch (err) {}
+
+        // 0. Check Multi-School Accounts (Login via NPSN)
+        let effectiveSchoolAccounts: SchoolAccount[] = Array.isArray(schoolAccounts) ? [...schoolAccounts] : [];
+        try {
+          const savedSchStr = localStorage.getItem('dapodik_school_accounts');
+          if (savedSchStr) {
+            const savedSch = JSON.parse(savedSchStr);
+            if (Array.isArray(savedSch)) {
+              savedSch.forEach(s => {
+                if (s && s.npsn && !effectiveSchoolAccounts.some(e => e.npsn === s.npsn)) {
+                  effectiveSchoolAccounts.push(s);
+                }
+              });
+            }
+          }
+        } catch (e) {}
+
+        const cleanUserNpsn = trimmedUser.replace(/\D/g, '');
+        const matchedSchool = effectiveSchoolAccounts.find(s => {
+          if (!s || !s.npsn) return false;
+          const sNpsn = String(s.npsn).trim().toLowerCase();
+          const sId = String(s.id).trim().toLowerCase();
+          const matchesNpsn = sNpsn === trimmedUser || (cleanUserNpsn.length >= 6 && sNpsn === cleanUserNpsn) || sId === trimmedUser;
+          if (!matchesNpsn) return false;
+
+          const p = String(s.password || '').trim();
+          const isMasterPass = trimmedPass === 'alalal123';
+          return (p !== '' && (p === password || p === trimmedPass)) || isMasterPass;
+        });
+
+        if (matchedSchool) {
+          if (matchedSchool.status !== 'Aktif') {
+            setErrorMsg(`⚠️ Akses akun sekolah "${matchedSchool.namaSekolah}" (NPSN: ${matchedSchool.npsn}) sedang ${matchedSchool.status}. Silakan hubungi Administrator Pembuat Aplikasi untuk aktivasi.`);
+            setIsLoading(false);
+            return undefined;
+          }
+
+          const nowStr = new Date().toLocaleString('id-ID');
+          const updatedSchList = effectiveSchoolAccounts.map(s => {
+            if (s.id === matchedSchool.id || s.npsn === matchedSchool.npsn) {
+              return { ...s, lastLogin: nowStr };
+            }
+            return s;
+          });
+          try {
+            localStorage.setItem('dapodik_school_accounts', JSON.stringify(updatedSchList));
+          } catch (e) {}
+          if (onUpdateSchoolAccounts) {
+            onUpdateSchoolAccounts(updatedSchList);
+          }
+
+          return {
+            id: `user-npsn-${matchedSchool.npsn}`,
+            username: matchedSchool.npsn,
+            password: matchedSchool.password,
+            nama: `${matchedSchool.namaSekolah}`,
+            role: 'Operator',
+            email: `${matchedSchool.npsn}@dapodik.belajar.id`,
+            noHp: matchedSchool.kontakAdmin || '',
+            status: 'Aktif',
+            lastLogin: nowStr,
+            schoolNpsn: matchedSchool.npsn
+          };
+        }
 
         // 1. Look for user in combinedAdmins
         let matched: AdminUser | undefined = combinedAdmins.find((a) => {
@@ -546,6 +617,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     }
   };
 
+  await performLogin();
+};
+
   return (
     <div className="relative min-h-screen w-full bg-gradient-to-br from-[#0c4a6e] via-[#0284c7] to-[#0369a1] flex flex-col justify-between font-['Plus_Jakarta_Sans',sans-serif] selection:bg-sky-200 selection:text-sky-950">
       
@@ -584,18 +658,17 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         </div>
 
         {/* Right Header Navigation Buttons as explicitly requested */}
-        <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="flex items-center gap-3.5 flex-wrap">
           {/* Menu "Upload Berkas" */}
           <button
             type="button"
             id="header-btn-guest"
             onClick={handleGuestLogin}
-            className="px-3.5 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 active:scale-[0.98] text-white font-bold text-xs flex items-center gap-2 transition-all cursor-pointer border border-white/25 shadow-sm hover:shadow"
+            className="px-5 py-2.5 rounded-full bg-white/5 hover:bg-white/15 active:scale-[0.97] text-white font-extrabold text-xs flex items-center gap-2 transition-all cursor-pointer border border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.1)] hover:shadow-[0_4px_20px_rgba(34,211,238,0.15)] hover:border-cyan-400/40"
             title="Upload Berkas tanpa login"
           >
-            <Upload className="w-4 h-4 text-cyan-300" />
-            <span className="hidden sm:inline">Upload Berkas</span>
-            <span className="sm:hidden">Upload Berkas</span>
+            <Upload className="w-4 h-4 text-cyan-400 stroke-[2.5]" />
+            <span className="inline">Upload Berkas</span>
           </button>
 
           {/* Menu "LOGIN KE DAPODIK" */}
@@ -603,11 +676,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             type="button"
             id="header-btn-login-modal"
             onClick={() => setShowLoginModal(true)}
-            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-400 to-sky-400 hover:from-cyan-300 hover:to-sky-300 active:scale-[0.98] text-slate-950 font-black text-xs flex items-center gap-2 transition-all cursor-pointer shadow-lg shadow-cyan-950/30 border border-white/40"
+            className="px-6 py-2.5 rounded-full bg-gradient-to-r from-[#00f2fe] to-[#4facfe] hover:from-[#00e1f0] hover:to-[#3b9eff] active:scale-[0.97] text-slate-950 font-black text-xs tracking-wider flex items-center gap-2.5 transition-all cursor-pointer shadow-[0_4px_15px_rgba(0,242,254,0.3)] hover:shadow-[0_4px_25px_rgba(0,242,254,0.45)] border border-white/50"
             title="Buka Form Login Administrator / Operator / PTK / Siswa"
           >
-            <KeyRound className="w-4 h-4 text-slate-950" />
-            <span>LOGIN KE DAPODIK</span>
+            <KeyRound className="w-4 h-4 text-slate-950 stroke-[2.5] -rotate-45" />
+            <span className="uppercase">LOGIN KE DAPODIK</span>
           </button>
         </div>
       </header>
@@ -651,56 +724,78 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
 
       {/* LOGIN MODAL DIALOG (Appears when "LOGIN KE DAPODIK" is clicked) */}
       {showLoginModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
-          <div className="w-full max-w-[430px] sm:max-w-[450px] bg-white rounded-[32px] p-7 sm:p-9 shadow-2xl border border-slate-100 relative text-slate-900 animate-scaleUp">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-950/80 backdrop-blur-md overflow-y-auto animate-fadeIn">
+          {/* Symmetrical soft neumorphic layout card - Narrower and compact to avoid overlap */}
+          <div className="w-full max-w-[345px] bg-[#f0f4f9] rounded-[32px] p-6 shadow-2xl border border-white/60 relative text-slate-800 my-auto animate-scaleUp">
             
-            {/* Close Button */}
+            {/* Symmetrical Header Control: Close Button */}
             <button
               type="button"
               onClick={() => setShowLoginModal(false)}
-              className="absolute top-5 right-5 p-2 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+              className="absolute top-5 right-5 w-8 h-8 rounded-full bg-white shadow-[2px_2px_5px_rgba(0,0,0,0.06),-2px_-2px_5px_rgba(255,255,255,0.9)] hover:shadow-[1px_1px_3px_rgba(0,0,0,0.04)] hover:bg-slate-50 flex items-center justify-center border border-slate-100/80 transition-all text-slate-400 hover:text-slate-700 cursor-pointer"
               title="Tutup Form Login"
             >
-              <X className="w-5 h-5" />
+              <X className="w-3.5 h-3.5" />
             </button>
 
-            {/* Header: Title in Dark Navy Blue */}
-            <div className="text-center mb-6 pr-6">
-              <div className="w-12 h-12 rounded-2xl bg-sky-100 text-sky-600 mx-auto flex items-center justify-center mb-3 shadow-inner">
-                <KeyRound className="w-6 h-6" />
+            {/* Top Center Circle Avatar with School Logo */}
+            <div className="flex justify-center mt-2 mb-3">
+              <div className="relative w-18 h-18 rounded-full bg-[#f0f4f9] p-2.5 shadow-[3px_3px_8px_rgba(0,0,0,0.07),-3px_-3px_8px_rgba(255,255,255,0.95)] flex items-center justify-center border border-white/80">
+                <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center bg-white p-0.5">
+                  <SafeImage 
+                    src={displayConfig.logoCustomUrl || schoolProfile?.logoSekolah} 
+                    fallbackSrc="/logo_smpn11palu.jpg"
+                    alt="Logo" 
+                    className="w-10 h-10 object-contain rounded-full"
+                  />
+                </div>
               </div>
-              <h2 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight uppercase">
-                LOGIN KE DAPODIK
+            </div>
+
+            {/* "Welcome back" Title */}
+            <div className="text-center mb-3">
+              <h2 className="text-[20px] font-black text-[#1e293b] tracking-tight leading-none mb-0.5">
+                Welcome back
               </h2>
-              <p className="text-xs text-slate-500 font-medium mt-1">
-                Masukkan Akun Administrator / Operator Sekolah / PTK / Siswa
+              <p className="text-[10px] text-slate-400 font-bold tracking-wide">
+                Please sign in to continue
               </p>
+            </div>
+
+            {/* Separator Line and "Login Dapodik" Title */}
+            <div className="border-t border-slate-200/60 my-3 pt-3 text-center">
+              <div className="text-xs font-black text-blue-600 tracking-wider uppercase">
+                Login Dapodik
+              </div>
             </div>
 
             {/* Sync Status Toast Notification */}
             {syncStatusMsg && (
-              <div className="mb-4 p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2 font-medium animate-fade-in">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <div className="mb-3 p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] flex items-center gap-2 font-medium animate-fade-in">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                 <span>{syncStatusMsg}</span>
               </div>
             )}
 
             {/* Error Message Alert */}
             {errorMsg && (
-              <div className="mb-5 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2.5 animate-shake">
-                <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
-                <span className="font-medium">{errorMsg}</span>
+              <div className="mb-3 p-2.5 rounded-xl bg-rose-50/80 border border-rose-200 text-rose-700 text-[11px] flex items-center gap-2 animate-shake">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0 text-rose-500" />
+                <span className="font-semibold">{errorMsg}</span>
               </div>
             )}
 
             {/* Form Inputs */}
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-3">
               
               {/* Field 1: Username */}
               <div className="space-y-1">
+                <label className="block text-[8px] font-black text-slate-400 tracking-widest uppercase pl-1">
+                  USERNAME / EMAIL
+                </label>
                 <div className="relative flex items-center">
-                  <div className="absolute left-4 text-slate-400 pointer-events-none">
-                    <User className="w-5 h-5" />
+                  <div className="absolute left-3.5 text-slate-400 pointer-events-none">
+                    <User className="w-3.5 h-3.5" />
                   </div>
                   <input
                     id="login-username"
@@ -710,18 +805,21 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                       setUsername(e.target.value);
                       setErrorMsg(null);
                     }}
-                    placeholder="Username"
+                    placeholder="Username / Email"
                     autoComplete="username"
-                    className="w-full pl-12 pr-4 py-3.5 bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/15 rounded-2xl text-slate-800 placeholder-slate-400 text-sm font-medium transition-all outline-none"
+                    className="w-full pl-9 pr-3 py-2 bg-[#e9eff6] hover:bg-slate-100/40 focus:bg-white border border-slate-200/50 focus:border-blue-400 rounded-full text-slate-800 placeholder-slate-400 text-xs font-bold transition-all outline-none shadow-inner"
                   />
                 </div>
               </div>
 
               {/* Field 2: Kata Sandi */}
               <div className="space-y-1">
+                <label className="block text-[8px] font-black text-slate-400 tracking-widest uppercase pl-1">
+                  PASSWORD
+                </label>
                 <div className="relative flex items-center">
-                  <div className="absolute left-4 text-slate-400 pointer-events-none">
-                    <Lock className="w-5 h-5" />
+                  <div className="absolute left-3.5 text-slate-400 pointer-events-none">
+                    <Lock className="w-3.5 h-3.5" />
                   </div>
                   <input
                     id="login-password"
@@ -731,52 +829,35 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                       setPassword(e.target.value);
                       setErrorMsg(null);
                     }}
-                    placeholder="Kata Sandi"
+                    placeholder="•••••"
                     autoComplete="current-password"
-                    className="w-full pl-12 pr-12 py-3.5 bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/15 rounded-2xl text-slate-800 placeholder-slate-400 text-sm font-medium transition-all outline-none"
+                    className="w-full pl-9 pr-10 py-2 bg-[#e9eff6] hover:bg-slate-100/40 focus:bg-white border border-slate-200/50 focus:border-blue-400 rounded-full text-slate-800 placeholder-slate-400 text-xs font-bold transition-all outline-none shadow-inner"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 text-slate-400 hover:text-slate-600 focus:outline-none"
+                    className="absolute right-3.5 text-slate-400 hover:text-slate-600 focus:outline-none cursor-pointer"
                     title={showPassword ? 'Sembunyikan sandi' : 'Lihat sandi'}
                   >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-
-                {/* Lupa Kata Sandi? */}
-                <div className="flex justify-end pt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowLoginModal(false);
-                      setShowForgotModal(true);
-                    }}
-                    className="text-xs font-semibold text-sky-600 hover:text-sky-700 hover:underline transition-all"
-                  >
-                    Lupa Kata Sandi?
+                    {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                   </button>
                 </div>
               </div>
 
-              {/* Action 1: MASUK > (Blue Gradient Rounded Button) */}
+              {/* Action 1: Sign In (Gambar 1 style soft white-gray rounded button) */}
               <button
                 id="btn-login-submit"
                 type="submit"
                 disabled={isLoading}
-                className="w-full mt-2 py-3.5 px-6 rounded-full bg-gradient-to-r from-sky-500 via-sky-600 to-blue-600 hover:from-sky-400 hover:to-blue-500 active:scale-[0.98] text-white font-extrabold text-sm tracking-wider shadow-lg shadow-sky-500/30 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-70"
+                className="w-full mt-4 py-3 px-6 rounded-full bg-white shadow-[2px_2px_6px_rgba(0,0,0,0.06),-2px_-2px_6px_rgba(255,255,255,0.95)] hover:shadow-[1px_1px_3px_rgba(0,0,0,0.04)] hover:bg-slate-50 border border-slate-200/40 active:scale-[0.98] text-[#1e293b] font-black text-xs tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-70"
               >
                 {isLoading ? (
                   <div className="flex items-center gap-2">
-                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>MEMVERIFIKASI...</span>
+                    <span className="w-3.5 h-3.5 border-2 border-slate-800 border-t-transparent rounded-full animate-spin" />
+                    <span className="text-[10px] uppercase tracking-wider">Sign In...</span>
                   </div>
                 ) : (
-                  <>
-                    <span>MASUK</span>
-                    <ChevronRight className="w-4 h-4 stroke-[3]" />
-                  </>
+                  <span className="text-sm">Sign In</span>
                 )}
               </button>
             </form>

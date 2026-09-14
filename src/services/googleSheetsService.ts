@@ -1,4 +1,4 @@
-import { Student, TeacherStaff, SarprasItem, StudentReport, SyncConfig, AppDisplayConfig, SchoolProfile, AdminUser, NotificationItem } from '../types';
+import { Student, TeacherStaff, SarprasItem, StudentReport, SyncConfig, AppDisplayConfig, SchoolProfile, AdminUser, NotificationItem, SchoolAccount } from '../types';
 
 export const APPS_SCRIPT_TEMPLATE = `/**
  * =========================================================================
@@ -88,11 +88,97 @@ const HEADERS_MAP = {
   'Notifikasi': ['id', 'title', 'message', 'time', 'type', 'read'],
   'Permintaan_Akses_Berkas': ['id', 'fileId', 'fileName', 'requesterName', 'requesterRole', 'requesterEmail', 'requestedAt', 'reason', 'status', 'reviewedBy', 'reviewedAt', 'reviewNotes'],
   'Data_Berkas': ['id', 'Nama Berkas', 'Nama Pengirim/Orang Tua', 'Kategori', 'Tanggal', 'Link Drive', 'Ukuran File'],
-  'Data_Aplikasi': ['id', 'label', 'url', 'icon', 'color', 'category', 'desc', 'tag']
+  'Data_Aplikasi': ['id', 'label', 'url', 'icon', 'color', 'category', 'desc', 'tag'],
+  'Data_Multi_Sekolah': ['id', 'npsn', 'namaSekolah', 'password', 'status', 'role', 'bentukPendidikan', 'kepalaSekolah', 'nipKepalaSekolah', 'alamat', 'kabupatenKota', 'provinsi', 'spreadsheetUrl', 'webAppUrl', 'kontakAdmin', 'catatan', 'createdAt', 'lastLogin']
 };
 
+// Utility helper to open correct spreadsheet based on parameters for multi-tenant isolation
+function getTargetSpreadsheet(e, postData) {
+  if (postData && postData.spreadsheetUrl) {
+    try { return SpreadsheetApp.openByUrl(postData.spreadsheetUrl); } catch(err) {}
+  }
+  if (postData && postData.spreadsheetId) {
+    try { return SpreadsheetApp.openById(postData.spreadsheetId); } catch(err) {}
+  }
+  if (e && e.parameter) {
+    if (e.parameter.spreadsheetUrl) {
+      try { return SpreadsheetApp.openByUrl(e.parameter.spreadsheetUrl); } catch(err) {}
+    }
+    if (e.parameter.spreadsheetId) {
+      try { return SpreadsheetApp.openById(e.parameter.spreadsheetId); } catch(err) {}
+    }
+  }
+  return SpreadsheetApp.getActiveSpreadsheet();
+}
+
+// ID Spreadsheet Master (Hanya diketahui oleh Anda sebagai Pembuat Aplikasi)
+const MASTER_SPREADSHEET_ID = "MASUKKAN_ID_SPREADSHEET_MASTER_DISINI";
+
+function loginUser(npsn, password) {
+  try {
+    const masterSs = SpreadsheetApp.openById(MASTER_SPREADSHEET_ID);
+    const userSheet = masterSs.getSheetByName("Users") || masterSs.getSheetByName("Data_Multi_Sekolah") || checkAndCreateUserSheet(masterSs);
+    const logSheet = masterSs.getSheetByName("Log_Aktivitas") || checkAndCreateLogSheet(masterSs);
+    
+    const data = userSheet.getDataRange().getValues();
+    
+    // Cari baris data berdasarkan NPSN dan Password (abaikan baris header index 0)
+    for (let i = 1; i < data.length; i++) {
+      const rowNpsn = String(data[i][0] || "").trim();
+      const rowPass = String(data[i][1] || "").trim();
+      const namaSekolah = data[i][2] || "Sekolah " + rowNpsn;
+      const status = data[i][3] || "Active";
+      const targetSpreadsheetId = data[i][4] || "";
+      
+      if (rowNpsn === String(npsn).trim() && rowPass === String(password).trim()) {
+        if (status !== "Active" && status !== "Aktif") {
+          return { success: false, message: "Akun sekolah ini sedang dinonaktifkan." };
+        }
+        
+        // Catat Log Login ke Master Spreadsheet
+        try {
+          logSheet.appendRow([new Date(), rowNpsn, namaSekolah, "Login Berhasil", "Web App Session"]);
+        } catch(eLog) {}
+        
+        return {
+          success: true,
+          npsn: rowNpsn,
+          namaSekolah: namaSekolah,
+          spreadsheetId: targetSpreadsheetId,
+          spreadsheetUrl: targetSpreadsheetId.indexOf('http') > -1 ? targetSpreadsheetId : "https://docs.google.com/spreadsheets/d/" + targetSpreadsheetId + "/edit"
+        };
+      }
+    }
+  } catch(err) {
+    return { success: false, message: "Gagal menghubungkan ke database pusat: " + err.toString() };
+  }
+  
+  return { success: false, message: "NPSN atau Password salah!" };
+}
+
+function checkAndCreateUserSheet(ss) {
+  try {
+    var sheet = ss.insertSheet("Users");
+    sheet.appendRow(["NPSN", "Password", "Nama_Sekolah", "Status", "Spreadsheet_ID_Sekolah"]);
+    sheet.appendRow(["10101001", "PassSekolahA123", "SMP Negeri 1", "Active", ss.getId()]);
+    return sheet;
+  } catch(e) {
+    return ss.getSheetByName("Sheet1") || ss.getSheets()[0];
+  }
+}
+
+function checkAndCreateLogSheet(ss) {
+  try {
+    var sheet = ss.insertSheet("Log_Aktivitas");
+    sheet.appendRow(["Timestamp", "NPSN", "Nama_Sekolah", "Waktu_Login", "IP / Info"]);
+    return sheet;
+  } catch(e) {
+    return ss.getSheetByName("Sheet1") || ss.getSheets()[0];
+  }
+}
+
 function doGet(e) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getTargetSpreadsheet(e, null);
   // Pastikan seluruh sheet & tabel otomatis terbuat
   checkAndInitializeSheets(ss);
 
@@ -110,8 +196,9 @@ function doGet(e) {
     notifikasi: getSheetData(ss, 'Notifikasi'),
     permintaanAkses: getSheetData(ss, 'Permintaan_Akses_Berkas'),
     berkas: getSheetData(ss, 'Data_Berkas'),
+    schoolAccounts: getSheetData(ss, 'Data_Multi_Sekolah'),
     status: 'success',
-    version: '2026.2.10',
+    version: '2026.3.2',
     timestamp: new Date().toLocaleString('id-ID')
   };
   
@@ -122,7 +209,15 @@ function doGet(e) {
 function doPost(e) {
   try {
     const data = JSON.parse(e.postData.contents);
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    // Dynamic routing bypass for login validation
+    if (data && data.type === 'LOGIN_USER') {
+      const loginResult = loginUser(data.npsn, data.password);
+      return ContentService.createTextOutput(JSON.stringify(loginResult))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    const ss = getTargetSpreadsheet(e, data);
     
     // Pastikan seluruh sheet & tabel otomatis terbuat
     checkAndInitializeSheets(ss);
@@ -173,6 +268,7 @@ function doPost(e) {
         notifikasi: getSheetData(ss, 'Notifikasi'),
         permintaanAkses: getSheetData(ss, 'Permintaan_Akses_Berkas'),
         berkas: getSheetData(ss, 'Data_Berkas'),
+        schoolAccounts: getSheetData(ss, 'Data_Multi_Sekolah'),
         status: 'success'
       };
       return ContentService.createTextOutput(JSON.stringify(result))
@@ -192,6 +288,7 @@ function doPost(e) {
       if (data.aplikasi !== undefined) saveSheetData(ss, 'Data_Aplikasi', data.aplikasi, HEADERS_MAP['Data_Aplikasi']);
       if (data.notifikasi !== undefined) saveSheetData(ss, 'Notifikasi', data.notifikasi, HEADERS_MAP['Notifikasi']);
       if (data.berkas !== undefined) appendOrMergeSheetData(ss, 'Data_Berkas', data.berkas, HEADERS_MAP['Data_Berkas']);
+      if (data.schoolAccounts !== undefined) saveSheetData(ss, 'Data_Multi_Sekolah', data.schoolAccounts, HEADERS_MAP['Data_Multi_Sekolah']);
     } else if (data.type === 'SYNC_SISWA') {
       saveSheetData(ss, 'Data_Siswa', data.payload, HEADERS_MAP['Data_Siswa']);
     } else if (data.type === 'SYNC_SISWA_KELUAR') {
@@ -625,6 +722,10 @@ function checkAndInitializeSheets(ss) {
       ['other-2', 'Merdeka Mengajar (PMM)', 'https://guru.kemdikbud.go.id/', 'School', 'bg-sky-500/20 text-sky-300 border-sky-500/30 hover:bg-sky-500/30', 'other', 'Platform Perangkat Ajar & Guru', 'Pelatihan'],
       ['other-3', 'Canva Pendidikan', 'https://www.canva.com/education/', 'Laptop', 'bg-purple-500/20 text-purple-300 border-purple-500/30 hover:bg-purple-500/30', 'other', 'Desain Grafis Media Pembelajaran', 'Kreatif'],
       ['other-4', 'Sistem Perbukuan (SIBI)', 'https://buku.kemdikbud.go.id/', 'Archive', 'bg-amber-500/20 text-amber-300 border-amber-500/30 hover:bg-amber-500/30', 'other', 'Katalog Buku Teks & Kurikulum', 'Buku Ajar']
+    ],
+    'Data_Multi_Sekolah': [
+      HEADERS_MAP['Data_Multi_Sekolah'],
+      ['sch-001', '40203578', 'SMP NEGERI 11 PALU', 'admin123', 'Aktif', 'Super Administrator', 'Sekolah Menengah Pertama (SMP)', 'Drs. Bambang Sudarsono, M.Pd.', '197508122003121002', 'Jl. Keramik, Kelurahan Duyu, Kecamatan Tatanga', 'Kota Palu', 'Sulawesi Tengah', '', '', '', '', '2026-09-13', '']
     ]
   };
 
@@ -750,6 +851,7 @@ function parseSheetsResult(result: any) {
       administrator: Array.isArray(result.administrator) ? result.administrator : [],
       profilSekolah: Array.isArray(result.profilSekolah) ? result.profilSekolah : [],
       aplikasi: Array.isArray(result.aplikasi) ? result.aplikasi : [],
+      schoolAccounts: Array.isArray(result.schoolAccounts) ? result.schoolAccounts : [],
       notifikasi: (result.notifikasi || []).map((n: any, idx: number) => {
         const id = String(n.id || n.ID || `notif-${Date.now()}-${idx}`);
         const title = String(n.title || n.Judul || n.judul || n.Title || '');
@@ -765,6 +867,34 @@ function parseSheetsResult(result: any) {
   };
 }
 
+export async function validateCentralLogin(
+  webAppUrl: string,
+  npsn: string,
+  password: string
+): Promise<{ success: boolean; message: string; data?: any }> {
+  if (!webAppUrl) {
+    return { success: false, message: 'URL Google Apps Script belum dikonfigurasi.' };
+  }
+  const payload = {
+    type: 'LOGIN_USER',
+    npsn,
+    password
+  };
+  try {
+    const result = await callProxyOrDirectPost(webAppUrl, payload);
+    if (result && result.success && result.data) {
+      return {
+        success: result.data.success,
+        message: result.data.message || (result.data.success ? 'Login sukses!' : 'Gagal login.'),
+        data: result.data
+      };
+    }
+    return { success: false, message: result.message || 'Gagal terhubung ke server login.' };
+  } catch (error: any) {
+    return { success: false, message: error?.message || 'Gagal menghubungi server login.' };
+  }
+}
+
 export async function syncToGoogleSheets(
   config: SyncConfig,
   data: {
@@ -777,6 +907,7 @@ export async function syncToGoogleSheets(
     profilSekolah?: Array<{ key: string; value: string }>;
     aplikasi?: any[];
     notifikasi?: NotificationItem[];
+    schoolAccounts?: SchoolAccount[];
   }
 ): Promise<{ success: boolean; message: string }> {
   if (!config.webAppUrl) {
@@ -839,6 +970,8 @@ export async function syncToGoogleSheets(
       profilSekolah: data.profilSekolah || [],
       aplikasi: data.aplikasi || [],
       notifikasi: data.notifikasi || [],
+      schoolAccounts: data.schoolAccounts || [],
+      spreadsheetUrl: config.spreadsheetUrl || '',
       timestamp: new Date().toLocaleString('id-ID')
     };
 
@@ -865,6 +998,7 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
     profilSekolah: Array<{ key: string; value: string }>;
     aplikasi?: any[];
     notifikasi?: NotificationItem[];
+    schoolAccounts?: SchoolAccount[];
   };
 }> {
   if (!config.webAppUrl) {
@@ -879,7 +1013,10 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
     const proxyRes = await fetch('/api/load-sheets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ webAppUrl: config.webAppUrl })
+      body: JSON.stringify({ 
+        webAppUrl: config.webAppUrl,
+        spreadsheetUrl: config.spreadsheetUrl || ''
+      })
     });
     if (proxyRes.ok) {
       const result = await proxyRes.json();
@@ -893,7 +1030,13 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
 
   // 2. Fallback to direct client-side fetch (supports redirect follow in modern browsers)
   try {
-    const directRes = await fetch(config.webAppUrl, {
+    let getUrl = config.webAppUrl;
+    if (config.spreadsheetUrl) {
+      const separator = getUrl.includes('?') ? '&' : '?';
+      getUrl = `${getUrl}${separator}spreadsheetUrl=${encodeURIComponent(config.spreadsheetUrl)}`;
+    }
+
+    const directRes = await fetch(getUrl, {
       method: 'GET',
       redirect: 'follow'
     });
@@ -930,7 +1073,8 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
               ? Object.entries(cache.schoolProfile).map(([k, v]) => ({ key: k, value: v !== undefined && v !== null ? String(v) : '' }))
               : [],
             aplikasi: cache.aplikasiLinks || [],
-            notifikasi: cache.notifications || []
+            notifikasi: cache.notifications || [],
+            schoolAccounts: cache.schoolAccounts || []
           }
         };
       }
@@ -986,7 +1130,8 @@ export async function syncNotifikasiToGoogleSheets(
   }
   const payload = {
     type: 'SYNC_NOTIFIKASI',
-    payload: notifications
+    payload: notifications,
+    spreadsheetUrl: config.spreadsheetUrl || ''
   };
   return await callProxyOrDirectPost(config.webAppUrl, payload);
 }
