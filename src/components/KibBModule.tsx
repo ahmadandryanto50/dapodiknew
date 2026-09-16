@@ -106,15 +106,36 @@ function parseCSVContent(text: string): Record<string, string>[] {
 }
 
 function getCSVValue(row: Record<string, string>, keys: string[]): string {
-  for (const k of Object.keys(row)) {
-    const cleanK = k.toLowerCase().replace(/[^a-z0-9]/g, '');
-    for (const key of keys) {
-      if (cleanK.includes(key.toLowerCase().replace(/[^a-z0-9]/g, ''))) {
-        return row[k];
-      }
-    }
+  const rowKeys = Object.keys(row);
+  
+  // Phase 1: Search for exact matches (ignoring casing and non-alphanumeric characters)
+  for (const key of keys) {
+    const target = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const foundKey = rowKeys.find(rk => {
+      const current = rk.toLowerCase().replace(/[^a-z0-9]/g, '');
+      return current === target;
+    });
+    if (foundKey) return row[foundKey];
   }
+
+  // Phase 2: Search for partial matches but avoid false positives like "kodebarang" or "hargabarang" when looking for "barang" or "nama"
+  for (const key of keys) {
+    const target = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const foundKey = rowKeys.find(rk => {
+      const current = rk.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if ((target === 'barang' || target === 'nama') && (current.includes('kode') || current.includes('harga') || current.includes('foto') || current.includes('no') || current.includes('nomor'))) {
+        return false;
+      }
+      return current.includes(target);
+    });
+    if (foundKey) return row[foundKey];
+  }
+
   return '';
+}
+
+function generateShortKibBId(): string {
+  return `KIB-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
 }
 
 interface KibBModuleProps {
@@ -279,7 +300,7 @@ export const KibBModule: React.FC<KibBModuleProps> = ({
       });
     } else {
       const newItem: KibBItem = {
-        id: `kib-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        id: generateShortKibBId(),
         ...formData
       };
       onAddKibB(newItem);
@@ -352,7 +373,7 @@ export const KibBModule: React.FC<KibBModuleProps> = ({
         if (!namaBarang) return;
 
         const newItem: KibBItem = {
-          id: `kib-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
+          id: generateShortKibBId(),
           namaBarang: namaBarang,
           kodeBarang: getCSVValue(row, ['kodebarang', 'kode', 'nomorkode']) || `1.3.2.${Math.floor(10 + Math.random() * 89)}.${Math.floor(10 + Math.random() * 89)}.${Math.floor(100 + Math.random() * 899)}`,
           kondisi: (getCSVValue(row, ['kondisi']) || 'Baik') as any,
@@ -706,7 +727,14 @@ export const KibBModule: React.FC<KibBModuleProps> = ({
                         {item.no !== undefined && item.no !== '' ? item.no : index + 1}
                       </td>
                       <td className="py-2.5 px-3">
-                        <span className="font-bold text-slate-900 block">{item.namaBarang}</span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-slate-900">{item.namaBarang}</span>
+                          {item.id && (
+                            <span className="inline-flex font-mono text-[9px] font-extrabold text-indigo-700 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded shadow-2xs">
+                              {item.id}
+                            </span>
+                          )}
+                        </div>
                         {item.keterangan && (
                           <span className="text-[11px] text-slate-500 block truncate max-w-[200px]">
                             {item.keterangan}

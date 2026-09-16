@@ -341,7 +341,7 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
           });
           if (loadRes.ok) {
             const loadData = await loadRes.json();
-            const berkasArr = loadData && (loadData.berkas || loadData["Data_Berkas"] || loadData.schoolFiles || loadData.files);
+            const berkasArr = loadData && (loadData.berkas || loadData["Data_Berkas"] || loadData["Data Berkas"] || loadData.schoolFiles || loadData.files);
             if (Array.isArray(berkasArr) && berkasArr.length > 0) {
               loadedFiles = berkasArr;
             }
@@ -1346,7 +1346,15 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
 
                   {/* Metadata Row */}
                   <div className="flex flex-wrap items-center justify-between gap-1 pt-1 border-t border-slate-100 text-[10px]">
-                    <div className="flex items-center gap-1 font-bold text-slate-600">
+                    <div className="flex flex-wrap items-center gap-1.5 font-bold text-slate-600">
+                      {file.id && (
+                        <>
+                          <span className="text-slate-400 font-medium">ID:</span>
+                          <span className="font-mono text-indigo-700 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded text-[9px] mr-1.5">
+                            {file.id}
+                          </span>
+                        </>
+                      )}
                       <span className="text-slate-400 font-medium">Pengirim:</span>
                       <span className="text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded truncate max-w-[110px]" title={file.uploadedBy}>
                         {file.uploadedBy || 'Tamu'}

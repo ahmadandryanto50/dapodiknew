@@ -173,7 +173,7 @@ async function startServer() {
         return res.status(400).json({ success: false, message: "Nama berkas diperlukan." });
       }
 
-      const fileId = `file-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+      const fileId = `BRK-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
       const ext = name.split(".").pop()?.toLowerCase() || "dat";
       const nowStr = new Date().toISOString().replace("T", " ").substring(0, 16);
 
@@ -583,12 +583,15 @@ async function startServer() {
       
       if (webAppUrl) {
         try {
+          const configObj = safeReadJSON(CONFIG_FILE, null);
+          const spreadsheetUrl = configObj?.spreadsheetUrl || "";
+
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout for Google Apps Script cold-starts
           const sheetsRes = await fetch(webAppUrl, {
             method: "POST",
             headers: { "Content-Type": "text/plain" },
-            body: JSON.stringify({ type: "LOAD_ALL" }),
+            body: JSON.stringify({ type: "LOAD_ALL", spreadsheetUrl }),
             redirect: "follow",
             signal: controller.signal
           });
@@ -596,7 +599,7 @@ async function startServer() {
           if (sheetsRes.ok) {
             const sheetsData = await sheetsRes.json();
             if (sheetsData && sheetsData.status === "success") {
-              const rawBerkas = sheetsData.berkas || sheetsData["Data_Berkas"] || sheetsData.schoolFiles || sheetsData.files;
+              const rawBerkas = sheetsData.berkas || sheetsData["Data_Berkas"] || sheetsData["Data Berkas"] || sheetsData.schoolFiles || sheetsData.files;
               if (Array.isArray(rawBerkas)) {
                 spreadsheetFiles = rawBerkas;
               }
@@ -620,7 +623,7 @@ async function startServer() {
       for (let idx = 0; idx < spreadsheetFiles.length; idx++) {
         const f = spreadsheetFiles[idx];
         if (f && (f.id || f["Nama Berkas"] || f.name || f["Link Drive"] || f.driveFileUrl)) {
-          const fileId = String(f.id || f.fileId || `file-sheet-${idx}`);
+          const fileId = String(f.id || f.fileId || `BRK-S-${idx}`);
           fileMap.set(fileId, {
             id: fileId,
             name: f["Nama Berkas"] || f.name || f.Name || "Berkas Dokumen",
@@ -844,7 +847,7 @@ async function startServer() {
         for (let idx = 0; idx < incFiles.length; idx++) {
           const f = incFiles[idx];
           if (f && (f.id || f.name || f["Nama Berkas"] || f.driveFileUrl || f["Link Drive"])) {
-            const fileId = String(f.id || f.fileId || `file-inc-${idx}`);
+            const fileId = String(f.id || f.fileId || `BRK-I-${idx}`);
             if (!delFileSet.has(fileId)) {
               fileMap.set(fileId, {
                 id: fileId,

@@ -1258,6 +1258,20 @@ export default function App() {
 
     const initApp = async () => {
       try {
+        // Load active shared sync config from server first to keep all devices/browsers synchronized
+        try {
+          const configRes = await fetch(`/api/sync-config?t=${Date.now()}`);
+          if (configRes.ok) {
+            const serverConfig = await configRes.json();
+            if (serverConfig && serverConfig.webAppUrl) {
+              setSyncConfig(serverConfig);
+              localStorage.setItem('dapodik_sync_config', JSON.stringify(serverConfig));
+            }
+          }
+        } catch (err) {
+          console.warn('Failed to load shared sync-config from server:', err);
+        }
+
         // Hydrate from server cache immediately so new browsers (like Mozilla or mobile) have data instantly
         try {
           const cacheRes = await fetch(`/api/app-data?t=${Date.now()}`);
@@ -1349,9 +1363,30 @@ export default function App() {
   // Periodic 2-way background polling from Google Sheets (every 60 seconds)
   useEffect(() => {
     if (!isInitialized) return;
-    const interval = setInterval(() => {
+    const interval = setInterval(async () => {
+      if (document.visibilityState !== 'visible') return;
+
+      // 1. Check if sync-config has been updated on the server by another device
+      try {
+        const configRes = await fetch(`/api/sync-config?t=${Date.now()}`);
+        if (configRes.ok) {
+          const serverConfig = await configRes.json();
+          if (serverConfig && serverConfig.webAppUrl) {
+            const currentCfgStr = JSON.stringify(syncConfigRef.current);
+            const serverCfgStr = JSON.stringify(serverConfig);
+            if (currentCfgStr !== serverCfgStr) {
+              setSyncConfig(serverConfig);
+              localStorage.setItem('dapodik_sync_config', JSON.stringify(serverConfig));
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to poll updated sync-config from server:', err);
+      }
+
+      // 2. Poll sheet data
       const currentCfg = getEffectiveSyncConfig();
-      if (currentCfg && currentCfg.webAppUrl && document.visibilityState === 'visible') {
+      if (currentCfg && currentCfg.webAppUrl) {
         handlePullFromSheets(true);
       }
     }, 60000);
