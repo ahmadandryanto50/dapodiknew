@@ -9,6 +9,7 @@ import {
   Student, 
   TeacherStaff, 
   SarprasItem, 
+  KibBItem,
   StudentReport, 
   SyncConfig, 
   NotificationItem,
@@ -21,6 +22,7 @@ import {
   initialStudents, 
   initialTeachers, 
   initialSarpras, 
+  initialKibB,
   initialReports, 
   initialNotifications,
   initialAdministrators,
@@ -43,7 +45,7 @@ import { NotificationDrawer } from './components/NotificationDrawer';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { SafeImage } from './components/SafeImage';
 import { formatDateIndonesian, cleanLeadingZerosCode } from './utils/dateUtils';
-import { loadFromGoogleSheets, syncToGoogleSheets } from './services/googleSheetsService';
+import { loadFromGoogleSheets, syncToGoogleSheets, syncKibBToGoogleSheets } from './services/googleSheetsService';
 import { 
   Home, 
   School,
@@ -237,6 +239,11 @@ function mergeNotifications(
   return merged;
 }
 
+function cleanKibBItems(items: KibBItem[] = []): KibBItem[] {
+  if (!Array.isArray(items)) return [];
+  return items.filter(item => item && typeof item === 'object' && (item.namaBarang || item.kodeBarang || item.id || item.merkType));
+}
+
 export default function App() {
   // Authentication State
   const [administrators, setAdministrators] = useState<AdminUser[]>(() => {
@@ -315,6 +322,25 @@ export default function App() {
       }
     }
     return initialSarpras;
+  });
+
+  const [kibB, setKibB] = useState<KibBItem[]>(() => {
+    const saved = localStorage.getItem('dapodik_kib_b');
+    if (saved !== null) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const cleaned = cleanKibBItems(parsed);
+          if (cleaned.length !== parsed.length) {
+            localStorage.setItem('dapodik_kib_b', JSON.stringify(cleaned));
+          }
+          return cleaned;
+        }
+      } catch (e) {
+        console.error('Failed to parse dapodik_kib_b', e);
+      }
+    }
+    return cleanKibBItems(initialKibB);
   });
 
   const [reports, setReports] = useState<StudentReport[]>(() => {
@@ -521,7 +547,8 @@ export default function App() {
     customNotifications = notificationsRef.current,
     customAplikasiLinks = aplikasiLinks,
     customDeletedNotifIds = getDeletedNotifIds(),
-    customSchoolAccounts = schoolAccounts
+    customSchoolAccounts = schoolAccounts,
+    customKibB = kibB
   ) => {
     if (!isInitialized) return;
     try {
@@ -532,6 +559,7 @@ export default function App() {
           students: customStudents,
           teachers: customTeachers,
           sarpras: customSarpras,
+          kibB: customKibB,
           reports: customReports,
           displayConfig: customDisplayConfig,
           schoolProfile: customSchoolProfile,
@@ -573,6 +601,9 @@ export default function App() {
 
         const sSar = localStorage.getItem('dapodik_sarpras');
         setSarpras(sSar ? JSON.parse(sSar) : initialSarpras);
+
+        const sKib = localStorage.getItem('dapodik_kib_b');
+        setKibB(sKib ? cleanKibBItems(JSON.parse(sKib)) : cleanKibBItems(initialKibB));
 
         const sR = localStorage.getItem('dapodik_reports');
         setReports(sR ? sanitizeReports(JSON.parse(sR)) : sanitizeReports(initialReports));
@@ -638,6 +669,9 @@ export default function App() {
 
         const sSar = localStorage.getItem(`dapodik_sarpras_${npsn}`);
         setSarpras(sSar ? JSON.parse(sSar) : []);
+
+        const sKib = localStorage.getItem(`dapodik_kib_b_${npsn}`);
+        setKibB(sKib ? JSON.parse(sKib) : []);
 
         const sR = localStorage.getItem(`dapodik_reports_${npsn}`);
         setReports(sR ? sanitizeReports(JSON.parse(sR)) : []);
@@ -749,9 +783,19 @@ export default function App() {
     localStorage.setItem(getStorageKey('dapodik_sarpras'), JSON.stringify(sarpras));
     if (!isSyncingFromServerRef.current) {
       lastLocalMutationRef.current = Date.now();
-      saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks, getDeletedNotifIds(), schoolAccounts);
+      saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks, getDeletedNotifIds(), schoolAccounts, kibB);
     }
   }, [sarpras, isInitialized, activeSchoolNpsn]);
+
+  useEffect(() => {
+    if (!isInitialized) return;
+    if (loadedSchoolNpsnRef.current !== activeSchoolNpsn) return;
+    localStorage.setItem(getStorageKey('dapodik_kib_b'), JSON.stringify(kibB));
+    if (!isSyncingFromServerRef.current) {
+      lastLocalMutationRef.current = Date.now();
+      saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks, getDeletedNotifIds(), schoolAccounts, kibB);
+    }
+  }, [kibB, isInitialized, activeSchoolNpsn]);
 
   useEffect(() => {
     if (!isInitialized) return;
@@ -957,7 +1001,7 @@ export default function App() {
         const result = await loadFromGoogleSheets(currentCfg);
         if (result && result.success && result.data) {
           const {
-            siswa, ptk, sarpras, rapor, administrator, pengaturan, profilSekolah, aplikasi, notifikasi, schoolAccounts: pulledSchoolAccounts
+            siswa, ptk, sarpras, kibB: pulledKibB, rapor, administrator, pengaturan, profilSekolah, aplikasi, notifikasi, schoolAccounts: pulledSchoolAccounts
           } = result.data;
 
           isSyncingFromServerRef.current = true;
@@ -975,6 +1019,11 @@ export default function App() {
           if (Array.isArray(sarpras)) {
             setSarpras(sarpras);
             localStorage.setItem(getStorageKey('dapodik_sarpras'), JSON.stringify(sarpras));
+          }
+          if (Array.isArray(pulledKibB) && pulledKibB.length > 0) {
+            const clean = cleanKibBItems(pulledKibB);
+            setKibB(clean);
+            localStorage.setItem(getStorageKey('dapodik_kib_b'), JSON.stringify(clean));
           }
           if (Array.isArray(rapor)) {
             const clean = sanitizeReports(rapor);
@@ -1039,7 +1088,8 @@ export default function App() {
             Array.isArray(notifikasi) ? notifikasi : notificationsRef.current,
             Array.isArray(aplikasi) ? aplikasi : aplikasiLinks,
             getDeletedNotifIds(),
-            Array.isArray(pulledSchoolAccounts) && pulledSchoolAccounts.length > 0 ? pulledSchoolAccounts : schoolAccounts
+            Array.isArray(pulledSchoolAccounts) && pulledSchoolAccounts.length > 0 ? pulledSchoolAccounts : schoolAccounts,
+            Array.isArray(pulledKibB) ? pulledKibB : kibB
           );
 
           const nowStr = new Date().toLocaleString('id-ID');
@@ -1069,6 +1119,8 @@ export default function App() {
           localStorage.setItem(getStorageKey('dapodik_teachers'), JSON.stringify([]));
           setSarpras([]);
           localStorage.setItem(getStorageKey('dapodik_sarpras'), JSON.stringify([]));
+          setKibB([]);
+          localStorage.setItem(getStorageKey('dapodik_kib_b'), JSON.stringify([]));
           setReports([]);
           localStorage.setItem(getStorageKey('dapodik_reports'), JSON.stringify([]));
 
@@ -1131,6 +1183,11 @@ export default function App() {
             if (serverData.sarpras && Array.isArray(serverData.sarpras)) {
               setSarpras(serverData.sarpras);
               localStorage.setItem('dapodik_sarpras', JSON.stringify(serverData.sarpras));
+            }
+            if (serverData.kibB && Array.isArray(serverData.kibB)) {
+              const clean = cleanKibBItems(serverData.kibB);
+              setKibB(clean);
+              localStorage.setItem('dapodik_kib_b', JSON.stringify(clean));
             }
             if (serverData.reports && Array.isArray(serverData.reports)) {
               const clean = sanitizeReports(serverData.reports);
@@ -1414,7 +1471,8 @@ export default function App() {
       type?: 'info' | 'success' | 'warning' | 'error';
     },
     customAplikasiLinks = aplikasiLinks,
-    customSchoolAccounts = schoolAccounts
+    customSchoolAccounts = schoolAccounts,
+    customKibB = kibB
   ) => {
     // Persiapkan notifikasi terbaru jika ada pendingNotification
     let activeNotifs = customNotifications || [];
@@ -1442,7 +1500,8 @@ export default function App() {
       activeNotifs,
       currentAplikasi,
       getDeletedNotifIds(),
-      customSchoolAccounts
+      customSchoolAccounts,
+      customKibB
     );
 
     // Otomatis simpan & sync perubahan ke Google Spreadsheet
@@ -1461,6 +1520,7 @@ export default function App() {
         siswa: customStudents,
         ptk: customTeachers,
         sarpras: customSarpras,
+        kibB: customKibB,
         rapor: customReports,
         pengaturan: pengaturanArray,
         profilSekolah: profilSekolahArray,
@@ -2036,6 +2096,129 @@ export default function App() {
     );
   };
 
+  // KIB B Handlers (Peralatan dan Mesin)
+  const handleAddKibB = (item: KibBItem) => {
+    lastLocalMutationRef.current = Date.now();
+    const updated = [item, ...kibB];
+    setKibB(updated);
+    localStorage.setItem(getStorageKey('dapodik_kib_b'), JSON.stringify(updated));
+    showToast(`Menyimpan barang KIB B "${item.namaBarang}" ke database & Spreadsheet...`);
+
+    // Auto-sync ke server cache & spreadsheet sync
+    triggerAutoSync(
+      students,
+      teachers,
+      sarpras,
+      reports,
+      displayConfig,
+      schoolProfile,
+      administrators,
+      false,
+      notificationsRef.current,
+      {
+        title: 'Penambahan Barang KIB B',
+        message: `Barang KIB B "${item.namaBarang}" (${item.kodeBarang || '-'}) berhasil ditambahkan ke inventaris.`,
+        type: 'success'
+      },
+      aplikasiLinks,
+      schoolAccounts,
+      updated
+    );
+
+    // Kirim sinkronisasi langsung khusus sheet "KIB B" ke Google Spreadsheet
+    const currentCfg = getEffectiveSyncConfig();
+    if (currentCfg && currentCfg.webAppUrl) {
+      syncKibBToGoogleSheets(currentCfg, updated).then(res => {
+        if (res && res.success) {
+          showToast(`Data KIB B "${item.namaBarang}" berhasil tersimpan di Google Spreadsheet (Sheet: KIB B)!`);
+        }
+      }).catch(err => {
+        console.warn('Sync KIB B directly to spreadsheet error:', err);
+      });
+    } else {
+      showToast(`Barang KIB B "${item.namaBarang}" berhasil disimpan secara lokal.`);
+    }
+  };
+
+  const handleUpdateKibB = (item: KibBItem) => {
+    lastLocalMutationRef.current = Date.now();
+    const updated = kibB.map(i => i.id === item.id ? item : i);
+    setKibB(updated);
+    localStorage.setItem(getStorageKey('dapodik_kib_b'), JSON.stringify(updated));
+    showToast(`Memperbarui data barang KIB B "${item.namaBarang}" ke Spreadsheet...`);
+
+    triggerAutoSync(
+      students,
+      teachers,
+      sarpras,
+      reports,
+      displayConfig,
+      schoolProfile,
+      administrators,
+      false,
+      notificationsRef.current,
+      {
+        title: 'Pembaruan Barang KIB B',
+        message: `Data barang KIB B "${item.namaBarang}" berhasil diperbarui di database.`,
+        type: 'info'
+      },
+      aplikasiLinks,
+      schoolAccounts,
+      updated
+    );
+
+    const currentCfg = getEffectiveSyncConfig();
+    if (currentCfg && currentCfg.webAppUrl) {
+      syncKibBToGoogleSheets(currentCfg, updated).then(res => {
+        if (res && res.success) {
+          showToast(`Pembaruan KIB B "${item.namaBarang}" berhasil tersimpan di Spreadsheet (Sheet: KIB B)!`);
+        }
+      }).catch(err => {
+        console.warn('Sync KIB B update error:', err);
+      });
+    }
+  };
+
+  const handleDeleteKibB = (id: string) => {
+    lastLocalMutationRef.current = Date.now();
+    const target = kibB.find(i => i.id === id);
+    const updated = kibB.filter(i => i.id !== id);
+    setKibB(updated);
+    localStorage.setItem(getStorageKey('dapodik_kib_b'), JSON.stringify(updated));
+    showToast(`Menghapus barang KIB B dari Spreadsheet...`);
+
+    triggerAutoSync(
+      students,
+      teachers,
+      sarpras,
+      reports,
+      displayConfig,
+      schoolProfile,
+      administrators,
+      false,
+      notificationsRef.current,
+      {
+        title: 'Penghapusan Barang KIB B',
+        message: `Barang KIB B "${target?.namaBarang || 'Item'}" telah dihapus dari inventaris.`,
+        type: 'warning'
+      },
+      aplikasiLinks,
+      schoolAccounts,
+      updated
+    );
+
+    const currentCfg = getEffectiveSyncConfig();
+    if (currentCfg && currentCfg.webAppUrl) {
+      syncKibBToGoogleSheets(currentCfg, updated).then(res => {
+        if (res && res.success) {
+          showToast(`Barang KIB B berhasil dihapus dari Google Spreadsheet (Sheet: KIB B)!`);
+        }
+      }).catch(err => {
+        console.warn('Sync KIB B deletion error:', err);
+      });
+    }
+  };
+
   // Reports Handlers
   const handleAddReport = (r: StudentReport) => {
     lastLocalMutationRef.current = Date.now();
@@ -2513,6 +2696,10 @@ export default function App() {
               onAddSarpras={handleAddSarpras}
               onUpdateSarpras={handleUpdateSarpras}
               onDeleteSarpras={handleDeleteSarpras}
+              kibB={kibB}
+              onAddKibB={handleAddKibB}
+              onUpdateKibB={handleUpdateKibB}
+              onDeleteKibB={handleDeleteKibB}
               onBackToHome={() => setActiveTab('home')}
             />
           </div>

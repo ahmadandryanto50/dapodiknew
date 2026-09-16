@@ -154,6 +154,26 @@ export interface SarprasItem {
   layakPakai: boolean;
 }
 
+export interface KibBItem {
+  id: string;
+  no?: number | string;
+  namaBarang: string;
+  kodeBarang: string;
+  kondisi: 'Baik' | 'Rusak Ringan' | 'Rusak Berat' | string;
+  merkType?: string;
+  ukuranCc?: string;
+  bahan?: string;
+  tahun?: string | number;
+  noPabrik?: string;
+  noRangka?: string;
+  noMesin?: string;
+  noPolisi?: string;
+  noBpkb?: string;
+  asalUsul?: string;
+  harga?: string | number;
+  keterangan?: string;
+}
+
 export interface SubjectScore {
   mapel: string;
   kelompok?: 'Kelompok A' | 'Kelompok B' | string;

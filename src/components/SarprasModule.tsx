@@ -14,10 +14,12 @@ import {
   XSquare,
   X,
   Layers,
-  ChevronDown
+  ChevronDown,
+  Package
 } from 'lucide-react';
-import { SarprasItem } from '../types';
+import { SarprasItem, KibBItem } from '../types';
 import { exportToCSV } from '../services/googleSheetsService';
+import { KibBModule } from './KibBModule';
 
 interface SarprasModuleProps {
   sarpras: SarprasItem[];
@@ -25,6 +27,10 @@ interface SarprasModuleProps {
   onUpdateSarpras: (item: SarprasItem) => void;
   onDeleteSarpras: (id: string) => void;
   onBackToHome: () => void;
+  kibB?: KibBItem[];
+  onAddKibB?: (item: KibBItem) => void;
+  onUpdateKibB?: (item: KibBItem) => void;
+  onDeleteKibB?: (id: string) => void;
 }
 
 export const SarprasModule: React.FC<SarprasModuleProps> = ({
@@ -32,8 +38,13 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
   onAddSarpras,
   onUpdateSarpras,
   onDeleteSarpras,
-  onBackToHome
+  onBackToHome,
+  kibB = [],
+  onAddKibB = () => {},
+  onUpdateKibB = () => {},
+  onDeleteKibB = () => {}
 }) => {
+  const [activeSubTab, setActiveSubTab] = useState<'sarpras' | 'kib_b'>('sarpras');
   const [search, setSearch] = useState('');
   const [filterKategori, setFilterKategori] = useState('ALL');
   const [filterKondisi, setFilterKondisi] = useState('ALL');
@@ -155,44 +166,97 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
         <div className="flex items-center gap-3">
           <button
             onClick={onBackToHome}
-            className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors border border-slate-200/60"
+            className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors border border-slate-200/60 cursor-pointer"
             title="Kembali ke Beranda"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-slate-900">Sarana & Prasarana (Sarpras)</h1>
+              <h1 className="text-xl font-bold text-slate-900">
+                {activeSubTab === 'sarpras' ? 'Sarana & Prasarana (Sarpras)' : 'Menu KIB B (Peralatan & Mesin)'}
+              </h1>
               <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                {sarpras.length} Aset & Ruangan
+                {activeSubTab === 'sarpras' ? `${sarpras.length} Aset & Ruangan` : `${kibB.length} Barang KIB B`}
               </span>
             </div>
             <p className="text-xs text-slate-500">
-              Monitoring kondisi fisik ruangan, laboratorium, buku perpustakaan, dan inventaris sekolah
+              {activeSubTab === 'sarpras'
+                ? 'Monitoring kondisi fisik ruangan, laboratorium, buku perpustakaan, dan inventaris sekolah'
+                : 'Inventarisasi peralatan dan mesin sekolah terhubung langsung ke spreadsheet dan database Cloud'
+              }
             </p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => exportToCSV(sarpras, 'DAPODIK_DATA_SARPRAS')}
-            className="px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200 transition-all flex items-center gap-1.5 shadow-sm"
-          >
-            <Download className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Ekspor Database</span>
-          </button>
+        {/* Tab Selector & Action Buttons */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
+            <button
+              onClick={() => setActiveSubTab('sarpras')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                activeSubTab === 'sarpras'
+                  ? 'bg-white text-emerald-700 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Building2 className="w-3.5 h-3.5" />
+              <span>Sarpras</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200/70 text-slate-700 font-mono">
+                {sarpras.length}
+              </span>
+            </button>
 
-          <button
-            onClick={handleOpenAdd}
-            className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-all flex items-center gap-1.5"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Tambah Sarpras Baru</span>
-          </button>
+            <button
+              onClick={() => setActiveSubTab('kib_b')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                activeSubTab === 'kib_b'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Package className="w-3.5 h-3.5" />
+              <span>KIB B</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                activeSubTab === 'kib_b' ? 'bg-white/25 text-white' : 'bg-slate-200/70 text-slate-700'
+              }`}>
+                {kibB.length}
+              </span>
+            </button>
+          </div>
+
+          {activeSubTab === 'sarpras' && (
+            <>
+              <button
+                onClick={() => exportToCSV(sarpras, 'DAPODIK_DATA_SARPRAS')}
+                className="px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="hidden sm:inline">Ekspor Database</span>
+              </button>
+
+              <button
+                onClick={handleOpenAdd}
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Tambah Sarpras</span>
+              </button>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Filter Bar */}
+      {activeSubTab === 'kib_b' ? (
+        <KibBModule
+          kibB={kibB}
+          onAddKibB={onAddKibB}
+          onUpdateKibB={onUpdateKibB}
+          onDeleteKibB={onDeleteKibB}
+        />
+      ) : (
+        <>
+          {/* Filter Bar */}
       <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm text-xs">
         <div className="sm:col-span-6 relative">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -578,6 +642,8 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

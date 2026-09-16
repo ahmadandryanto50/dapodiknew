@@ -1,9 +1,9 @@
-import { Student, TeacherStaff, SarprasItem, StudentReport, SyncConfig, AppDisplayConfig, SchoolProfile, AdminUser, NotificationItem, SchoolAccount } from '../types';
+import { Student, TeacherStaff, SarprasItem, KibBItem, StudentReport, SyncConfig, AppDisplayConfig, SchoolProfile, AdminUser, NotificationItem, SchoolAccount } from '../types';
 
 export const APPS_SCRIPT_TEMPLATE = `/**
  * =========================================================================
  * GOOGLE APPS SCRIPT UNTUK DAPODIK TERINTEGRASI 2026
- * Versi Script: v3.2 (Pure Google Sheets & Drive Auto Row Delete Sync)
+ * Versi Script: v3.3 (Pure Google Sheets, Drive Sync & KIB B Inventarisasi Barang)
  * =========================================================================
  * 
  * FUNGSI UTAMA OTORISASI GOOGLE DRIVE (Jalankan ini jika butuh izin ulang):
@@ -84,6 +84,8 @@ const HEADERS_MAP = {
   'Data_Alumni': ['id', 'nisn', 'nik', 'nama', 'jenisKelamin', 'tempatLahir', 'tanggalLahir', 'rombel', 'tahunLulus', 'noSeriIjazah', 'namaIbu', 'namaAyah', 'alamat', 'hp', 'status', 'alasanKeluar', 'agama', 'nis', 'skhun', 'sekolahAsal'],
   'Data_PTK': ['id', 'nuptk', 'nip', 'nama', 'jenisKelamin', 'statusKepegawaian', 'jenisPtk', 'mapel', 'pendidikanTerakhir', 'noHp', 'email', 'statusSertifikasi', 'tempatLahir', 'tanggalLahir', 'agama', 'alamatJalan', 'rt', 'rw', 'namaDusun', 'desaKelurahan', 'kecamatan', 'kodePos', 'tugasTambahan', 'skCpns', 'tanggalCpns', 'skPengangkatan', 'tmtPengangkatan', 'pangkatGolongan', 'nik', 'noKk'],
   'Data_Sarpras': ['id', 'kodeBarang', 'namaBarang', 'kategori', 'kondisi', 'jumlah', 'satuan', 'letakRuang', 'tahunPengadaan', 'layakPakai'],
+  'KIB B': ['id', 'no', 'namaBarang', 'kodeBarang', 'kondisi', 'merkType', 'ukuranCc', 'bahan', 'tahun', 'noPabrik', 'noRangka', 'noMesin', 'noPolisi', 'noBpkb', 'asalUsul', 'harga', 'keterangan'],
+  'Data_KIB_B': ['id', 'no', 'namaBarang', 'kodeBarang', 'kondisi', 'merkType', 'ukuranCc', 'bahan', 'tahun', 'noPabrik', 'noRangka', 'noMesin', 'noPolisi', 'noBpkb', 'asalUsul', 'harga', 'keterangan'],
   'Data_Rapor': ['id', 'studentId', 'nisn', 'studentName', 'rombel', 'semester', 'tahunAjaran', 'scores', 'kehadiran', 'catatanWaliKelas', 'statusKenaikan'],
   'Notifikasi': ['id', 'title', 'message', 'time', 'type', 'read'],
   'Permintaan_Akses_Berkas': ['id', 'fileId', 'fileName', 'requesterName', 'requesterRole', 'requesterEmail', 'requestedAt', 'reason', 'status', 'reviewedBy', 'reviewedAt', 'reviewNotes'],
@@ -182,12 +184,18 @@ function doGet(e) {
   // Pastikan seluruh sheet & tabel otomatis terbuat
   checkAndInitializeSheets(ss);
 
+  // Ambil data KIB B (utamakan nama sheet "KIB B", jika belum ada coba "Data_KIB_B")
+  var kibSheet = ss.getSheetByName('KIB B') || ss.getSheetByName('Data_KIB_B');
+  var kibData = kibSheet ? getSheetData(ss, kibSheet.getName()) : [];
+
   const result = {
     siswa: getSheetData(ss, 'Data_Siswa'),
     siswaKeluar: getSheetData(ss, 'Data_Siswa_Keluar'),
     alumni: getSheetData(ss, 'Data_Alumni'),
     ptk: getSheetData(ss, 'Data_PTK'),
     sarpras: getSheetData(ss, 'Data_Sarpras'),
+    kibB: kibData,
+    'KIB B': kibData,
     rapor: getSheetData(ss, 'Data_Rapor'),
     pengaturan: getSheetData(ss, 'Data_Pengaturan'),
     administrator: getSheetData(ss, 'Administrator'),
@@ -198,7 +206,7 @@ function doGet(e) {
     berkas: getSheetData(ss, 'Data_Berkas'),
     schoolAccounts: getSheetData(ss, 'Data_Multi_Sekolah'),
     status: 'success',
-    version: '2026.3.2',
+    version: '2026.3.3',
     timestamp: new Date().toLocaleString('id-ID')
   };
   
@@ -254,12 +262,17 @@ function doPost(e) {
     }
 
     if (data.type === 'LOAD_ALL') {
+      var kibSheet = ss.getSheetByName('KIB B') || ss.getSheetByName('Data_KIB_B');
+      var kibData = kibSheet ? getSheetData(ss, kibSheet.getName()) : [];
+
       const result = {
         siswa: getSheetData(ss, 'Data_Siswa'),
         siswaKeluar: getSheetData(ss, 'Data_Siswa_Keluar'),
         alumni: getSheetData(ss, 'Data_Alumni'),
         ptk: getSheetData(ss, 'Data_PTK'),
         sarpras: getSheetData(ss, 'Data_Sarpras'),
+        kibB: kibData,
+        'KIB B': kibData,
         rapor: getSheetData(ss, 'Data_Rapor'),
         pengaturan: getSheetData(ss, 'Data_Pengaturan'),
         administrator: getSheetData(ss, 'Administrator'),
@@ -281,6 +294,20 @@ function doPost(e) {
       if (data.alumni !== undefined) saveSheetData(ss, 'Data_Alumni', data.alumni, HEADERS_MAP['Data_Alumni']);
       if (data.ptk !== undefined) saveSheetData(ss, 'Data_PTK', data.ptk, HEADERS_MAP['Data_PTK']);
       if (data.sarpras !== undefined) saveSheetData(ss, 'Data_Sarpras', data.sarpras, HEADERS_MAP['Data_Sarpras']);
+      if (data.kibB !== undefined || data['KIB B'] !== undefined) {
+        var kibItems = data.kibB !== undefined ? data.kibB : data['KIB B'];
+        var targetKibSheet = ss.getSheetByName('KIB B') || ss.getSheetByName('Data_KIB_B');
+        var targetSheetName = 'KIB B';
+        if (targetKibSheet) {
+          if (targetKibSheet.getName() === 'Data_KIB_B' && !ss.getSheetByName('KIB B')) {
+            try { targetKibSheet.setName('KIB B'); } catch(eRename) {}
+          }
+          targetSheetName = targetKibSheet.getName();
+        } else {
+          targetKibSheet = ss.insertSheet('KIB B');
+        }
+        saveSheetData(ss, targetSheetName, kibItems, HEADERS_MAP['KIB B']);
+      }
       if (data.rapor !== undefined) saveSheetData(ss, 'Data_Rapor', data.rapor, HEADERS_MAP['Data_Rapor']);
       if (data.pengaturan !== undefined) saveSheetData(ss, 'Data_Pengaturan', data.pengaturan);
       if (data.administrator !== undefined) saveSheetData(ss, 'Administrator', data.administrator);
@@ -299,6 +326,23 @@ function doPost(e) {
       saveSheetData(ss, 'Data_PTK', data.payload, HEADERS_MAP['Data_PTK']);
     } else if (data.type === 'SYNC_SARPRAS') {
       saveSheetData(ss, 'Data_Sarpras', data.payload, HEADERS_MAP['Data_Sarpras']);
+    } else if (data.type === 'SYNC_KIB_B') {
+      var targetKibSheet = ss.getSheetByName('KIB B') || ss.getSheetByName('Data_KIB_B');
+      var targetSheetName = 'KIB B';
+      if (targetKibSheet) {
+        if (targetKibSheet.getName() === 'Data_KIB_B' && !ss.getSheetByName('KIB B')) {
+          try { targetKibSheet.setName('KIB B'); } catch(eRename) {}
+        }
+        targetSheetName = targetKibSheet.getName();
+      } else {
+        targetKibSheet = ss.insertSheet('KIB B');
+      }
+      var kibItems = data.payload || data.kibB || data['KIB B'] || [];
+      saveSheetData(ss, targetSheetName, kibItems, HEADERS_MAP['KIB B']);
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        message: 'Data KIB B berhasil disimpan ke Google Spreadsheet pada sheet "' + targetSheetName + '"!'
+      })).setMimeType(ContentService.MimeType.JSON);
     } else if (data.type === 'SYNC_RAPOR') {
       saveSheetData(ss, 'Data_Rapor', data.payload, HEADERS_MAP['Data_Rapor']);
     } else if (data.type === 'SYNC_NOTIFIKASI') {
@@ -539,6 +583,23 @@ function saveSheetData(ss, sheetName, items, fallbackHeaders) {
         else if (key === 'Tanggal') val = items[i]['uploadedAt'] || items[i]['UploadedAt'];
         else if (key === 'Link Drive') val = items[i]['driveFileUrl'] || items[i]['DriveFileUrl'] || items[i]['url'];
         else if (key === 'Ukuran File') val = items[i]['fileSize'] || items[i]['FileSize'] || items[i]['size'];
+        // KIB B field aliases
+        else if (key === 'No' || key === 'No.' || key === 'no') val = items[i]['no'] !== undefined ? items[i]['no'] : (i + 1);
+        else if (key === 'Nama Barang' || key === 'namaBarang' || key === 'Jenis Barang / Nama Barang') val = items[i]['namaBarang'] || items[i]['Nama Barang'];
+        else if (key === 'Kode Barang' || key === 'kodeBarang' || key === 'Nomor Kode Barang') val = items[i]['kodeBarang'] || items[i]['Kode Barang'];
+        else if (key === 'Kondisi' || key === 'kondisi') val = items[i]['kondisi'] || items[i]['Kondisi'];
+        else if (key === 'Merk / Type' || key === 'merkType' || key === 'Merk/Type') val = items[i]['merkType'] || items[i]['Merk / Type'];
+        else if (key === 'Ukuran / CC' || key === 'ukuranCc' || key === 'Ukuran/CC') val = items[i]['ukuranCc'] || items[i]['Ukuran / CC'];
+        else if (key === 'Bahan' || key === 'bahan') val = items[i]['bahan'] || items[i]['Bahan'];
+        else if (key === 'Tahun' || key === 'tahun' || key === 'Tahun Pembelian') val = items[i]['tahun'] || items[i]['Tahun'];
+        else if (key === 'No Pabrik' || key === 'noPabrik' || key === 'No. Pabrik') val = items[i]['noPabrik'] || items[i]['No Pabrik'];
+        else if (key === 'No Rangka' || key === 'noRangka' || key === 'No. Rangka') val = items[i]['noRangka'] || items[i]['No Rangka'];
+        else if (key === 'No Mesin' || key === 'noMesin' || key === 'No. Mesin') val = items[i]['noMesin'] || items[i]['No Mesin'];
+        else if (key === 'No Polisi' || key === 'noPolisi' || key === 'No. Polisi') val = items[i]['noPolisi'] || items[i]['No Polisi'];
+        else if (key === 'No Bpkb' || key === 'noBpkb' || key === 'No. BPKB') val = items[i]['noBpkb'] || items[i]['No Bpkb'];
+        else if (key === 'Asal Usul' || key === 'asalUsul' || key === 'Asal Usul Perolehan') val = items[i]['asalUsul'] || items[i]['Asal Usul'];
+        else if (key === 'Harga' || key === 'harga' || key === 'Harga (Rp)') val = items[i]['harga'] || items[i]['Harga'];
+        else if (key === 'Keterangan' || key === 'keterangan') val = items[i]['keterangan'] || items[i]['Keterangan'];
       }
       if (typeof val === 'object' && val !== null) {
         val = JSON.stringify(val);
@@ -558,7 +619,7 @@ function saveSheetData(ss, sheetName, items, fallbackHeaders) {
   // Format Header
   const headerRange = sheet.getRange(1, 1, 1, headers.length);
   headerRange.setFontWeight('bold');
-  headerRange.setBackground(sheetName === 'Data_Alumni' ? '#059669' : sheetName === 'Permintaan_Akses_Berkas' ? '#D97706' : '#0284C7');
+  headerRange.setBackground(sheetName === 'Data_Alumni' ? '#059669' : (sheetName === 'KIB B' || sheetName === 'Data_KIB_B') ? '#0D9488' : sheetName === 'Permintaan_Akses_Berkas' ? '#D97706' : '#0284C7');
   headerRange.setFontColor('#FFFFFF');
   headerRange.setHorizontalAlignment('center');
   
@@ -604,6 +665,13 @@ function checkAndInitializeSheets(ss) {
     }
   }
   if (!ss) return;
+
+  // Jika ada sheet lama bernama "Data_KIB_B" dan belum ada sheet "KIB B", ubah namanya menjadi "KIB B"
+  var oldKibSheet = ss.getSheetByName('Data_KIB_B');
+  if (oldKibSheet && !ss.getSheetByName('KIB B')) {
+    try { oldKibSheet.setName('KIB B'); } catch(eRen) {}
+  }
+
   // Safe sheet creator to ensure sheets exist on doGet / doPost
   const defaultSheets = {
     'Data_Alumni': [
@@ -621,6 +689,10 @@ function checkAndInitializeSheets(ss) {
     ],
     'Data_Sarpras': [
       HEADERS_MAP['Data_Sarpras']
+    ],
+    'KIB B': [
+      HEADERS_MAP['KIB B'],
+      ['kib-001', 1, 'Timbangan Meja Kapasitas 5 kg', '1.3.2.03.03.010.003', 'Baik', '', '', '', '2017', '', '', '', '', '', 'DAK / P2HP', '1.467.800', 'Ruang Wakasek']
     ],
     'Data_Rapor': [
       HEADERS_MAP['Data_Rapor']
@@ -738,7 +810,7 @@ function checkAndInitializeSheets(ss) {
       
       const headerRange = sheet.getRange(1, 1, 1, rows[0].length);
       headerRange.setFontWeight('bold');
-      headerRange.setBackground(name === 'Data_Alumni' ? '#059669' : name === 'Permintaan_Akses_Berkas' ? '#D97706' : '#0284C7');
+      headerRange.setBackground(name === 'Data_Alumni' ? '#059669' : name === 'KIB B' ? '#0D9488' : name === 'Permintaan_Akses_Berkas' ? '#D97706' : '#0284C7');
       headerRange.setFontColor('#FFFFFF');
       headerRange.setHorizontalAlignment('center');
       try {
@@ -846,6 +918,71 @@ function parseSheetsResult(result: any) {
       siswa: combinedStudents,
       ptk: Array.isArray(result.ptk) ? result.ptk : [],
       sarpras: Array.isArray(result.sarpras) ? result.sarpras : [],
+      kibB: (function() {
+        const rawKib = Array.isArray(result.kibB) 
+          ? result.kibB 
+          : (Array.isArray(result['KIB B']) 
+            ? result['KIB B'] 
+            : (Array.isArray(result.kib_b) 
+              ? result.kib_b 
+              : (Array.isArray(result.Data_KIB_B) ? result.Data_KIB_B : [])));
+        
+        return rawKib.map((item: any, idx: number) => {
+          if (!item || typeof item !== 'object') return null;
+          
+          const getVal = (...keys: string[]) => {
+            for (const k of keys) {
+              if (item[k] !== undefined && item[k] !== null && String(item[k]).trim() !== '') {
+                return String(item[k]).trim();
+              }
+              // Also check lowercase key without spaces
+              const matchKey = Object.keys(item).find(ik => ik.toLowerCase().replace(/[^a-z0-9]/g, '') === k.toLowerCase().replace(/[^a-z0-9]/g, ''));
+              if (matchKey && item[matchKey] !== undefined && item[matchKey] !== null && String(item[matchKey]).trim() !== '') {
+                return String(item[matchKey]).trim();
+              }
+            }
+            return '';
+          };
+
+          const id = getVal('id', 'ID', 'Id') || `kib-${Date.now()}-${idx}`;
+          const noVal = getVal('no', 'No', 'No.', 'Nomor') || String(idx + 1);
+          const namaBarang = getVal('namaBarang', 'Nama Barang', 'Jenis Barang / Nama Barang', 'nama_barang', 'Jenis Barang', 'Nama', 'nama');
+          const kodeBarang = getVal('kodeBarang', 'Kode Barang', 'Nomor Kode Barang', 'kode_barang', 'Kode');
+          const kondisi = getVal('kondisi', 'Kondisi', 'Keadaan Barang', 'Keadaan') || 'Baik';
+          const merkType = getVal('merkType', 'Merk / Type', 'Merk/Type', 'merk', 'Type', 'Merk', 'Tipe', 'Merk / Tipe');
+          const ukuranCc = getVal('ukuranCc', 'Ukuran / CC', 'Ukuran/CC', 'ukuran', 'Ukuran', 'CC');
+          const bahan = getVal('bahan', 'Bahan', 'Material');
+          const tahun = getVal('tahun', 'Tahun', 'Tahun Pembelian', 'Tahun Pengadaan', 'Tahun Perolehan');
+          const noPabrik = getVal('noPabrik', 'No Pabrik', 'No. Pabrik', 'Nomor Pabrik');
+          const noRangka = getVal('noRangka', 'No Rangka', 'No. Rangka', 'Nomor Rangka');
+          const noMesin = getVal('noMesin', 'No Mesin', 'No. Mesin', 'Nomor Mesin');
+          const noPolisi = getVal('noPolisi', 'No Polisi', 'No. Polisi', 'Nomor Polisi', 'No Plat');
+          const noBpkb = getVal('noBpkb', 'No Bpkb', 'No. BPKB', 'Nomor BPKB');
+          const asalUsul = getVal('asalUsul', 'Asal Usul', 'Asal Usul Perolehan', 'Asal-Usul', 'Sumber Dana');
+          const harga = getVal('harga', 'Harga', 'Harga (Rp)', 'Harga Beli', 'Nilai');
+          const keterangan = getVal('keterangan', 'Keterangan', 'Ket', 'Ket.', 'Lokasi', 'Letak Ruang');
+
+          return {
+            id,
+            no: parseInt(noVal, 10) || (idx + 1),
+            namaBarang,
+            kodeBarang,
+            kondisi,
+            merkType,
+            ukuranCc,
+            bahan,
+            tahun,
+            noPabrik,
+            noRangka,
+            noMesin,
+            noPolisi,
+            noBpkb,
+            asalUsul,
+            harga,
+            keterangan
+          };
+        }).filter((k: any) => k && (k.namaBarang || k.kodeBarang || k.merkType || k.harga || k.asalUsul || k.keterangan || k.id));
+      })(),
       rapor: Array.isArray(result.rapor) ? result.rapor : [],
       pengaturan: Array.isArray(result.pengaturan) ? result.pengaturan : [],
       administrator: Array.isArray(result.administrator) ? result.administrator : [],
@@ -901,6 +1038,7 @@ export async function syncToGoogleSheets(
     siswa: Student[];
     ptk: TeacherStaff[];
     sarpras: SarprasItem[];
+    kibB?: KibBItem[];
     rapor: StudentReport[];
     pengaturan?: Array<{ key: string; value: string }>;
     administrator?: AdminUser[];
@@ -964,6 +1102,8 @@ export async function syncToGoogleSheets(
       }),
       ptk: data.ptk || [],
       sarpras: data.sarpras || [],
+      kibB: data.kibB || [],
+      'KIB B': data.kibB || [],
       rapor: data.rapor || [],
       pengaturan: data.pengaturan || [],
       administrator: data.administrator || [],
@@ -985,6 +1125,50 @@ export async function syncToGoogleSheets(
   }
 }
 
+/**
+ * Fungsi khusus sinkronisasi instan KIB B langsung ke sheet "KIB B" di Google Spreadsheet
+ */
+export async function syncKibBToGoogleSheets(
+  config: SyncConfig,
+  items: KibBItem[]
+): Promise<{ success: boolean; message: string; data?: any }> {
+  if (!config.webAppUrl) {
+    return {
+      success: false,
+      message: 'URL Google Apps Script belum diisi di Pengaturan.'
+    };
+  }
+  const payload = {
+    type: 'SYNC_KIB_B',
+    payload: items,
+    kibB: items,
+    'KIB B': items,
+    spreadsheetUrl: config.spreadsheetUrl || '',
+    timestamp: new Date().toLocaleString('id-ID')
+  };
+  return await callProxyOrDirectPost(config.webAppUrl, payload);
+}
+
+export function getSavedSyncConfig(): SyncConfig {
+  const ACTIVE_APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx82FotXhPvN0i9hOo_S-bctwcT5JCB6JrvUu5CHtIMEepaJj1EIl5Bf7mxPoW8JuPguA/exec';
+  try {
+    const saved = localStorage.getItem('dapodik_sync_config');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed && parsed.webAppUrl) return parsed;
+    }
+  } catch (e) {}
+  return {
+    spreadsheetUrl: '1XmLmshCOhSktRfzW8uG_8RqxlxVCQt5eUVekEFLwj_M',
+    webAppUrl: ACTIVE_APP_SCRIPT_URL,
+    sheetId: '',
+    autoSync: true,
+    lastSynced: null,
+    status: 'connected',
+    mode: 'appscript'
+  };
+}
+
 export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
   success: boolean;
   message: string;
@@ -992,6 +1176,7 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
     siswa: Student[];
     ptk: TeacherStaff[];
     sarpras: SarprasItem[];
+    kibB?: KibBItem[];
     rapor: StudentReport[];
     pengaturan: Array<{ key: string; value: string }>;
     administrator: AdminUser[];
@@ -1064,6 +1249,7 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
             siswa: cache.students || [],
             ptk: cache.teachers || [],
             sarpras: cache.sarpras || [],
+            kibB: cache.kibB || [],
             rapor: cache.reports || [],
             pengaturan: cache.displayConfig 
               ? Object.entries(cache.displayConfig).map(([k, v]) => ({ key: k, value: v !== undefined && v !== null ? String(v) : '' }))
@@ -1135,8 +1321,6 @@ export async function syncNotifikasiToGoogleSheets(
   };
   return await callProxyOrDirectPost(config.webAppUrl, payload);
 }
-
-// Removed file upload/sync functions
 
 export function downloadKodeGsFile() {
   try {

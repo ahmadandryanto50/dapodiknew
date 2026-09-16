@@ -101,6 +101,11 @@ function safeWriteJSON(filePath: string, data: any) {
   }
 }
 
+function cleanKibB(items: any[] = []): any[] {
+  if (!Array.isArray(items)) return [];
+  return items.filter((item: any) => item && typeof item === 'object' && (item.namaBarang || item.kodeBarang || item.id || item.merkType));
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -504,6 +509,7 @@ async function startServer() {
             siswa: cachedData.students || [],
             ptk: cachedData.teachers || [],
             sarpras: cachedData.sarpras || [],
+            kibB: cleanKibB(cachedData.kibB),
             rapor: cachedData.reports || [],
             administrator: cachedData.administrators || [],
             aplikasi: cachedData.aplikasiLinks || [],
@@ -534,6 +540,7 @@ async function startServer() {
           siswa: cached.students || [],
           ptk: cached.teachers || [],
           sarpras: cached.sarpras || [],
+          kibB: cleanKibB(cached.kibB),
           rapor: cached.reports || [],
           administrator: cached.administrators || [],
           aplikasi: cached.aplikasiLinks || [],
@@ -562,6 +569,9 @@ async function startServer() {
   app.get("/api/app-data", async (req, res) => {
     try {
       const data = safeReadJSON(DATA_FILE, {});
+      if (Array.isArray(data.kibB)) {
+        data.kibB = cleanKibB(data.kibB);
+      }
       
       // Filter out deleted files permanently across devices
       const deletedFileIds: string[] = Array.isArray(data.deletedFileIds) ? data.deletedFileIds : [];
@@ -874,6 +884,7 @@ async function startServer() {
       const finalData = {
         ...currentData,
         ...incoming,
+        kibB: cleanKibB(incoming.kibB !== undefined ? incoming.kibB : (currentData.kibB || [])),
         schoolAccounts: incoming.schoolAccounts !== undefined ? incoming.schoolAccounts : (currentData.schoolAccounts || []),
         deletedNotifIds: mergedDeleted,
         deletedPermintaanAksesIds: mergedDeletedReqs,
