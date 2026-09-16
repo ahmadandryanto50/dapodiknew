@@ -1,3 +1,4 @@
+import * as XLSX from 'xlsx';
 import { Student, TeacherStaff, SarprasItem, KibBItem, StudentReport, SyncConfig, AppDisplayConfig, SchoolProfile, AdminUser, NotificationItem, SchoolAccount } from '../types';
 
 export const APPS_SCRIPT_TEMPLATE = `/**
@@ -84,8 +85,8 @@ const HEADERS_MAP = {
   'Data_Alumni': ['id', 'nisn', 'nik', 'nama', 'jenisKelamin', 'tempatLahir', 'tanggalLahir', 'rombel', 'tahunLulus', 'noSeriIjazah', 'namaIbu', 'namaAyah', 'alamat', 'hp', 'status', 'alasanKeluar', 'agama', 'nis', 'skhun', 'sekolahAsal'],
   'Data_PTK': ['id', 'nuptk', 'nip', 'nama', 'jenisKelamin', 'statusKepegawaian', 'jenisPtk', 'mapel', 'pendidikanTerakhir', 'noHp', 'email', 'statusSertifikasi', 'tempatLahir', 'tanggalLahir', 'agama', 'alamatJalan', 'rt', 'rw', 'namaDusun', 'desaKelurahan', 'kecamatan', 'kodePos', 'tugasTambahan', 'skCpns', 'tanggalCpns', 'skPengangkatan', 'tmtPengangkatan', 'pangkatGolongan', 'nik', 'noKk'],
   'Data_Sarpras': ['id', 'kodeBarang', 'namaBarang', 'kategori', 'kondisi', 'jumlah', 'satuan', 'letakRuang', 'tahunPengadaan', 'layakPakai'],
-  'KIB B': ['id', 'no', 'namaBarang', 'kodeBarang', 'kondisi', 'merkType', 'ukuranCc', 'bahan', 'tahun', 'noPabrik', 'noRangka', 'noMesin', 'noPolisi', 'noBpkb', 'asalUsul', 'harga', 'keterangan'],
-  'Data_KIB_B': ['id', 'no', 'namaBarang', 'kodeBarang', 'kondisi', 'merkType', 'ukuranCc', 'bahan', 'tahun', 'noPabrik', 'noRangka', 'noMesin', 'noPolisi', 'noBpkb', 'asalUsul', 'harga', 'keterangan'],
+  'KIB B': ['id', 'namaBarang', 'kodeBarang', 'kondisi', 'merkType', 'ukuranCc', 'bahan', 'tahun', 'noPabrik', 'noRangka', 'noMesin', 'noPolisi', 'noBpkb', 'asalUsul', 'harga', 'keterangan'],
+  'Data_KIB_B': ['id', 'namaBarang', 'kodeBarang', 'kondisi', 'merkType', 'ukuranCc', 'bahan', 'tahun', 'noPabrik', 'noRangka', 'noMesin', 'noPolisi', 'noBpkb', 'asalUsul', 'harga', 'keterangan'],
   'Data_Rapor': ['id', 'studentId', 'nisn', 'studentName', 'rombel', 'semester', 'tahunAjaran', 'scores', 'kehadiran', 'catatanWaliKelas', 'statusKenaikan'],
   'Notifikasi': ['id', 'title', 'message', 'time', 'type', 'read'],
   'Permintaan_Akses_Berkas': ['id', 'fileId', 'fileName', 'requesterName', 'requesterRole', 'requesterEmail', 'requestedAt', 'reason', 'status', 'reviewedBy', 'reviewedAt', 'reviewNotes'],
@@ -692,7 +693,7 @@ function checkAndInitializeSheets(ss) {
     ],
     'KIB B': [
       HEADERS_MAP['KIB B'],
-      ['kib-001', 1, 'Timbangan Meja Kapasitas 5 kg', '1.3.2.03.03.010.003', 'Baik', '', '', '', '2017', '', '', '', '', '', 'DAK / P2HP', '1.467.800', 'Ruang Wakasek']
+      ['kib-001', 'Timbangan Meja Kapasitas 5 kg', '1.3.2.03.03.010.003', 'Baik', '', '', '', '2017', '', '', '', '', '', 'DAK / P2HP', '1.467.800', 'Ruang Wakasek']
     ],
     'Data_Rapor': [
       HEADERS_MAP['Data_Rapor']
@@ -999,7 +1000,8 @@ function parseSheetsResult(result: any) {
         const rawRead = n.read !== undefined ? n.read : (n.readStatus !== undefined ? n.readStatus : n.dibaca);
         const read = Boolean(rawRead === true || rawRead === 'true' || rawRead === 'TRUE' || rawRead === 1 || rawRead === '1');
         return { id, title, message, time, type, read };
-      }).filter((n: NotificationItem) => n.title || n.message)
+      }).filter((n: NotificationItem) => n.title || n.message),
+      berkas: Array.isArray(result.berkas) ? result.berkas : (Array.isArray(result['Data_Berkas']) ? result['Data_Berkas'] : [])
     }
   };
 }
@@ -1150,7 +1152,7 @@ export async function syncKibBToGoogleSheets(
 }
 
 export function getSavedSyncConfig(): SyncConfig {
-  const ACTIVE_APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx82FotXhPvN0i9hOo_S-bctwcT5JCB6JrvUu5CHtIMEepaJj1EIl5Bf7mxPoW8JuPguA/exec';
+  const ACTIVE_APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwOjTnhqqQFCvRGK_5NPVICqUbK-yHUTq1b0CwX3aXqcYjOITfoaogfBWDS3I1bdL6hZA/exec';
   try {
     const saved = localStorage.getItem('dapodik_sync_config');
     if (saved) {
@@ -1184,6 +1186,7 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
     aplikasi?: any[];
     notifikasi?: NotificationItem[];
     schoolAccounts?: SchoolAccount[];
+    berkas?: any[];
   };
 }> {
   if (!config.webAppUrl) {
@@ -1305,6 +1308,66 @@ export function exportToCSV(data: any[], filename: string) {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+}
+
+export function exportToExcel(data: Record<string, any>[], filename: string, sheetName: string = 'KIB B') {
+  if (!data || data.length === 0) {
+    alert('Tidak ada data untuk diekspor.');
+    return;
+  }
+  try {
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+
+    // Auto calculate column widths
+    const keys = Object.keys(data[0] || {});
+    const colWidths = keys.map(k => {
+      let maxLen = k.length;
+      data.forEach(row => {
+        const val = row[k] !== undefined && row[k] !== null ? String(row[k]) : '';
+        if (val.length > maxLen) maxLen = val.length;
+      });
+      return { wch: Math.min(Math.max(maxLen + 4, 14), 45) };
+    });
+    worksheet['!cols'] = colWidths;
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const finalFilename = filename.toLowerCase().endsWith('.xlsx') ? filename : `${filename}_${dateStr}.xlsx`;
+    XLSX.writeFile(workbook, finalFilename);
+  } catch (e: any) {
+    console.error('Error exporting to Excel:', e);
+    // Fallback to CSV if any issue
+    exportToCSV(data, filename);
+  }
+}
+
+export function readExcelOrCSVFile(file: File): Promise<Record<string, string>[]> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const buffer = e.target?.result as ArrayBuffer;
+        const workbook = XLSX.read(buffer, { type: 'array' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const jsonData = XLSX.utils.sheet_to_json<Record<string, any>>(worksheet, { defval: '', raw: false });
+
+        const stringified = jsonData.map(row => {
+          const cleanRow: Record<string, string> = {};
+          Object.keys(row).forEach(k => {
+            cleanRow[k] = row[k] !== undefined && row[k] !== null ? String(row[k]).trim() : '';
+          });
+          return cleanRow;
+        });
+        resolve(stringified);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.onerror = (err) => reject(err);
+    reader.readAsArrayBuffer(file);
+  });
 }
 
 export async function syncNotifikasiToGoogleSheets(

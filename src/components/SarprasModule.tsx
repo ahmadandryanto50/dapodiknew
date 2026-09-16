@@ -29,8 +29,11 @@ interface SarprasModuleProps {
   onBackToHome: () => void;
   kibB?: KibBItem[];
   onAddKibB?: (item: KibBItem) => void;
+  onBulkAddKibB?: (items: KibBItem[]) => void;
   onUpdateKibB?: (item: KibBItem) => void;
   onDeleteKibB?: (id: string) => void;
+  onSync?: () => Promise<void> | void;
+  isSyncing?: boolean;
 }
 
 export const SarprasModule: React.FC<SarprasModuleProps> = ({
@@ -41,8 +44,11 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
   onBackToHome,
   kibB = [],
   onAddKibB = () => {},
+  onBulkAddKibB,
   onUpdateKibB = () => {},
-  onDeleteKibB = () => {}
+  onDeleteKibB = () => {},
+  onSync,
+  isSyncing = false
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'sarpras' | 'kib_b'>('sarpras');
   const [search, setSearch] = useState('');
@@ -251,8 +257,11 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
         <KibBModule
           kibB={kibB}
           onAddKibB={onAddKibB}
+          onBulkAddKibB={onBulkAddKibB}
           onUpdateKibB={onUpdateKibB}
           onDeleteKibB={onDeleteKibB}
+          onSync={onSync}
+          isSyncing={isSyncing}
         />
       ) : (
         <>

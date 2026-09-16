@@ -7,7 +7,7 @@ let CONFIG_FILE = path.join(process.cwd(), "sync_config.json");
 let DATA_FILE = path.join(process.cwd(), "app_data.json");
 let UPLOADS_DIR = path.join(process.cwd(), "public", "uploads");
 
-const DEFAULT_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwpbGWjF08VqIedbu5UJxQKvstzR6VDOujjbKZ7YeldA0o3XZZZPZNxL072KZYgE1e82g/exec";
+const DEFAULT_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwOjTnhqqQFCvRGK_5NPVICqUbK-yHUTq1b0CwX3aXqcYjOITfoaogfBWDS3I1bdL6hZA/exec";
 
 function getEffectiveWebAppUrl(incomingUrl?: string): string {
   if (incomingUrl && typeof incomingUrl === "string" && incomingUrl.trim().startsWith("http")) {
@@ -584,7 +584,7 @@ async function startServer() {
       if (webAppUrl) {
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout for Google Apps Script cold-starts
+          const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout for Google Apps Script cold-starts
           const sheetsRes = await fetch(webAppUrl, {
             method: "POST",
             headers: { "Content-Type": "text/plain" },
@@ -596,8 +596,9 @@ async function startServer() {
           if (sheetsRes.ok) {
             const sheetsData = await sheetsRes.json();
             if (sheetsData && sheetsData.status === "success") {
-              if (Array.isArray(sheetsData.berkas)) {
-                spreadsheetFiles = sheetsData.berkas;
+              const rawBerkas = sheetsData.berkas || sheetsData["Data_Berkas"] || sheetsData.schoolFiles || sheetsData.files;
+              if (Array.isArray(rawBerkas)) {
+                spreadsheetFiles = rawBerkas;
               }
               if (Array.isArray(sheetsData.schoolAccounts) && sheetsData.schoolAccounts.length > 0) {
                 data.schoolAccounts = sheetsData.schoolAccounts;
@@ -652,6 +653,7 @@ async function startServer() {
       }
       
       data.schoolFiles = mergedFiles;
+      safeWriteJSON(DATA_FILE, data);
       
       if (deletedFileIds.length > 0 && Array.isArray(data.files)) {
         data.files = data.files.filter((f: any) => f && f.id && !deletedSet.has(String(f.id)));
@@ -837,10 +839,29 @@ async function startServer() {
           fileMap.set(String(f.id), f);
         }
       }
-      if (Array.isArray(incoming.schoolFiles)) {
-        for (const f of incoming.schoolFiles) {
-          if (f && f.id && !delFileSet.has(String(f.id))) {
-            fileMap.set(String(f.id), f);
+      const incFiles = Array.isArray(incoming.schoolFiles) ? incoming.schoolFiles : (Array.isArray(incoming.berkas) ? incoming.berkas : (Array.isArray(incoming.files) ? incoming.files : []));
+      if (incFiles.length > 0) {
+        for (let idx = 0; idx < incFiles.length; idx++) {
+          const f = incFiles[idx];
+          if (f && (f.id || f.name || f["Nama Berkas"] || f.driveFileUrl || f["Link Drive"])) {
+            const fileId = String(f.id || f.fileId || `file-inc-${idx}`);
+            if (!delFileSet.has(fileId)) {
+              fileMap.set(fileId, {
+                id: fileId,
+                name: f.name || f["Nama Berkas"] || f.Name || "Berkas Dokumen",
+                category: f.category || f["Kategori"] || f.Category || "Umum",
+                fileSize: Number(f.fileSize || f["Ukuran File"] || f.FileSize || f.size || 0),
+                fileType: f.fileType || f.FileType || "application/octet-stream",
+                fileExtension: f.fileExtension || f.FileExtension || "",
+                uploadedAt: f.uploadedAt || f["Tanggal"] || f.UploadedAt || "",
+                uploadedBy: f.uploadedBy || f["Nama Pengirim/Orang Tua"] || f.UploadedBy || "Tamu / Orang Tua",
+                uploadedByRole: f.uploadedByRole || f.UploadedByRole || "Tamu / Umum",
+                driveFileUrl: f.driveFileUrl || f["Link Drive"] || f.DriveFileUrl || f.url || "",
+                driveFolderId: f.driveFolderId || f.DriveFolderId || "",
+                privacy: f.privacy || f.Privacy || "Public",
+                description: f.description || f.Description || ""
+              });
+            }
           }
         }
       }

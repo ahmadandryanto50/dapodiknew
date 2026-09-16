@@ -301,13 +301,17 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
     const deletedSet = new Set(localDeletedIds.map(id => String(id)));
 
     if (!loadedFiles || loadedFiles.length === 0) {
-      let targetWebAppUrl = "https://script.google.com/macros/s/AKfycbwpbGWjF08VqIedbu5UJxQKvstzR6VDOujjbKZ7YeldA0o3XZZZPZNxL072KZYgE1e82g/exec";
+      let targetWebAppUrl = "https://script.google.com/macros/s/AKfycbwOjTnhqqQFCvRGK_5NPVICqUbK-yHUTq1b0CwX3aXqcYjOITfoaogfBWDS3I1bdL6hZA/exec";
+      let targetSpreadsheetUrl = "";
       try {
         const configRes = await fetch('/api/sync-config');
         if (configRes.ok) {
           const configData = await configRes.json();
           if (configData && configData.webAppUrl) {
             targetWebAppUrl = configData.webAppUrl;
+          }
+          if (configData && configData.spreadsheetUrl) {
+            targetSpreadsheetUrl = configData.spreadsheetUrl;
           }
         }
       } catch (cfgErr) {
@@ -316,19 +320,20 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
 
       if (targetWebAppUrl) {
         try {
-          const gasRes = await fetch(targetWebAppUrl, {
+          const loadRes = await fetch('/api/load-sheets', {
             method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({ type: 'LOAD_ALL' })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ webAppUrl: targetWebAppUrl, spreadsheetUrl: targetSpreadsheetUrl })
           });
-          if (gasRes.ok) {
-            const gasData = await gasRes.json();
-            if (gasData && Array.isArray(gasData.berkas) && gasData.berkas.length > 0) {
-              loadedFiles = gasData.berkas;
+          if (loadRes.ok) {
+            const loadData = await loadRes.json();
+            const berkasArr = loadData && (loadData.berkas || loadData["Data_Berkas"] || loadData.schoolFiles || loadData.files);
+            if (Array.isArray(berkasArr) && berkasArr.length > 0) {
+              loadedFiles = berkasArr;
             }
           }
         } catch (gasErr) {
-          console.warn('Direct client-side fetch from Google Apps Script failed:', gasErr);
+          console.warn('Fetch from Google Sheets via /api/load-sheets proxy failed:', gasErr);
         }
       }
     }
@@ -336,17 +341,22 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
     // 3. Normalize, Filter Deleted, & Sort History Items
     if (Array.isArray(loadedFiles) && loadedFiles.length > 0) {
       const normalized = loadedFiles
-        .filter((f: any) => f && f.id && !deletedSet.has(String(f.id)))
-        .map((f: any, idx: number) => ({
-          ...f,
-          id: String(f.id || f.fileId || `file-idx-${idx}`),
-          name: f.name || f['Nama Berkas'] || f.Name || 'Berkas Dokumen',
-          uploadedBy: f.uploadedBy || f['Nama Pengirim/Orang Tua'] || f.UploadedBy || 'Tamu / Orang Tua',
-          category: f.category || f['Kategori'] || f.Category || 'Umum',
-          uploadedAt: f.uploadedAt || f['Tanggal'] || f.UploadedAt || '',
-          driveFileUrl: f.driveFileUrl || f['Link Drive'] || f.DriveFileUrl || f.url || '',
-          fileSize: Number(f.fileSize || f['Ukuran File'] || f.FileSize || f.size || 0)
-        }));
+        .filter((f: any) => f && (f.id || f.name || f['Nama Berkas'] || f['Link Drive'] || f.driveFileUrl))
+        .map((f: any, idx: number) => {
+          const rawId = f.id || f.fileId || f['Link Drive'] || f['Nama Berkas'] || `file-idx-${idx}`;
+          return {
+            ...f,
+            id: String(rawId),
+            name: f.name || f['Nama Berkas'] || f.Name || 'Berkas Dokumen',
+            uploadedBy: f.uploadedBy || f['Nama Pengirim/Orang Tua'] || f.UploadedBy || 'Tamu / Orang Tua',
+            category: f.category || f['Kategori'] || f.Category || 'Umum',
+            uploadedAt: f.uploadedAt || f['Tanggal'] || f.UploadedAt || '',
+            driveFileUrl: f.driveFileUrl || f['Link Drive'] || f.DriveFileUrl || f.url || '',
+            fileSize: Number(f.fileSize || f['Ukuran File'] || f.FileSize || f.size || 0)
+          };
+        })
+        .filter((f: any) => !deletedSet.has(String(f.id)));
+
       const sorted = normalized.sort((a, b) => {
         const timeA = a.uploadedAt ? new Date(String(a.uploadedAt).replace(/-/g, '/')).getTime() : 0;
         const timeB = b.uploadedAt ? new Date(String(b.uploadedAt).replace(/-/g, '/')).getTime() : 0;
@@ -817,9 +827,9 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
 
     if (successCount === queue.length) {
       if (hasSyncWarning && syncWarningText) {
-        setGlobalSuccess(`Berkas Anda berhasil disimpan di server sekolah, namun sinkronisasi Google Drive ditunda: ${syncWarningText}`);
+        setGlobalSuccess(`Tersimpan (Catatan Google Drive: ${syncWarningText})`);
       } else {
-        setGlobalSuccess(`Selamat! Seluruh ${successCount} berkas Anda berhasil dikirim dan tersimpan aman.`);
+        setGlobalSuccess('Tersimpan');
       }
       // Clear queue shortly after success
       setTimeout(() => {

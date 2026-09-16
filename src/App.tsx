@@ -444,14 +444,15 @@ export default function App() {
   const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => {
     const OLD_APP_SCRIPT_URL_1 = 'https://script.google.com/macros/s/AKfycbwHOEkfJ7iJVAlTKUVboM7ZHd13dX9Z6adJBH6N2UwA-LbDmTrJvxPHuBB8T4kePUmJAQ/exec';
     const OLD_APP_SCRIPT_URL_2 = 'https://script.google.com/macros/s/AKfycbwCjNbFmpToPA9JATA4FlFJPESoWbqS9JzIhbF2TS7FNsTlK2ZIUMtfsPBE5ln3Q7eO/exec';
-    const ACTIVE_APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx82FotXhPvN0i9hOo_S-bctwcT5JCB6JrvUu5CHtIMEepaJj1EIl5Bf7mxPoW8JuPguA/exec';
+    const OLD_APP_SCRIPT_URL_3 = 'https://script.google.com/macros/s/AKfycbx82FotXhPvN0i9hOo_S-bctwcT5JCB6JrvUu5CHtIMEepaJj1EIl5Bf7mxPoW8JuPguA/exec';
+    const ACTIVE_APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwOjTnhqqQFCvRGK_5NPVICqUbK-yHUTq1b0CwX3aXqcYjOITfoaogfBWDS3I1bdL6hZA/exec';
 
     const saved = localStorage.getItem('dapodik_sync_config');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (parsed && parsed.webAppUrl) {
-          if (parsed.webAppUrl === OLD_APP_SCRIPT_URL_1 || parsed.webAppUrl === OLD_APP_SCRIPT_URL_2) {
+          if (parsed.webAppUrl === OLD_APP_SCRIPT_URL_1 || parsed.webAppUrl === OLD_APP_SCRIPT_URL_2 || parsed.webAppUrl === OLD_APP_SCRIPT_URL_3) {
             parsed.webAppUrl = ACTIVE_APP_SCRIPT_URL;
             localStorage.setItem('dapodik_sync_config', JSON.stringify(parsed));
           }
@@ -530,6 +531,11 @@ export default function App() {
     syncConfigRef.current = syncConfig;
   }, [syncConfig]);
 
+  const kibBRef = useRef<KibBItem[]>(kibB);
+  useEffect(() => {
+    kibBRef.current = kibB;
+  }, [kibB]);
+
   const handleOpenEditDisplay = (filter: 'all' | '1' | '2' | '3' | '4' | '5' = 'all') => {
     setSettingsInitialFilter(filter);
     setActiveTab('pengaturan');
@@ -548,7 +554,8 @@ export default function App() {
     customAplikasiLinks = aplikasiLinks,
     customDeletedNotifIds = getDeletedNotifIds(),
     customSchoolAccounts = schoolAccounts,
-    customKibB = kibB
+    customKibB = kibBRef.current,
+    customSchoolFiles?: any[]
   ) => {
     if (!isInitialized) return;
     try {
@@ -567,7 +574,8 @@ export default function App() {
           notifications: customNotifications,
           aplikasiLinks: customAplikasiLinks,
           deletedNotifIds: customDeletedNotifIds,
-          schoolAccounts: customSchoolAccounts
+          schoolAccounts: customSchoolAccounts,
+          schoolFiles: customSchoolFiles
         })
       });
     } catch (err) {
@@ -992,6 +1000,9 @@ export default function App() {
   };
 
   const handlePullFromSheets = async (silent = false) => {
+    if (silent && (Date.now() - lastLocalMutationRef.current < 15000)) {
+      return true;
+    }
     setIsSyncing(true);
     try {
       const currentCfg = getEffectiveSyncConfig();
@@ -1001,7 +1012,7 @@ export default function App() {
         const result = await loadFromGoogleSheets(currentCfg);
         if (result && result.success && result.data) {
           const {
-            siswa, ptk, sarpras, kibB: pulledKibB, rapor, administrator, pengaturan, profilSekolah, aplikasi, notifikasi, schoolAccounts: pulledSchoolAccounts
+            siswa, ptk, sarpras, kibB: pulledKibB, rapor, administrator, pengaturan, profilSekolah, aplikasi, notifikasi, berkas: pulledBerkas, schoolAccounts: pulledSchoolAccounts
           } = result.data;
 
           isSyncingFromServerRef.current = true;
@@ -1020,7 +1031,7 @@ export default function App() {
             setSarpras(sarpras);
             localStorage.setItem(getStorageKey('dapodik_sarpras'), JSON.stringify(sarpras));
           }
-          if (Array.isArray(pulledKibB) && pulledKibB.length > 0) {
+          if (Array.isArray(pulledKibB)) {
             const clean = cleanKibBItems(pulledKibB);
             setKibB(clean);
             localStorage.setItem(getStorageKey('dapodik_kib_b'), JSON.stringify(clean));
@@ -1089,7 +1100,8 @@ export default function App() {
             Array.isArray(aplikasi) ? aplikasi : aplikasiLinks,
             getDeletedNotifIds(),
             Array.isArray(pulledSchoolAccounts) && pulledSchoolAccounts.length > 0 ? pulledSchoolAccounts : schoolAccounts,
-            Array.isArray(pulledKibB) ? pulledKibB : kibB
+            Array.isArray(pulledKibB) ? pulledKibB : kibB,
+            Array.isArray(pulledBerkas) ? pulledBerkas : undefined
           );
 
           const nowStr = new Date().toLocaleString('id-ID');
@@ -1104,7 +1116,7 @@ export default function App() {
 
           setIsSyncing(false);
           if (!silent) {
-            showToast('✅ Data berhasil ditarik dari Cloud Database!');
+            showToast('Tarik Data Berhasil');
             try { confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 } }); } catch (e) {}
           }
           return true;
@@ -1223,7 +1235,7 @@ export default function App() {
           }
           
           if (!silent) {
-            showToast('✅ Data disinkronkan dari server cache!');
+            showToast('Tarik Data Berhasil');
           }
           return true;
         }
@@ -1544,7 +1556,7 @@ export default function App() {
     }
 
     if (force) {
-      showToast('Data berhasil disimpan & ter-update di Database!');
+      showToast('Sinkron Selesai');
     }
   };
 
@@ -1898,7 +1910,7 @@ export default function App() {
     }
     setStudents(updated);
     localStorage.setItem('dapodik_students', JSON.stringify(updated));
-    showToast(`🎉 Sukses mengimpor ${imported.length} data siswa!`);
+    showToast('Tersimpan');
     triggerAutoSync(
       updated,
       teachers,
@@ -2003,7 +2015,7 @@ export default function App() {
     }
     setTeachers(updated);
     localStorage.setItem('dapodik_teachers', JSON.stringify(updated));
-    showToast(`🎉 Sukses mengimpor ${imported.length} data PTK!`);
+    showToast('Tersimpan');
     triggerAutoSync(
       students,
       updated,
@@ -2101,6 +2113,7 @@ export default function App() {
     lastLocalMutationRef.current = Date.now();
     const updated = [item, ...kibB];
     setKibB(updated);
+    kibBRef.current = updated;
     localStorage.setItem(getStorageKey('dapodik_kib_b'), JSON.stringify(updated));
     showToast(`Menyimpan barang KIB B "${item.namaBarang}" ke database & Spreadsheet...`);
 
@@ -2131,9 +2144,12 @@ export default function App() {
       syncKibBToGoogleSheets(currentCfg, updated).then(res => {
         if (res && res.success) {
           showToast(`Data KIB B "${item.namaBarang}" berhasil tersimpan di Google Spreadsheet (Sheet: KIB B)!`);
+        } else {
+          showToast(`⚠️ KIB B tersimpan lokal, respon Spreadsheet: ${res?.message || 'Periksa koneksi'}`);
         }
       }).catch(err => {
         console.warn('Sync KIB B directly to spreadsheet error:', err);
+        showToast(`⚠️ Tersimpan lokal. Gagal sinkron ke Spreadsheet: ${err?.message || 'Koneksi terputus'}`);
       });
     } else {
       showToast(`Barang KIB B "${item.namaBarang}" berhasil disimpan secara lokal.`);
@@ -2144,6 +2160,7 @@ export default function App() {
     lastLocalMutationRef.current = Date.now();
     const updated = kibB.map(i => i.id === item.id ? item : i);
     setKibB(updated);
+    kibBRef.current = updated;
     localStorage.setItem(getStorageKey('dapodik_kib_b'), JSON.stringify(updated));
     showToast(`Memperbarui data barang KIB B "${item.namaBarang}" ke Spreadsheet...`);
 
@@ -2172,9 +2189,12 @@ export default function App() {
       syncKibBToGoogleSheets(currentCfg, updated).then(res => {
         if (res && res.success) {
           showToast(`Pembaruan KIB B "${item.namaBarang}" berhasil tersimpan di Spreadsheet (Sheet: KIB B)!`);
+        } else {
+          showToast(`⚠️ Perubahan tersimpan lokal, respon Spreadsheet: ${res?.message || 'Gagal'}`);
         }
       }).catch(err => {
         console.warn('Sync KIB B update error:', err);
+        showToast(`⚠️ Terupdate lokal. Gagal sinkron ke Spreadsheet: ${err?.message || 'Error'}`);
       });
     }
   };
@@ -2184,6 +2204,7 @@ export default function App() {
     const target = kibB.find(i => i.id === id);
     const updated = kibB.filter(i => i.id !== id);
     setKibB(updated);
+    kibBRef.current = updated;
     localStorage.setItem(getStorageKey('dapodik_kib_b'), JSON.stringify(updated));
     showToast(`Menghapus barang KIB B dari Spreadsheet...`);
 
@@ -2212,9 +2233,56 @@ export default function App() {
       syncKibBToGoogleSheets(currentCfg, updated).then(res => {
         if (res && res.success) {
           showToast(`Barang KIB B berhasil dihapus dari Google Spreadsheet (Sheet: KIB B)!`);
+        } else {
+          showToast(`⚠️ Penghapusan tersimpan lokal, respon Spreadsheet: ${res?.message || 'Gagal'}`);
         }
       }).catch(err => {
         console.warn('Sync KIB B deletion error:', err);
+        showToast(`⚠️ Dihapus lokal. Gagal sinkron ke Spreadsheet: ${err?.message || 'Error'}`);
+      });
+    }
+  };
+
+  const handleBulkAddKibB = (newItems: KibBItem[]) => {
+    if (!Array.isArray(newItems) || newItems.length === 0) return;
+    lastLocalMutationRef.current = Date.now();
+    const updated = [...newItems, ...kibB];
+    setKibB(updated);
+    kibBRef.current = updated;
+    localStorage.setItem(getStorageKey('dapodik_kib_b'), JSON.stringify(updated));
+    showToast(`Menyimpan ${newItems.length} barang KIB B ke database & Spreadsheet...`);
+
+    triggerAutoSync(
+      students,
+      teachers,
+      sarpras,
+      reports,
+      displayConfig,
+      schoolProfile,
+      administrators,
+      false,
+      notificationsRef.current,
+      {
+        title: 'Import Data Barang KIB B',
+        message: `Sebanyak ${newItems.length} data barang KIB B telah diimpor ke inventaris.`,
+        type: 'info'
+      },
+      aplikasiLinks,
+      schoolAccounts,
+      updated
+    );
+
+    const currentCfg = getEffectiveSyncConfig();
+    if (currentCfg && currentCfg.webAppUrl) {
+      syncKibBToGoogleSheets(currentCfg, updated).then(res => {
+        if (res && res.success) {
+          showToast('Tersimpan');
+        } else {
+          showToast(`⚠️ Import tersimpan lokal, respon Spreadsheet: ${res?.message || 'Gagal'}`);
+        }
+      }).catch(err => {
+        console.warn('Sync KIB B bulk add error:', err);
+        showToast(`⚠️ Tersimpan lokal. Gagal sinkron ke Spreadsheet: ${err?.message || 'Error'}`);
       });
     }
   };
@@ -2698,9 +2766,12 @@ export default function App() {
               onDeleteSarpras={handleDeleteSarpras}
               kibB={kibB}
               onAddKibB={handleAddKibB}
+              onBulkAddKibB={handleBulkAddKibB}
               onUpdateKibB={handleUpdateKibB}
               onDeleteKibB={handleDeleteKibB}
               onBackToHome={() => setActiveTab('home')}
+              onSync={handleManualSync}
+              isSyncing={isSyncing}
             />
           </div>
         )}
