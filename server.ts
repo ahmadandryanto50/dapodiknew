@@ -390,6 +390,21 @@ async function startServer() {
       let { webAppUrl, payload } = req.body || {};
       webAppUrl = getEffectiveWebAppUrl(webAppUrl);
       
+      let parsedPayload = payload;
+      if (typeof payload === 'string') {
+        try {
+          parsedPayload = JSON.parse(payload);
+        } catch (e) {}
+      }
+
+      if (parsedPayload && typeof parsedPayload === 'object') {
+        let sUrl = parsedPayload.spreadsheetUrl || "";
+        if (sUrl && !sUrl.startsWith("http")) {
+          parsedPayload.spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${sUrl}/edit`;
+        }
+        payload = parsedPayload;
+      }
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 180000); // 180 seconds timeout for file uploads
       
