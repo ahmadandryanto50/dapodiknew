@@ -439,13 +439,18 @@ async function startServer() {
         return res.status(400).json({ success: false, message: "webAppUrl is required" });
       }
 
+      let resolvedSpreadsheetUrl = spreadsheetUrl || "";
+      if (resolvedSpreadsheetUrl && !resolvedSpreadsheetUrl.startsWith("http")) {
+        resolvedSpreadsheetUrl = `https://docs.google.com/spreadsheets/d/${resolvedSpreadsheetUrl}/edit`;
+      }
+
       let data: any = null;
 
       // Append spreadsheetUrl as query parameter for GET requests
       let getUrl = webAppUrl;
-      if (spreadsheetUrl) {
+      if (resolvedSpreadsheetUrl) {
         const separator = getUrl.includes('?') ? '&' : '?';
-        getUrl = `${getUrl}${separator}spreadsheetUrl=${encodeURIComponent(spreadsheetUrl)}`;
+        getUrl = `${getUrl}${separator}spreadsheetUrl=${encodeURIComponent(resolvedSpreadsheetUrl)}`;
       }
 
       // 1. Try GET first with 60s timeout
@@ -476,7 +481,7 @@ async function startServer() {
           const postRes = await fetch(webAppUrl, {
             method: "POST",
             headers: { "Content-Type": "text/plain" },
-            body: JSON.stringify({ type: "LOAD_ALL", spreadsheetUrl }),
+            body: JSON.stringify({ type: "LOAD_ALL", spreadsheetUrl: resolvedSpreadsheetUrl }),
             redirect: "follow",
             signal: controller.signal
           });
@@ -584,7 +589,10 @@ async function startServer() {
       if (webAppUrl) {
         try {
           const configObj = safeReadJSON(CONFIG_FILE, null);
-          const spreadsheetUrl = configObj?.spreadsheetUrl || "";
+          let spreadsheetUrl = configObj?.spreadsheetUrl || "";
+          if (spreadsheetUrl && !spreadsheetUrl.startsWith("http")) {
+            spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetUrl}/edit`;
+          }
 
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout for Google Apps Script cold-starts
