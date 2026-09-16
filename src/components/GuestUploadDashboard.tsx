@@ -279,6 +279,17 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
     setIsLoadingHistory(true);
     let loadedFiles: any[] = [];
 
+    // 0. Check localStorage first for instant display
+    try {
+      const savedLocal = localStorage.getItem('dapodik_school_files') || localStorage.getItem('dapodik_berkas');
+      if (savedLocal) {
+        const parsedLocal = JSON.parse(savedLocal);
+        if (Array.isArray(parsedLocal) && parsedLocal.length > 0) {
+          loadedFiles = parsedLocal;
+        }
+      }
+    } catch (e) {}
+
     // 1. First, fetch from server cache (/api/app-data)
     try {
       const res = await fetch(`/api/app-data?t=${Date.now()}`);
@@ -286,6 +297,8 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
         const serverData = await res.json();
         if (serverData && Array.isArray(serverData.schoolFiles) && serverData.schoolFiles.length > 0) {
           loadedFiles = serverData.schoolFiles;
+        } else if (serverData && Array.isArray(serverData.berkas) && serverData.berkas.length > 0) {
+          loadedFiles = serverData.berkas;
         }
       }
     } catch (e) {
@@ -362,6 +375,9 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
         const timeB = b.uploadedAt ? new Date(String(b.uploadedAt).replace(/-/g, '/')).getTime() : 0;
         return timeB - timeA;
       });
+      try {
+        localStorage.setItem('dapodik_school_files', JSON.stringify(sorted));
+      } catch (e) {}
       setHistoryFiles(sorted);
     } else {
       setHistoryFiles([]);

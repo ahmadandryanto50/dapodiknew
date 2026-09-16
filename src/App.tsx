@@ -329,7 +329,7 @@ export default function App() {
     if (saved !== null) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
+        if (Array.isArray(parsed) && parsed.length > 0) {
           const cleaned = cleanKibBItems(parsed);
           if (cleaned.length !== parsed.length) {
             localStorage.setItem('dapodik_kib_b', JSON.stringify(cleaned));
@@ -1264,12 +1264,61 @@ export default function App() {
           if (cacheRes.ok) {
             const serverData = await cacheRes.json();
             if (serverData) {
+              if (Array.isArray(serverData.students) && serverData.students.length > 0) {
+                const clean = sanitizeStudentDates(serverData.students);
+                setStudents(clean);
+                localStorage.setItem('dapodik_students', JSON.stringify(clean));
+              }
+              if (Array.isArray(serverData.teachers) && serverData.teachers.length > 0) {
+                const clean = sanitizeTeacherDates(serverData.teachers);
+                setTeachers(clean);
+                localStorage.setItem('dapodik_teachers', JSON.stringify(clean));
+              }
+              if (Array.isArray(serverData.sarpras) && serverData.sarpras.length > 0) {
+                setSarpras(serverData.sarpras);
+                localStorage.setItem('dapodik_sarpras', JSON.stringify(serverData.sarpras));
+              }
+              if (Array.isArray(serverData.kibB) && serverData.kibB.length > 0) {
+                const clean = cleanKibBItems(serverData.kibB);
+                setKibB(clean);
+                localStorage.setItem('dapodik_kib_b', JSON.stringify(clean));
+              }
+              if (Array.isArray(serverData.reports) && serverData.reports.length > 0) {
+                const clean = sanitizeReports(serverData.reports);
+                setReports(clean);
+                localStorage.setItem('dapodik_reports', JSON.stringify(clean));
+              }
+              if (Array.isArray(serverData.administrators) && serverData.administrators.length > 0) {
+                const cleanAdmins = getCleanAdministrators(serverData.administrators);
+                setAdministrators(cleanAdmins);
+                localStorage.setItem('dapodik_administrators', JSON.stringify(cleanAdmins));
+              }
+              if (Array.isArray(serverData.aplikasiLinks) && serverData.aplikasiLinks.length > 0) {
+                setAplikasiLinks(serverData.aplikasiLinks);
+                localStorage.setItem('dapodik_aplikasi_links', JSON.stringify(serverData.aplikasiLinks));
+              }
+              if (Array.isArray(serverData.notifications) && serverData.notifications.length > 0) {
+                setNotifications(serverData.notifications);
+                notificationsRef.current = serverData.notifications;
+                localStorage.setItem('dapodik_notifications', JSON.stringify(serverData.notifications));
+              }
               if (Array.isArray(serverData.customFolders) && serverData.customFolders.length > 0) {
                 setCustomFolders(serverData.customFolders);
               }
               if (Array.isArray(serverData.schoolAccounts) && serverData.schoolAccounts.length > 0) {
                 setSchoolAccounts(serverData.schoolAccounts);
                 localStorage.setItem('dapodik_school_accounts', JSON.stringify(serverData.schoolAccounts));
+              }
+              if (Array.isArray(serverData.schoolFiles) && serverData.schoolFiles.length > 0) {
+                localStorage.setItem('dapodik_school_files', JSON.stringify(serverData.schoolFiles));
+              }
+              if (serverData.displayConfig) {
+                setDisplayConfig(serverData.displayConfig);
+                localStorage.setItem('dapodik_display_config', JSON.stringify(serverData.displayConfig));
+              }
+              if (serverData.schoolProfile) {
+                setSchoolProfile(serverData.schoolProfile);
+                localStorage.setItem('dapodik_school_profile', JSON.stringify(serverData.schoolProfile));
               }
             }
           }
