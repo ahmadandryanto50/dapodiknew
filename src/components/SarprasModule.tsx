@@ -70,6 +70,11 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
 
   const [deletingSarpras, setDeletingSarpras] = useState<{ id: string; name: string } | null>(null);
 
+  // Generate dynamic unique categories list from current database items
+  const uniqueCategories = Array.from(new Set(sarpras.map(item => item.kategori).filter(Boolean)));
+  const defaultCategories = ['Ruang Teori/Kelas', 'Ruang Laboratorium', 'Ruang Pimpinan', 'Perpustakaan', 'Peralatan Elektronik', 'Perabot'];
+  const allFilterCategories = Array.from(new Set([...defaultCategories, ...uniqueCategories]));
+
   const filteredSarpras = sarpras.filter(item => {
     const matchSearch = item.namaBarang.toLowerCase().includes(search.toLowerCase()) ||
                         item.kodeBarang.toLowerCase().includes(search.toLowerCase()) ||
@@ -207,12 +212,9 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
             className="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-emerald-500 focus:bg-white transition-colors"
           >
             <option value="ALL">Semua Kategori</option>
-            <option value="Ruang Teori/Kelas">Ruang Teori/Kelas</option>
-            <option value="Ruang Laboratorium">Ruang Laboratorium</option>
-            <option value="Ruang Pimpinan">Ruang Pimpinan</option>
-            <option value="Perpustakaan">Perpustakaan</option>
-            <option value="Peralatan Elektronik">Peralatan Elektronik</option>
-            <option value="Perabot">Perabot</option>
+            {allFilterCategories.map((cat) => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
           </select>
         </div>
 
@@ -439,18 +441,23 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-700 font-medium mb-1">Kategori</label>
-                  <select
+                  <input
+                    type="text"
+                    required
                     value={formData.kategori}
-                    onChange={(e) => setFormData({ ...formData, kategori: e.target.value as any })}
+                    onChange={(e) => setFormData({ ...formData, kategori: e.target.value })}
                     className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none"
-                  >
-                    <option value="Ruang Teori/Kelas">Ruang Teori/Kelas</option>
-                    <option value="Ruang Laboratorium">Ruang Laboratorium</option>
-                    <option value="Ruang Pimpinan">Ruang Pimpinan</option>
-                    <option value="Perpustakaan">Perpustakaan</option>
-                    <option value="Peralatan Elektronik">Peralatan Elektronik</option>
-                    <option value="Perabot">Perabot</option>
-                  </select>
+                    placeholder="Ketik kategori baru atau pilih..."
+                    list="kategori-presets"
+                  />
+                  <datalist id="kategori-presets">
+                    <option value="Ruang Teori/Kelas" />
+                    <option value="Ruang Laboratorium" />
+                    <option value="Ruang Pimpinan" />
+                    <option value="Perpustakaan" />
+                    <option value="Peralatan Elektronik" />
+                    <option value="Perabot" />
+                  </datalist>
                 </div>
 
                 <div>

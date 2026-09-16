@@ -199,28 +199,6 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
         <div className="absolute -top-24 -left-24 w-96 h-96 bg-cyan-400/20 rounded-full blur-3xl" />
         <div className="absolute top-1/3 -right-20 w-[32rem] h-[32rem] bg-blue-400/25 rounded-full blur-3xl" />
         <div className="absolute -bottom-32 left-1/4 w-[40rem] h-[40rem] bg-sky-300/15 rounded-full blur-3xl" />
-
-        {/* Network constellation dots & lines */}
-        <svg className="absolute inset-0 w-full h-full opacity-30">
-          <defs>
-            <linearGradient id="lineGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#ffffff" stopOpacity="0.4" />
-              <stop offset="100%" stopColor="#38bdf8" stopOpacity="0.1" />
-            </linearGradient>
-          </defs>
-          <line x1="20%" y1="20%" x2="50%" y2="40%" stroke="url(#lineGrad)" strokeWidth="1.5" strokeDasharray="4 4" />
-          <line x1="50%" y1="40%" x2="80%" y2="25%" stroke="url(#lineGrad)" strokeWidth="1.5" />
-          <line x1="80%" y1="25%" x2="70%" y2="65%" stroke="url(#lineGrad)" strokeWidth="1.5" strokeDasharray="4 4" />
-          <line x1="30%" y1="70%" x2="50%" y2="40%" stroke="url(#lineGrad)" strokeWidth="1.5" />
-          <line x1="70%" y1="65%" x2="85%" y2="80%" stroke="url(#lineGrad)" strokeWidth="1.5" />
-          
-          <circle cx="20%" cy="20%" r="4" fill="#38bdf8" />
-          <circle cx="50%" cy="40%" r="5" fill="#ffffff" />
-          <circle cx="80%" cy="25%" r="6" fill="#38bdf8" />
-          <circle cx="70%" cy="65%" r="4" fill="#fbbf24" />
-          <circle cx="30%" cy="70%" r="5" fill="#38bdf8" />
-          <circle cx="85%" cy="80%" r="4" fill="#ffffff" />
-        </svg>
       </div>
 
       {/* Sticky Top Header Bar (Persists position on scroll) */}

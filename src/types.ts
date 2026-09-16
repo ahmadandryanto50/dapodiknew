@@ -145,7 +145,7 @@ export interface SarprasItem {
   id: string;
   kodeBarang: string;
   namaBarang: string;
-  kategori: 'Ruang Teori/Kelas' | 'Ruang Laboratorium' | 'Ruang Pimpinan' | 'Perpustakaan' | 'Peralatan Elektronik' | 'Perabot';
+  kategori: string;
   kondisi: 'Baik' | 'Rusak Ringan' | 'Rusak Sedang' | 'Rusak Berat';
   jumlah: number;
   satuan: string;
