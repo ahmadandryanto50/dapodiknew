@@ -279,6 +279,14 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
     setIsLoadingHistory(true);
     let loadedFiles: any[] = [];
 
+    // Load deleted IDs list first
+    let localDeletedIds: string[] = [];
+    try {
+      const stored = localStorage.getItem('dapodik_deleted_file_ids');
+      if (stored) localDeletedIds = JSON.parse(stored);
+    } catch (e) {}
+    const deletedSet = new Set(localDeletedIds.map(id => String(id)));
+
     // 0. Check localStorage first for instant display
     try {
       const savedLocal = localStorage.getItem('dapodik_school_files') || localStorage.getItem('dapodik_berkas');
@@ -306,13 +314,6 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
     }
 
     // 2. Fallback or Sync Direct from Google Apps Script Spreadsheet if server cache is empty
-    let localDeletedIds: string[] = [];
-    try {
-      const stored = localStorage.getItem('dapodik_deleted_file_ids');
-      if (stored) localDeletedIds = JSON.parse(stored);
-    } catch (e) {}
-    const deletedSet = new Set(localDeletedIds.map(id => String(id)));
-
     if (!loadedFiles || loadedFiles.length === 0) {
       let targetWebAppUrl = "https://script.google.com/macros/s/AKfycbwOjTnhqqQFCvRGK_5NPVICqUbK-yHUTq1b0CwX3aXqcYjOITfoaogfBWDS3I1bdL6hZA/exec";
       let targetSpreadsheetUrl = "";
@@ -368,7 +369,7 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
             fileSize: Number(f.fileSize || f['Ukuran File'] || f.FileSize || f.size || 0)
           };
         })
-        .filter((f: any) => !deletedSet.has(String(f.id)));
+        .filter((f: any) => !deletedSet.has(String(f.id)) && !deletedSet.has(String(f.name)) && !deletedSet.has(String(f.driveFileUrl)));
 
       const sorted = normalized.sort((a, b) => {
         const timeA = a.uploadedAt ? new Date(String(a.uploadedAt).replace(/-/g, '/')).getTime() : 0;
@@ -391,15 +392,21 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
     try {
       const targetFile = historyFiles.find((f) => String(f.id) === String(fileId));
 
-      // 1. Save deleted file ID to client localStorage so it never reappears on client side
+      // 1. Save deleted file ID, name, driveUrl to client localStorage so it never reappears on client side
       try {
         let currentDeleted: string[] = [];
         const stored = localStorage.getItem('dapodik_deleted_file_ids');
         if (stored) currentDeleted = JSON.parse(stored);
         if (!currentDeleted.includes(String(fileId))) {
           currentDeleted.push(String(fileId));
-          localStorage.setItem('dapodik_deleted_file_ids', JSON.stringify(currentDeleted));
         }
+        if (targetFile?.name && !currentDeleted.includes(String(targetFile.name))) {
+          currentDeleted.push(String(targetFile.name));
+        }
+        if (targetFile?.driveFileUrl && !currentDeleted.includes(String(targetFile.driveFileUrl))) {
+          currentDeleted.push(String(targetFile.driveFileUrl));
+        }
+        localStorage.setItem('dapodik_deleted_file_ids', JSON.stringify(currentDeleted));
       } catch (e) {}
 
       // Get current active webAppUrl
@@ -472,14 +479,26 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
         }
       }
 
-      // Always update local UI state immediately
-      setHistoryFiles((prev) => prev.filter((f) => String(f.id) !== String(fileId)));
-      setGlobalSuccess('Berkas berhasil terhapus dari riwayat aplikasi dan spreadsheet!');
+      // Always update local UI state and local storage immediately
+      setHistoryFiles((prev) => {
+        const next = prev.filter((f) => String(f.id) !== String(fileId));
+        try {
+          localStorage.setItem('dapodik_school_files', JSON.stringify(next));
+        } catch (e) {}
+        return next;
+      });
+      setGlobalSuccess('Berkas berhasil terhapus dari riwayat aplikasi!');
       setGlobalError(null);
     } catch (err) {
       console.error('Error deleting file:', err);
       // Remove item anyway so UI updates instantly
-      setHistoryFiles((prev) => prev.filter((f) => String(f.id) !== String(fileId)));
+      setHistoryFiles((prev) => {
+        const next = prev.filter((f) => String(f.id) !== String(fileId));
+        try {
+          localStorage.setItem('dapodik_school_files', JSON.stringify(next));
+        } catch (e) {}
+        return next;
+      });
       setGlobalSuccess('Berkas berhasil terhapus dari tampilan riwayat!');
     } finally {
       setIsDeletingId(null);

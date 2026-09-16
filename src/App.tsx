@@ -329,7 +329,7 @@ export default function App() {
     if (saved !== null) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           const cleaned = cleanKibBItems(parsed);
           if (cleaned.length !== parsed.length) {
             localStorage.setItem('dapodik_kib_b', JSON.stringify(cleaned));
