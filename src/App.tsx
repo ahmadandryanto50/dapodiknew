@@ -1033,8 +1033,25 @@ export default function App() {
           }
           if (Array.isArray(pulledKibB)) {
             const clean = cleanKibBItems(pulledKibB);
-            setKibB(clean);
-            localStorage.setItem(getStorageKey('dapodik_kib_b'), JSON.stringify(clean));
+            const localKibB = kibBRef.current || kibB || [];
+            
+            // Merge by ID to prevent losing any local changes that haven't been synced
+            const mergedKibB = [...clean];
+            let hasNewLocal = false;
+            localKibB.forEach(localItem => {
+              if (localItem && localItem.id && !mergedKibB.some(item => item.id === localItem.id)) {
+                mergedKibB.push(localItem);
+                hasNewLocal = true;
+              }
+            });
+            
+            setKibB(mergedKibB);
+            localStorage.setItem(getStorageKey('dapodik_kib_b'), JSON.stringify(mergedKibB));
+            
+            if (hasNewLocal || (clean.length === 0 && localKibB.length > 0)) {
+              console.warn("Found local KIB B items not present on Sheets, trigger back-sync:", mergedKibB);
+              syncKibBToGoogleSheets(currentCfg, mergedKibB).catch(e => console.error("Auto merge back-sync failed:", e));
+            }
           }
           if (Array.isArray(rapor)) {
             const clean = sanitizeReports(rapor);
