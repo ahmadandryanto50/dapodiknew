@@ -40,7 +40,13 @@ function safeWriteJSON(filePath: string, data: any) {
 app.use(express.json({ limit: '50mb' }));
 
 app.use("/api", (req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, PATCH, DELETE");
+  res.setHeader("Access-Control-Allow-Headers", "X-Requested-With,content-type,Authorization");
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
   next();
 });
 
@@ -58,6 +64,19 @@ app.get("/api/sync-config", (req, res) => {
     status: "connected",
     mode: "appscript"
   });
+});
+
+app.post("/api/sync-config", (req, res) => {
+  try {
+    const config = req.body;
+    if (config) {
+      safeWriteJSON(CONFIG_FILE, config);
+      return res.json({ success: true, message: "Configuration updated successfully", config });
+    }
+    return res.status(400).json({ success: false, message: "Invalid payload" });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
 });
 
 app.post("/api/sync-sheets", async (req, res) => {
@@ -100,12 +119,18 @@ app.post("/api/sync-sheets", async (req, res) => {
 
 app.post("/api/load-sheets", async (req, res) => {
   try {
-    let { webAppUrl } = req.body || {};
+    let { webAppUrl, spreadsheetUrl } = req.body || {};
     webAppUrl = getEffectiveWebAppUrl(webAppUrl);
     
+    let targetUrl = webAppUrl;
+    if (spreadsheetUrl) {
+      const sep = targetUrl.includes('?') ? '&' : '?';
+      targetUrl = `${targetUrl}${sep}spreadsheetUrl=${encodeURIComponent(spreadsheetUrl)}&spreadsheetId=${encodeURIComponent(spreadsheetUrl)}`;
+    }
+
     let data: any = null;
     try {
-      const response = await fetch(webAppUrl, { method: "GET", redirect: "follow" });
+      const response = await fetch(targetUrl, { method: "GET", redirect: "follow" });
       const text = await response.text();
       data = JSON.parse(text);
     } catch (e) {}
@@ -115,7 +140,11 @@ app.post("/api/load-sheets", async (req, res) => {
         const postRes = await fetch(webAppUrl, {
           method: "POST",
           headers: { "Content-Type": "text/plain" },
-          body: JSON.stringify({ type: "LOAD_ALL" }),
+          body: JSON.stringify({ 
+            type: "LOAD_ALL", 
+            spreadsheetUrl: spreadsheetUrl || "",
+            spreadsheetId: spreadsheetUrl || ""
+          }),
           redirect: "follow"
         });
         const postText = await postRes.text();

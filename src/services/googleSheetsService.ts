@@ -1152,6 +1152,7 @@ export async function syncToGoogleSheets(
       notifikasi: data.notifikasi || [],
       schoolAccounts: data.schoolAccounts || [],
       spreadsheetUrl: config.spreadsheetUrl || '',
+      spreadsheetId: config.spreadsheetUrl || '',
       timestamp: new Date().toLocaleString('id-ID')
     };
 
@@ -1204,6 +1205,7 @@ export async function syncKibBToGoogleSheets(
     kibB: mappedItems,
     'KIB B': mappedItems,
     spreadsheetUrl: config.spreadsheetUrl || '',
+    spreadsheetId: config.spreadsheetUrl || '',
     timestamp: new Date().toLocaleString('id-ID')
   };
   return await callProxyOrDirectPost(config.webAppUrl, payload);
@@ -1261,7 +1263,8 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         webAppUrl: config.webAppUrl,
-        spreadsheetUrl: config.spreadsheetUrl || ''
+        spreadsheetUrl: config.spreadsheetUrl || '',
+        spreadsheetId: config.spreadsheetUrl || ''
       })
     });
     if (proxyRes.ok) {
@@ -1279,7 +1282,7 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
     let getUrl = config.webAppUrl;
     if (config.spreadsheetUrl) {
       const separator = getUrl.includes('?') ? '&' : '?';
-      getUrl = `${getUrl}${separator}spreadsheetUrl=${encodeURIComponent(config.spreadsheetUrl)}`;
+      getUrl = `${getUrl}${separator}spreadsheetUrl=${encodeURIComponent(config.spreadsheetUrl)}&spreadsheetId=${encodeURIComponent(config.spreadsheetUrl)}`;
     }
 
     const directRes = await fetch(getUrl, {

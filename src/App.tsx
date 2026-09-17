@@ -46,6 +46,8 @@ import { MobileBottomNav } from './components/MobileBottomNav';
 import { SafeImage } from './components/SafeImage';
 import { formatDateIndonesian, cleanLeadingZerosCode } from './utils/dateUtils';
 import { loadFromGoogleSheets, syncToGoogleSheets, syncKibBToGoogleSheets } from './services/googleSheetsService';
+
+const SHARED_CONTAINER_URL = "https://ais-pre-rl7bj4twi2wve75vqpw7yr-169174220206.asia-east1.run.app";
 import { 
   Home, 
   School,
@@ -587,13 +589,24 @@ export default function App() {
   const saveSyncConfigToServer = async (newConfig: SyncConfig) => {
     if (!isInitialized) return;
     try {
+      // 1. Save to local deployment API
       await fetch('/api/sync-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newConfig)
       });
     } catch (err) {
-      console.error('Failed to save sync config to server:', err);
+      console.warn('Failed to save sync config to local server:', err);
+    }
+    try {
+      // 2. Also save to central shared container API so it is shared across Vercel, HP, and Laptop permanently
+      await fetch(`${SHARED_CONTAINER_URL}/api/sync-config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newConfig)
+      });
+    } catch (err) {
+      console.warn('Failed to save sync config to central shared server:', err);
     }
   };
 
@@ -1277,13 +1290,38 @@ export default function App() {
       try {
         // Load active shared sync config from server first to keep all devices/browsers synchronized
         try {
-          const configRes = await fetch(`/api/sync-config?t=${Date.now()}`);
-          if (configRes.ok) {
-            const serverConfig = await configRes.json();
-            if (serverConfig && serverConfig.webAppUrl) {
-              setSyncConfig(serverConfig);
-              localStorage.setItem('dapodik_sync_config', JSON.stringify(serverConfig));
+          let serverConfig = null;
+          // 1. Try local endpoint first
+          try {
+            const configRes = await fetch(`/api/sync-config?t=${Date.now()}`);
+            if (configRes.ok) {
+              const resJson = await configRes.json();
+              if (resJson && resJson.webAppUrl && !resJson.webAppUrl.includes("AKfycbyhC26e6a4a0ORdBvnMCz7c1pDR0rQsGkcO_LfVKhxAZGYtBMGle4qbjZoNx6D_uT79")) {
+                serverConfig = resJson;
+              }
             }
+          } catch (e) {
+            console.warn('Local sync-config load skipped:', e);
+          }
+
+          // 2. Fallback to Central Shared Container if local is empty/default
+          if (!serverConfig) {
+            try {
+              const sharedConfigRes = await fetch(`${SHARED_CONTAINER_URL}/api/sync-config?t=${Date.now()}`);
+              if (sharedConfigRes.ok) {
+                const resJson = await sharedConfigRes.json();
+                if (resJson && resJson.webAppUrl) {
+                  serverConfig = resJson;
+                }
+              }
+            } catch (e) {
+              console.warn('Central sync-config fallback skipped:', e);
+            }
+          }
+
+          if (serverConfig && serverConfig.webAppUrl) {
+            setSyncConfig(serverConfig);
+            localStorage.setItem('dapodik_sync_config', JSON.stringify(serverConfig));
           }
         } catch (err) {
           console.warn('Failed to load shared sync-config from server:', err);
@@ -1385,16 +1423,35 @@ export default function App() {
 
       // 1. Check if sync-config has been updated on the server by another device
       try {
-        const configRes = await fetch(`/api/sync-config?t=${Date.now()}`);
-        if (configRes.ok) {
-          const serverConfig = await configRes.json();
-          if (serverConfig && serverConfig.webAppUrl) {
-            const currentCfgStr = JSON.stringify(syncConfigRef.current);
-            const serverCfgStr = JSON.stringify(serverConfig);
-            if (currentCfgStr !== serverCfgStr) {
-              setSyncConfig(serverConfig);
-              localStorage.setItem('dapodik_sync_config', JSON.stringify(serverConfig));
+        let serverConfig = null;
+        try {
+          const configRes = await fetch(`/api/sync-config?t=${Date.now()}`);
+          if (configRes.ok) {
+            const resJson = await configRes.json();
+            if (resJson && resJson.webAppUrl && !resJson.webAppUrl.includes("AKfycbyhC26e6a4a0ORdBvnMCz7c1pDR0rQsGkcO_LfVKhxAZGYtBMGle4qbjZoNx6D_uT79")) {
+              serverConfig = resJson;
             }
+          }
+        } catch (e) {}
+
+        if (!serverConfig) {
+          try {
+            const sharedConfigRes = await fetch(`${SHARED_CONTAINER_URL}/api/sync-config?t=${Date.now()}`);
+            if (sharedConfigRes.ok) {
+              const resJson = await sharedConfigRes.json();
+              if (resJson && resJson.webAppUrl) {
+                serverConfig = resJson;
+              }
+            }
+          } catch (e) {}
+        }
+
+        if (serverConfig && serverConfig.webAppUrl) {
+          const currentCfgStr = JSON.stringify(syncConfigRef.current);
+          const serverCfgStr = JSON.stringify(serverConfig);
+          if (currentCfgStr !== serverCfgStr) {
+            setSyncConfig(serverConfig);
+            localStorage.setItem('dapodik_sync_config', JSON.stringify(serverConfig));
           }
         }
       } catch (err) {
@@ -2219,7 +2276,7 @@ export default function App() {
     localStorage.setItem(getStorageKey('dapodik_kib_b'), JSON.stringify(updated));
     showToast(`Menyimpan barang KIB B "${item.namaBarang}" ke database & Spreadsheet...`);
 
-    // Auto-sync ke server cache (skip sheets sync to prevent write collision)
+    // Auto-sync ke server cache (skip sheets sync to prevent write collision, no front-page notifications)
     triggerAutoSync(
       students,
       teachers,
@@ -2230,11 +2287,7 @@ export default function App() {
       administrators,
       false,
       notificationsRef.current,
-      {
-        title: 'Penambahan Barang KIB B',
-        message: `Barang KIB B "${item.namaBarang}" (${item.kodeBarang || '-'}) berhasil ditambahkan ke inventaris.`,
-        type: 'success'
-      },
+      undefined,
       aplikasiLinks,
       schoolAccounts,
       updated,
@@ -2267,7 +2320,7 @@ export default function App() {
     localStorage.setItem(getStorageKey('dapodik_kib_b'), JSON.stringify(updated));
     showToast(`Memperbarui data barang KIB B "${item.namaBarang}" ke Spreadsheet...`);
 
-    // Auto-sync ke server cache (skip sheets sync to prevent write collision)
+    // Auto-sync ke server cache (skip sheets sync to prevent write collision, no front-page notifications)
     triggerAutoSync(
       students,
       teachers,
@@ -2278,11 +2331,7 @@ export default function App() {
       administrators,
       false,
       notificationsRef.current,
-      {
-        title: 'Pembaruan Barang KIB B',
-        message: `Data barang KIB B "${item.namaBarang}" berhasil diperbarui di database.`,
-        type: 'info'
-      },
+      undefined,
       aplikasiLinks,
       schoolAccounts,
       updated,
@@ -2313,7 +2362,7 @@ export default function App() {
     localStorage.setItem(getStorageKey('dapodik_kib_b'), JSON.stringify(updated));
     showToast(`Menghapus barang KIB B dari Spreadsheet...`);
 
-    // Auto-sync ke server cache (skip sheets sync to prevent write collision)
+    // Auto-sync ke server cache (skip sheets sync to prevent write collision, no front-page notifications)
     triggerAutoSync(
       students,
       teachers,
@@ -2324,11 +2373,7 @@ export default function App() {
       administrators,
       false,
       notificationsRef.current,
-      {
-        title: 'Penghapusan Barang KIB B',
-        message: `Barang KIB B "${target?.namaBarang || 'Item'}" telah dihapus dari inventaris.`,
-        type: 'warning'
-      },
+      undefined,
       aplikasiLinks,
       schoolAccounts,
       updated,
@@ -2359,7 +2404,7 @@ export default function App() {
     localStorage.setItem(getStorageKey('dapodik_kib_b'), JSON.stringify(updated));
     showToast(`Menyimpan ${newItems.length} barang KIB B ke database & Spreadsheet...`);
 
-    // Auto-sync ke server cache (skip sheets sync to prevent write collision)
+    // Auto-sync ke server cache (skip sheets sync to prevent write collision, no front-page notifications)
     triggerAutoSync(
       students,
       teachers,
@@ -2370,11 +2415,7 @@ export default function App() {
       administrators,
       false,
       notificationsRef.current,
-      {
-        title: 'Import Data Barang KIB B',
-        message: `Sebanyak ${newItems.length} data barang KIB B telah diimpor ke inventaris.`,
-        type: 'info'
-      },
+      undefined,
       aplikasiLinks,
       schoolAccounts,
       updated,
