@@ -85,8 +85,8 @@ const HEADERS_MAP = {
   'Data_Alumni': ['id', 'nisn', 'nik', 'nama', 'jenisKelamin', 'tempatLahir', 'tanggalLahir', 'rombel', 'tahunLulus', 'noSeriIjazah', 'namaIbu', 'namaAyah', 'alamat', 'hp', 'status', 'alasanKeluar', 'agama', 'nis', 'skhun', 'sekolahAsal'],
   'Data_PTK': ['id', 'nuptk', 'nip', 'nama', 'jenisKelamin', 'statusKepegawaian', 'jenisPtk', 'mapel', 'pendidikanTerakhir', 'noHp', 'email', 'statusSertifikasi', 'tempatLahir', 'tanggalLahir', 'agama', 'alamatJalan', 'rt', 'rw', 'namaDusun', 'desaKelurahan', 'kecamatan', 'kodePos', 'tugasTambahan', 'skCpns', 'tanggalCpns', 'skPengangkatan', 'tmtPengangkatan', 'pangkatGolongan', 'nik', 'noKk'],
   'Data_Sarpras': ['id', 'kodeBarang', 'namaBarang', 'kategori', 'kondisi', 'jumlah', 'satuan', 'letakRuang', 'tahunPengadaan', 'layakPakai'],
-  'KIB B': ['id', 'namaBarang', 'kodeBarang', 'kondisi', 'merkType', 'ukuranCc', 'bahan', 'tahun', 'noPabrik', 'noRangka', 'noMesin', 'noPolisi', 'noBpkb', 'asalUsul', 'harga', 'keterangan'],
-  'Data_KIB_B': ['id', 'namaBarang', 'kodeBarang', 'kondisi', 'merkType', 'ukuranCc', 'bahan', 'tahun', 'noPabrik', 'noRangka', 'noMesin', 'noPolisi', 'noBpkb', 'asalUsul', 'harga', 'keterangan'],
+  'KIB B': ['id', 'No', 'Nama Barang', 'Kode Barang', 'Kondisi', 'Merk / Type', 'Ukuran / CC', 'Bahan', 'Tahun', 'No Pabrik', 'No Rangka', 'No Mesin', 'No Polisi', 'No Bpkb', 'Asal Usul', 'Harga', 'Keterangan'],
+  'Data_KIB_B': ['id', 'No', 'Nama Barang', 'Kode Barang', 'Kondisi', 'Merk / Type', 'Ukuran / CC', 'Bahan', 'Tahun', 'No Pabrik', 'No Rangka', 'No Mesin', 'No Polisi', 'No Bpkb', 'Asal Usul', 'Harga', 'Keterangan'],
   'Data_Rapor': ['id', 'studentId', 'nisn', 'studentName', 'rombel', 'semester', 'tahunAjaran', 'scores', 'kehadiran', 'catatanWaliKelas', 'statusKenaikan'],
   'Notifikasi': ['id', 'title', 'message', 'time', 'type', 'read'],
   'Permintaan_Akses_Berkas': ['id', 'fileId', 'fileName', 'requesterName', 'requesterRole', 'requesterEmail', 'requestedAt', 'reason', 'status', 'reviewedBy', 'reviewedAt', 'reviewNotes'],
@@ -693,7 +693,7 @@ function checkAndInitializeSheets(ss) {
     ],
     'KIB B': [
       HEADERS_MAP['KIB B'],
-      ['kib-001', 'Timbangan Meja Kapasitas 5 kg', '1.3.2.03.03.010.003', 'Baik', '', '', '', '2017', '', '', '', '', '', 'DAK / P2HP', '1.467.800', 'Ruang Wakasek']
+      ['kib-001', '1', 'Timbangan Meja Kapasitas 5 kg', '1.3.2.03.03.010.003', 'Baik', 'Timbangan Meja', '5 kg', 'Besi/Plastik', '2017', '', '', '', '', '', 'DAK / P2HP', '1467800', 'Ruang Wakasek']
     ],
     'Data_Rapor': [
       HEADERS_MAP['Data_Rapor']
@@ -1104,8 +1104,46 @@ export async function syncToGoogleSheets(
       }),
       ptk: data.ptk || [],
       sarpras: data.sarpras || [],
-      kibB: data.kibB || [],
-      'KIB B': data.kibB || [],
+      kibB: (data.kibB || []).map((item, idx) => ({
+        ...item,
+        'id': item.id,
+        'No': idx + 1,
+        'Nama Barang': item.namaBarang,
+        'Kode Barang': item.kodeBarang,
+        'Kondisi': item.kondisi,
+        'Merk / Type': item.merkType || '',
+        'Ukuran / CC': item.ukuranCc || '',
+        'Bahan': item.bahan || '',
+        'Tahun': item.tahun || '',
+        'No Pabrik': item.noPabrik || '',
+        'No Rangka': item.noRangka || '',
+        'No Mesin': item.noMesin || '',
+        'No Polisi': item.noPolisi || '',
+        'No Bpkb': item.noBpkb || '',
+        'Asal Usul': item.asalUsul || '',
+        'Harga': item.harga || '',
+        'Keterangan': item.keterangan || ''
+      })),
+      'KIB B': (data.kibB || []).map((item, idx) => ({
+        ...item,
+        'id': item.id,
+        'No': idx + 1,
+        'Nama Barang': item.namaBarang,
+        'Kode Barang': item.kodeBarang,
+        'Kondisi': item.kondisi,
+        'Merk / Type': item.merkType || '',
+        'Ukuran / CC': item.ukuranCc || '',
+        'Bahan': item.bahan || '',
+        'Tahun': item.tahun || '',
+        'No Pabrik': item.noPabrik || '',
+        'No Rangka': item.noRangka || '',
+        'No Mesin': item.noMesin || '',
+        'No Polisi': item.noPolisi || '',
+        'No Bpkb': item.noBpkb || '',
+        'Asal Usul': item.asalUsul || '',
+        'Harga': item.harga || '',
+        'Keterangan': item.keterangan || ''
+      })),
       rapor: data.rapor || [],
       pengaturan: data.pengaturan || [],
       administrator: data.administrator || [],
@@ -1140,11 +1178,31 @@ export async function syncKibBToGoogleSheets(
       message: 'URL Google Apps Script belum diisi di Pengaturan.'
     };
   }
+  const mappedItems = (items || []).map((item, idx) => ({
+    ...item,
+    'id': item.id,
+    'No': idx + 1,
+    'Nama Barang': item.namaBarang,
+    'Kode Barang': item.kodeBarang,
+    'Kondisi': item.kondisi,
+    'Merk / Type': item.merkType || '',
+    'Ukuran / CC': item.ukuranCc || '',
+    'Bahan': item.bahan || '',
+    'Tahun': item.tahun || '',
+    'No Pabrik': item.noPabrik || '',
+    'No Rangka': item.noRangka || '',
+    'No Mesin': item.noMesin || '',
+    'No Polisi': item.noPolisi || '',
+    'No Bpkb': item.noBpkb || '',
+    'Asal Usul': item.asalUsul || '',
+    'Harga': item.harga || '',
+    'Keterangan': item.keterangan || ''
+  }));
   const payload = {
     type: 'SYNC_KIB_B',
-    payload: items,
-    kibB: items,
-    'KIB B': items,
+    payload: mappedItems,
+    kibB: mappedItems,
+    'KIB B': mappedItems,
     spreadsheetUrl: config.spreadsheetUrl || '',
     timestamp: new Date().toLocaleString('id-ID')
   };
