@@ -1199,8 +1199,7 @@ export async function syncKibBToGoogleSheets(
     'Keterangan': item.keterangan || ''
   }));
   const payload = {
-    type: 'SYNC_KIB_B',
-    payload: mappedItems,
+    type: 'SYNC_ALL',
     kibB: mappedItems,
     'KIB B': mappedItems,
     spreadsheetUrl: config.spreadsheetUrl || '',
