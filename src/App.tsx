@@ -1585,7 +1585,8 @@ export default function App() {
     },
     customAplikasiLinks = aplikasiLinks,
     customSchoolAccounts = schoolAccounts,
-    customKibB = kibB
+    customKibB = kibB,
+    skipSheetsSync = false
   ) => {
     // Persiapkan notifikasi terbaru jika ada pendingNotification
     let activeNotifs = customNotifications || [];
@@ -1619,7 +1620,7 @@ export default function App() {
 
     // Otomatis simpan & sync perubahan ke Google Spreadsheet
     const currentCfg = getEffectiveSyncConfig();
-    if (currentCfg && currentCfg.webAppUrl && currentCfg.autoSync !== false) {
+    if (!skipSheetsSync && currentCfg && currentCfg.webAppUrl && currentCfg.autoSync !== false) {
       const pengaturanArray = Object.entries(customDisplayConfig || {}).map(([key, value]) => ({
         key,
         value: value !== undefined && value !== null ? String(value) : ''
@@ -2218,7 +2219,7 @@ export default function App() {
     localStorage.setItem(getStorageKey('dapodik_kib_b'), JSON.stringify(updated));
     showToast(`Menyimpan barang KIB B "${item.namaBarang}" ke database & Spreadsheet...`);
 
-    // Auto-sync ke server cache & spreadsheet sync
+    // Auto-sync ke server cache (skip sheets sync to prevent write collision)
     triggerAutoSync(
       students,
       teachers,
@@ -2236,7 +2237,8 @@ export default function App() {
       },
       aplikasiLinks,
       schoolAccounts,
-      updated
+      updated,
+      true
     );
 
     // Kirim sinkronisasi langsung khusus sheet "KIB B" ke Google Spreadsheet
@@ -2265,6 +2267,7 @@ export default function App() {
     localStorage.setItem(getStorageKey('dapodik_kib_b'), JSON.stringify(updated));
     showToast(`Memperbarui data barang KIB B "${item.namaBarang}" ke Spreadsheet...`);
 
+    // Auto-sync ke server cache (skip sheets sync to prevent write collision)
     triggerAutoSync(
       students,
       teachers,
@@ -2282,7 +2285,8 @@ export default function App() {
       },
       aplikasiLinks,
       schoolAccounts,
-      updated
+      updated,
+      true
     );
 
     const currentCfg = getEffectiveSyncConfig();
@@ -2309,6 +2313,7 @@ export default function App() {
     localStorage.setItem(getStorageKey('dapodik_kib_b'), JSON.stringify(updated));
     showToast(`Menghapus barang KIB B dari Spreadsheet...`);
 
+    // Auto-sync ke server cache (skip sheets sync to prevent write collision)
     triggerAutoSync(
       students,
       teachers,
@@ -2326,7 +2331,8 @@ export default function App() {
       },
       aplikasiLinks,
       schoolAccounts,
-      updated
+      updated,
+      true
     );
 
     const currentCfg = getEffectiveSyncConfig();
@@ -2353,6 +2359,7 @@ export default function App() {
     localStorage.setItem(getStorageKey('dapodik_kib_b'), JSON.stringify(updated));
     showToast(`Menyimpan ${newItems.length} barang KIB B ke database & Spreadsheet...`);
 
+    // Auto-sync ke server cache (skip sheets sync to prevent write collision)
     triggerAutoSync(
       students,
       teachers,
@@ -2370,7 +2377,8 @@ export default function App() {
       },
       aplikasiLinks,
       schoolAccounts,
-      updated
+      updated,
+      true
     );
 
     const currentCfg = getEffectiveSyncConfig();
