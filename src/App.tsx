@@ -991,8 +991,8 @@ export default function App() {
     if (activeSchoolNpsn !== '40203578' && activeSch) {
       return {
         ...mainCfg,
-        spreadsheetUrl: activeSch.spreadsheetUrl || '',
-        webAppUrl: activeSch.webAppUrl || '',
+        spreadsheetUrl: activeSch.spreadsheetUrl || mainCfg.spreadsheetUrl || '',
+        webAppUrl: activeSch.webAppUrl || mainCfg.webAppUrl || '',
         sheetId: ''
       };
     }

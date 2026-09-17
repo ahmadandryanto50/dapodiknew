@@ -6,6 +6,18 @@ import serverless from "serverless-http";
 const app = express();
 const CONFIG_FILE = path.join(process.cwd(), "sync_config.json");
 const DATA_FILE = path.join(process.cwd(), "app_data.json");
+const DEFAULT_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwOjTnhqqQFCvRGK_5NPVICqUbK-yHUTq1b0CwX3aXqcYjOITfoaogfBWDS3I1bdL6hZA/exec";
+
+function getEffectiveWebAppUrl(incomingUrl?: string): string {
+  if (incomingUrl && typeof incomingUrl === "string" && incomingUrl.trim().startsWith("http")) {
+    return incomingUrl.trim();
+  }
+  const config = safeReadJSON(CONFIG_FILE, null);
+  if (config && config.webAppUrl && typeof config.webAppUrl === "string" && config.webAppUrl.trim().startsWith("http")) {
+    return config.webAppUrl.trim();
+  }
+  return DEFAULT_WEB_APP_URL;
+}
 
 function safeReadJSON(filePath: string, fallback: any = {}) {
   try {
@@ -50,10 +62,9 @@ app.get("/api/sync-config", (req, res) => {
 
 app.post("/api/sync-sheets", async (req, res) => {
   try {
-    const { webAppUrl, payload } = req.body;
-    if (!webAppUrl) {
-      return res.status(400).json({ success: false, message: "webAppUrl is required" });
-    }
+    let { webAppUrl, payload } = req.body || {};
+    webAppUrl = getEffectiveWebAppUrl(webAppUrl);
+    
     const response = await fetch(webAppUrl, {
       method: "POST",
       headers: { "Content-Type": "text/plain" },
@@ -89,10 +100,9 @@ app.post("/api/sync-sheets", async (req, res) => {
 
 app.post("/api/load-sheets", async (req, res) => {
   try {
-    const { webAppUrl } = req.body;
-    if (!webAppUrl) {
-      return res.status(400).json({ success: false, message: "webAppUrl is required" });
-    }
+    let { webAppUrl } = req.body || {};
+    webAppUrl = getEffectiveWebAppUrl(webAppUrl);
+    
     let data: any = null;
     try {
       const response = await fetch(webAppUrl, { method: "GET", redirect: "follow" });
