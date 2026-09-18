@@ -520,6 +520,7 @@ export default function App() {
   const [isNotifDrawerOpen, setIsNotifDrawerOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [hasSuccessfullyPulled, setHasSuccessfullyPulled] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [settingsInitialFilter, setSettingsInitialFilter] = useState<'all' | '1' | '2' | '3' | '4' | '5'>('all');
 
@@ -543,6 +544,11 @@ export default function App() {
     setActiveTab('pengaturan');
   };
 
+  const getApiUrl = (path: string) => {
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.includes('run.app');
+    return isLocal ? path : `${SHARED_CONTAINER_URL}${path}`;
+  };
+
   // Save application data cache to server so that it is shared across all browsers/devices
   const saveCacheToServer = async (
     customStudents = students,
@@ -561,7 +567,7 @@ export default function App() {
   ) => {
     if (!isInitialized) return;
     try {
-      await fetch('/api/app-data', {
+      await fetch(getApiUrl('/api/app-data'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -590,7 +596,7 @@ export default function App() {
     if (!isInitialized) return;
     try {
       // 1. Save to local deployment API
-      await fetch('/api/sync-config', {
+      await fetch(getApiUrl('/api/sync-config'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newConfig)
@@ -1145,6 +1151,7 @@ export default function App() {
           }, 400);
 
           setIsSyncing(false);
+          setHasSuccessfullyPulled(true);
           if (!silent) {
             showToast('Tarik Data Berhasil');
             try { confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 } }); } catch (e) {}
@@ -1207,7 +1214,7 @@ export default function App() {
 
       // Fallback: server cache (only for main school)
       if (isMainSchool) {
-        const cacheRes = await fetch(`/api/app-data?t=${Date.now()}`);
+        const cacheRes = await fetch(getApiUrl(`/api/app-data?t=${Date.now()}`));
         setIsSyncing(false);
         if (cacheRes.ok) {
           const serverData = await cacheRes.json();
@@ -1264,6 +1271,7 @@ export default function App() {
             }
           }
           
+          setHasSuccessfullyPulled(true);
           if (!silent) {
             showToast('Tarik Data Berhasil');
           }
@@ -1293,7 +1301,7 @@ export default function App() {
           let serverConfig = null;
           // 1. Try local endpoint first
           try {
-            const configRes = await fetch(`/api/sync-config?t=${Date.now()}`);
+            const configRes = await fetch(getApiUrl(`/api/sync-config?t=${Date.now()}`));
             if (configRes.ok) {
               const resJson = await configRes.json();
               if (resJson && resJson.webAppUrl && !resJson.webAppUrl.includes("AKfycbyhC26e6a4a0ORdBvnMCz7c1pDR0rQsGkcO_LfVKhxAZGYtBMGle4qbjZoNx6D_uT79")) {
@@ -1329,7 +1337,7 @@ export default function App() {
 
         // Hydrate from server cache immediately so new browsers (like Mozilla or mobile) have data instantly
         try {
-          const cacheRes = await fetch(`/api/app-data?t=${Date.now()}`);
+          const cacheRes = await fetch(getApiUrl(`/api/app-data?t=${Date.now()}`));
           if (cacheRes.ok) {
             const serverData = await cacheRes.json();
             if (serverData) {
@@ -1425,7 +1433,7 @@ export default function App() {
       try {
         let serverConfig = null;
         try {
-          const configRes = await fetch(`/api/sync-config?t=${Date.now()}`);
+          const configRes = await fetch(getApiUrl(`/api/sync-config?t=${Date.now()}`));
           if (configRes.ok) {
             const resJson = await configRes.json();
             if (resJson && resJson.webAppUrl && !resJson.webAppUrl.includes("AKfycbyhC26e6a4a0ORdBvnMCz7c1pDR0rQsGkcO_LfVKhxAZGYtBMGle4qbjZoNx6D_uT79")) {
@@ -1657,6 +1665,16 @@ export default function App() {
 
     const currentAplikasi = customAplikasiLinks || aplikasiLinks;
 
+    // Safeguard: Cegah penghapusan database Spreadsheet jika data lokal masih kosong dan belum berhasil ditarik dari Sheets
+    let effectiveSkipSheetsSync = skipSheetsSync;
+    if (!effectiveSkipSheetsSync) {
+      const isLocalStateEmpty = (customStudents.length === 0 && customTeachers.length === 0 && customSarpras.length === 0 && customKibB.length === 0);
+      if (isLocalStateEmpty && !hasSuccessfullyPulled && !force) {
+        console.warn("[Safeguard] Sinkronisasi ke Spreadsheet dibatalkan karena data lokal masih kosong dan belum berhasil menarik data dari Cloud Database.");
+        effectiveSkipSheetsSync = true;
+      }
+    }
+
     // Data tersimpan di localStorage & Google Sheets via triggerAutoSync di bawah
 
     // Simpan seluruh data & notifikasi terbaru ke server cache untuk sinkronisasi multi-perangkat
@@ -1677,7 +1695,7 @@ export default function App() {
 
     // Otomatis simpan & sync perubahan ke Google Spreadsheet
     const currentCfg = getEffectiveSyncConfig();
-    if (!skipSheetsSync && currentCfg && currentCfg.webAppUrl && currentCfg.autoSync !== false) {
+    if (!effectiveSkipSheetsSync && currentCfg && currentCfg.webAppUrl && currentCfg.autoSync !== false) {
       const pengaturanArray = Object.entries(customDisplayConfig || {}).map(([key, value]) => ({
         key,
         value: value !== undefined && value !== null ? String(value) : ''
@@ -2276,7 +2294,7 @@ export default function App() {
     localStorage.setItem(getStorageKey('dapodik_kib_b'), JSON.stringify(updated));
     showToast(`Menyimpan barang KIB B "${item.namaBarang}" ke database & Spreadsheet...`);
 
-    // Auto-sync ke server cache (skip sheets sync to prevent write collision, no front-page notifications)
+    // Auto-sync ke server cache & Google Sheets menggunakan Sinkronisasi Penuh
     triggerAutoSync(
       students,
       teachers,
@@ -2285,31 +2303,18 @@ export default function App() {
       displayConfig,
       schoolProfile,
       administrators,
-      false,
+      true, // force = true
       notificationsRef.current,
-      undefined,
+      {
+        title: 'Penambahan KIB B',
+        message: `Barang baru "${item.namaBarang}" berhasil ditambahkan ke KIB B.`,
+        type: 'success'
+      },
       aplikasiLinks,
       schoolAccounts,
       updated,
-      true
+      false // skipSheetsSync = false (lakukan sinkronisasi penuh ke spreadsheet)
     );
-
-    // Kirim sinkronisasi langsung khusus sheet "KIB B" ke Google Spreadsheet
-    const currentCfg = getEffectiveSyncConfig();
-    if (currentCfg && currentCfg.webAppUrl) {
-      syncKibBToGoogleSheets(currentCfg, updated).then(res => {
-        if (res && res.success) {
-          showToast(`Data KIB B "${item.namaBarang}" berhasil tersimpan di Google Spreadsheet (Sheet: KIB B)!`);
-        } else {
-          showToast(`⚠️ KIB B tersimpan lokal, respon Spreadsheet: ${res?.message || 'Periksa koneksi'}`);
-        }
-      }).catch(err => {
-        console.warn('Sync KIB B directly to spreadsheet error:', err);
-        showToast(`⚠️ Tersimpan lokal. Gagal sinkron ke Spreadsheet: ${err?.message || 'Koneksi terputus'}`);
-      });
-    } else {
-      showToast(`Barang KIB B "${item.namaBarang}" berhasil disimpan secara lokal.`);
-    }
   };
 
   const handleUpdateKibB = (item: KibBItem) => {
@@ -2320,7 +2325,7 @@ export default function App() {
     localStorage.setItem(getStorageKey('dapodik_kib_b'), JSON.stringify(updated));
     showToast(`Memperbarui data barang KIB B "${item.namaBarang}" ke Spreadsheet...`);
 
-    // Auto-sync ke server cache (skip sheets sync to prevent write collision, no front-page notifications)
+    // Auto-sync ke server cache & Google Sheets menggunakan Sinkronisasi Penuh
     triggerAutoSync(
       students,
       teachers,
@@ -2329,28 +2334,18 @@ export default function App() {
       displayConfig,
       schoolProfile,
       administrators,
-      false,
+      true, // force = true
       notificationsRef.current,
-      undefined,
+      {
+        title: 'Pembaruan KIB B',
+        message: `Data barang "${item.namaBarang}" berhasil diperbarui.`,
+        type: 'info'
+      },
       aplikasiLinks,
       schoolAccounts,
       updated,
-      true
+      false // skipSheetsSync = false (lakukan sinkronisasi penuh ke spreadsheet)
     );
-
-    const currentCfg = getEffectiveSyncConfig();
-    if (currentCfg && currentCfg.webAppUrl) {
-      syncKibBToGoogleSheets(currentCfg, updated).then(res => {
-        if (res && res.success) {
-          showToast(`Pembaruan KIB B "${item.namaBarang}" berhasil tersimpan di Spreadsheet (Sheet: KIB B)!`);
-        } else {
-          showToast(`⚠️ Perubahan tersimpan lokal, respon Spreadsheet: ${res?.message || 'Gagal'}`);
-        }
-      }).catch(err => {
-        console.warn('Sync KIB B update error:', err);
-        showToast(`⚠️ Terupdate lokal. Gagal sinkron ke Spreadsheet: ${err?.message || 'Error'}`);
-      });
-    }
   };
 
   const handleDeleteKibB = (id: string) => {
@@ -2360,9 +2355,9 @@ export default function App() {
     setKibB(updated);
     kibBRef.current = updated;
     localStorage.setItem(getStorageKey('dapodik_kib_b'), JSON.stringify(updated));
-    showToast(`Menghapus barang KIB B dari Spreadsheet...`);
+    showToast(`Menghapus barang KIB B dari database & Spreadsheet...`);
 
-    // Auto-sync ke server cache (skip sheets sync to prevent write collision, no front-page notifications)
+    // Auto-sync ke server cache & Google Sheets menggunakan Sinkronisasi Penuh untuk menjamin penghapusan data
     triggerAutoSync(
       students,
       teachers,
@@ -2371,28 +2366,18 @@ export default function App() {
       displayConfig,
       schoolProfile,
       administrators,
-      false,
+      true, // force = true
       notificationsRef.current,
-      undefined,
+      {
+        title: 'Penghapusan KIB B',
+        message: `Barang "${target?.namaBarang || 'Barang'}" telah dihapus dari database KIB B.`,
+        type: 'warning'
+      },
       aplikasiLinks,
       schoolAccounts,
       updated,
-      true
+      false // skipSheetsSync = false (lakukan sinkronisasi penuh agar item terhapus permanen dari Spreadsheet)
     );
-
-    const currentCfg = getEffectiveSyncConfig();
-    if (currentCfg && currentCfg.webAppUrl) {
-      syncKibBToGoogleSheets(currentCfg, updated).then(res => {
-        if (res && res.success) {
-          showToast(`Barang KIB B berhasil dihapus dari Google Spreadsheet (Sheet: KIB B)!`);
-        } else {
-          showToast(`⚠️ Penghapusan tersimpan lokal, respon Spreadsheet: ${res?.message || 'Gagal'}`);
-        }
-      }).catch(err => {
-        console.warn('Sync KIB B deletion error:', err);
-        showToast(`⚠️ Dihapus lokal. Gagal sinkron ke Spreadsheet: ${err?.message || 'Error'}`);
-      });
-    }
   };
 
   const handleBulkAddKibB = (newItems: KibBItem[]) => {
@@ -2404,7 +2389,7 @@ export default function App() {
     localStorage.setItem(getStorageKey('dapodik_kib_b'), JSON.stringify(updated));
     showToast(`Menyimpan ${newItems.length} barang KIB B ke database & Spreadsheet...`);
 
-    // Auto-sync ke server cache (skip sheets sync to prevent write collision, no front-page notifications)
+    // Auto-sync ke server cache & Google Sheets menggunakan Sinkronisasi Penuh
     triggerAutoSync(
       students,
       teachers,
@@ -2413,28 +2398,14 @@ export default function App() {
       displayConfig,
       schoolProfile,
       administrators,
-      false,
+      true, // force = true
       notificationsRef.current,
       undefined,
       aplikasiLinks,
       schoolAccounts,
       updated,
-      true
+      false // skipSheetsSync = false (lakukan sinkronisasi penuh ke spreadsheet)
     );
-
-    const currentCfg = getEffectiveSyncConfig();
-    if (currentCfg && currentCfg.webAppUrl) {
-      syncKibBToGoogleSheets(currentCfg, updated).then(res => {
-        if (res && res.success) {
-          showToast('Tersimpan');
-        } else {
-          showToast(`⚠️ Import tersimpan lokal, respon Spreadsheet: ${res?.message || 'Gagal'}`);
-        }
-      }).catch(err => {
-        console.warn('Sync KIB B bulk add error:', err);
-        showToast(`⚠️ Tersimpan lokal. Gagal sinkron ke Spreadsheet: ${err?.message || 'Error'}`);
-      });
-    }
   };
 
   // Reports Handlers
@@ -3008,11 +2979,15 @@ export default function App() {
               isSyncing={isSyncing}
               onSync={handleManualSync}
               onClearOfflineCache={handleClearOfflineCache}
-              onSaveSyncConfig={(newConfig) => {
+              onSaveSyncConfig={async (newConfig) => {
                 setSyncConfig(newConfig);
                 localStorage.setItem('dapodik_sync_config', JSON.stringify(newConfig));
-                saveSyncConfigToServer(newConfig);
-                showToast('Konfigurasi Google Spreadsheet berhasil disimpan.');
+                await saveSyncConfigToServer(newConfig);
+                showToast('Konfigurasi Google Spreadsheet berhasil disimpan. Memulai sinkronisasi awal...');
+                // Segera tarik data dari spreadsheet baru untuk mempopulasi state lokal
+                setTimeout(() => {
+                  handlePullFromSheets(false);
+                }, 1000);
               }}
             />
           </div>

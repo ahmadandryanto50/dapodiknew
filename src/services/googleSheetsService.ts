@@ -97,20 +97,46 @@ const HEADERS_MAP = {
 
 // Utility helper to open correct spreadsheet based on parameters for multi-tenant isolation
 function getTargetSpreadsheet(e, postData) {
-  if (postData && postData.spreadsheetUrl) {
-    try { return SpreadsheetApp.openByUrl(postData.spreadsheetUrl); } catch(err) {}
+  var rawRef = "";
+  var targetId = "";
+  var parts = [];
+  var partsKey = [];
+  
+  if (postData) {
+    rawRef = postData.spreadsheetUrl || postData.spreadsheetId || "";
   }
-  if (postData && postData.spreadsheetId) {
-    try { return SpreadsheetApp.openById(postData.spreadsheetId); } catch(err) {}
+  if (!rawRef && e && e.parameter) {
+    rawRef = e.parameter.spreadsheetUrl || e.parameter.spreadsheetId || "";
   }
-  if (e && e.parameter) {
-    if (e.parameter.spreadsheetUrl) {
-      try { return SpreadsheetApp.openByUrl(e.parameter.spreadsheetUrl); } catch(err) {}
+  
+  if (rawRef) {
+    rawRef = String(rawRef).trim();
+    targetId = rawRef;
+    
+    // Ekstraksi ID dari URL Google Sheets secara aman tanpa menggunakan Regex untuk menghindari error kompilasi
+    if (rawRef.indexOf("/d/") > -1) {
+      parts = rawRef.split("/d/");
+      if (parts.length > 1) {
+        targetId = parts[1].split("/")[0];
+      }
+    } else if (rawRef.indexOf("key=") > -1) {
+      partsKey = rawRef.split("key=");
+      if (partsKey.length > 1) {
+        targetId = partsKey[1].split("&")[0].split("#")[0];
+      }
     }
-    if (e.parameter.spreadsheetId) {
-      try { return SpreadsheetApp.openById(e.parameter.spreadsheetId); } catch(err) {}
+    
+    // 1. Coba buka dengan ID (Sangat Cepat & Mendukung Perpindahan Database)
+    try {
+      return SpreadsheetApp.openById(targetId);
+    } catch(errId) {
+      // 2. Fallback jika harus dibuka dengan URL penuh
+      try {
+        return SpreadsheetApp.openByUrl(rawRef);
+      } catch(errUrl) {}
     }
   }
+  
   return SpreadsheetApp.getActiveSpreadsheet();
 }
 
@@ -556,7 +582,7 @@ function saveSheetData(ss, sheetName, items, fallbackHeaders) {
       sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
       const headerRange = sheet.getRange(1, 1, 1, headers.length);
       headerRange.setFontWeight('bold');
-      headerRange.setBackground(sheetName === 'Data_Alumni' ? '#059669' : '#0284C7');
+      headerRange.setBackground(sheetName === 'Data_Alumni' ? '#059669' : (sheetName === 'KIB B' || sheetName === 'Data_KIB_B') ? '#0D9488' : sheetName === 'Permintaan_Akses_Berkas' ? '#D97706' : '#0284C7');
       headerRange.setFontColor('#FFFFFF');
       headerRange.setHorizontalAlignment('center');
       try {
@@ -827,7 +853,10 @@ function checkAndInitializeSheets(ss) {
 async function callProxyOrDirectPost(webAppUrl: string, payload: any): Promise<{ success: boolean; message: string; data?: any }> {
   // 1. Try server-side proxy endpoint first (bypasses browser CORS & mobile browser restrictions)
   try {
-    const proxyRes = await fetch('/api/sync-sheets', {
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.includes('run.app');
+    const proxyUrl = isLocal ? '/api/sync-sheets' : 'https://ais-pre-rl7bj4twi2wve75vqpw7yr-169174220206.asia-east1.run.app/api/sync-sheets';
+
+    const proxyRes = await fetch(proxyUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ webAppUrl, payload })
