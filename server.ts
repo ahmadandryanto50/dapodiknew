@@ -654,6 +654,24 @@ async function startServer() {
               if (Array.isArray(sheetsData.schoolAccounts) && sheetsData.schoolAccounts.length > 0) {
                 data.schoolAccounts = sheetsData.schoolAccounts;
               }
+              if (Array.isArray(sheetsData.siswa) && sheetsData.siswa.length > 0) {
+                data.students = sheetsData.siswa;
+              }
+              if (Array.isArray(sheetsData.ptk) && sheetsData.ptk.length > 0) {
+                data.teachers = sheetsData.ptk;
+              }
+              if (Array.isArray(sheetsData.sarpras)) {
+                data.sarpras = sheetsData.sarpras;
+              }
+              if (Array.isArray(sheetsData.kibB)) {
+                data.kibB = cleanKibB(sheetsData.kibB);
+              }
+              if (Array.isArray(sheetsData.rapor)) {
+                data.reports = sheetsData.rapor;
+              }
+              if (Array.isArray(sheetsData.administrator) && sheetsData.administrator.length > 0) {
+                data.administrators = sheetsData.administrator;
+              }
             }
           }
         } catch (e: any) {

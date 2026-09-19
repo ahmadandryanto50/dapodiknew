@@ -291,13 +291,16 @@ export default function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
   
   const [students, setStudents] = useState<Student[]>(() => {
-    // Purge obsolete mock data from localStorage if version does not match
-    const CLEAN_OFFLINE_VER = 'dapodik_offline_clean_v2026_09';
+    // Purge obsolete offline cache from localStorage so all browsers synchronize immediately
+    const CLEAN_OFFLINE_VER = 'dapodik_offline_clean_v2026_09_19_335';
     if (typeof window !== 'undefined' && localStorage.getItem(CLEAN_OFFLINE_VER) !== 'true') {
       localStorage.removeItem('dapodik_students');
       localStorage.removeItem('dapodik_teachers');
       localStorage.removeItem('dapodik_sarpras');
       localStorage.removeItem('dapodik_reports');
+      localStorage.removeItem('dapodik_kib_b');
+      localStorage.removeItem('dapodik_aplikasi_links');
+      localStorage.removeItem('dapodik_notifications');
       localStorage.setItem(CLEAN_OFFLINE_VER, 'true');
     }
     const saved = localStorage.getItem('dapodik_students');

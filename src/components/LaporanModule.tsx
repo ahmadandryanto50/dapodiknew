@@ -93,8 +93,18 @@ export const LaporanModule: React.FC<LaporanModuleProps> = ({
     return str;
   };
 
-  // Active students only for standard student statistics
-  const activeStudents = allStudents.filter(s => s && (!s.status || s.status === 'Aktif'));
+  // Active students only for standard student statistics (strictly excluding graduated, mutated, dropouts)
+  const activeStudents = allStudents.filter(s => 
+    s && 
+    (!s.status || s.status.toLowerCase() === 'aktif') && 
+    s.status !== 'Lulus' && 
+    s.status !== 'Mutasi' && 
+    s.status !== 'Keluar' && 
+    s.status !== 'Dikeluarkan' && 
+    s.status !== 'Putus Sekolah' && 
+    s.status !== 'Wafat/Meninggal' && 
+    s.status !== 'Mengundurkan Diri'
+  );
 
   // Alumni / Graduated students statistics by year
   const alumniStudents = allStudents.filter(s => s && (s.status === 'Lulus' || s.status === 'Alumni' || s.alasanKeluar === 'Lulus' || Boolean(s.tahunLulus && String(s.tahunLulus).trim())));
