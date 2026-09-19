@@ -351,11 +351,11 @@ export default function App() {
   });
 
   const [bangunan, setBangunan] = useState<BangunanItem[]>(() => {
-    const saved = localStorage.getItem('dapodik_bangunan');
+    const saved = localStorage.getItem('dapodik_bangunan') || localStorage.getItem(getStorageKey('dapodik_bangunan'));
     if (saved !== null) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       } catch (e) {
         console.error('Failed to parse dapodik_bangunan', e);
       }
@@ -364,11 +364,11 @@ export default function App() {
   });
 
   const [ruang, setRuang] = useState<RuangItem[]>(() => {
-    const saved = localStorage.getItem('dapodik_ruang');
+    const saved = localStorage.getItem('dapodik_ruang') || localStorage.getItem(getStorageKey('dapodik_ruang'));
     if (saved !== null) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       } catch (e) {
         console.error('Failed to parse dapodik_ruang', e);
       }
@@ -1133,12 +1133,12 @@ export default function App() {
             kibBRef.current = clean;
             localStorage.setItem(getStorageKey('dapodik_kib_b'), JSON.stringify(clean));
           }
-          if (Array.isArray(pulledBangunan)) {
+          if (Array.isArray(pulledBangunan) && pulledBangunan.length > 0) {
             setBangunan(pulledBangunan);
             bangunanRef.current = pulledBangunan;
             localStorage.setItem(getStorageKey('dapodik_bangunan'), JSON.stringify(pulledBangunan));
           }
-          if (Array.isArray(pulledRuang)) {
+          if (Array.isArray(pulledRuang) && pulledRuang.length > 0) {
             setRuang(pulledRuang);
             ruangRef.current = pulledRuang;
             localStorage.setItem(getStorageKey('dapodik_ruang'), JSON.stringify(pulledRuang));

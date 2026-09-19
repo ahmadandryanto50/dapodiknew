@@ -1582,6 +1582,8 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
             ptk: cache.teachers || [],
             sarpras: cache.sarpras || [],
             kibB: cache.kibB || [],
+            bangunan: cache.bangunan || [],
+            ruang: cache.ruang || [],
             rapor: cache.reports || [],
             pengaturan: cache.displayConfig 
               ? Object.entries(cache.displayConfig).map(([k, v]) => ({ key: k, value: v !== undefined && v !== null ? String(v) : '' }))

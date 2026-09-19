@@ -667,10 +667,10 @@ async function startServer() {
               if (Array.isArray(sheetsData.sarpras)) {
                 data.sarpras = sheetsData.sarpras;
               }
-              if (Array.isArray(sheetsData.bangunan)) {
+              if (Array.isArray(sheetsData.bangunan) && sheetsData.bangunan.length > 0) {
                 data.bangunan = sheetsData.bangunan;
               }
-              if (Array.isArray(sheetsData.ruang)) {
+              if (Array.isArray(sheetsData.ruang) && sheetsData.ruang.length > 0) {
                 data.ruang = sheetsData.ruang;
               }
               if (Array.isArray(sheetsData.kibB)) {
@@ -984,6 +984,12 @@ async function startServer() {
       const finalData = {
         ...currentData,
         ...incoming,
+        bangunan: Array.isArray(incoming.bangunan) && incoming.bangunan.length > 0 
+          ? incoming.bangunan 
+          : (Array.isArray(currentData.bangunan) && currentData.bangunan.length > 0 ? currentData.bangunan : []),
+        ruang: Array.isArray(incoming.ruang) && incoming.ruang.length > 0 
+          ? incoming.ruang 
+          : (Array.isArray(currentData.ruang) && currentData.ruang.length > 0 ? currentData.ruang : []),
         kibB: cleanKibB(incoming.kibB !== undefined ? incoming.kibB : (currentData.kibB || [])),
         schoolAccounts: incoming.schoolAccounts !== undefined ? incoming.schoolAccounts : (currentData.schoolAccounts || []),
         deletedNotifIds: mergedDeleted,
