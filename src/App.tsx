@@ -3029,6 +3029,13 @@ export default function App() {
               currentUser={currentUser}
               displayConfig={displayConfig}
               schoolProfile={schoolProfile}
+              onPullData={() => handlePullFromSheets(false)}
+              isSyncing={isSyncing}
+              onQuickSync={handlePushToSheets}
+              students={students}
+              teachers={teachers}
+              sarpras={sarpras}
+              reports={reports}
             />
           </div>
         )}

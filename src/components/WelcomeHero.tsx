@@ -108,7 +108,17 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
     });
   };
 
-  const activeStudents = students.filter(s => !s.status || s.status === 'Aktif');
+  const activeStudents = students.filter(s => 
+    s && 
+    (!s.status || s.status === 'Aktif' || s.status === 'aktif') && 
+    s.status !== 'Lulus' && 
+    s.status !== 'Mutasi' && 
+    s.status !== 'Keluar' && 
+    s.status !== 'Dikeluarkan' && 
+    s.status !== 'Putus Sekolah' && 
+    s.status !== 'Wafat/Meninggal' && 
+    s.status !== 'Mengundurkan Diri'
+  );
 
   const ptkBreakdown = getPtkBreakdown(teachers);
   const totalGuru = ptkBreakdown.pendidikCount;
@@ -297,6 +307,13 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
             currentUser={currentUser}
             displayConfig={displayConfig}
             schoolProfile={schoolProfile}
+            onPullData={onPullData}
+            isSyncing={isSyncing}
+            onQuickSync={onQuickSync}
+            students={students}
+            teachers={teachers}
+            sarpras={sarpras}
+            reports={reports}
           />
         ) : (
           /* Center Grid: Left Nav Cards + Center Welcome Display + Right Interactive Dashboard */

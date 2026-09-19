@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Camera, 
@@ -19,7 +19,11 @@ import {
   FileIcon,
   Check,
   X,
-  Sun
+  Sun,
+  CloudDownload,
+  Users,
+  GraduationCap,
+  Database
 } from 'lucide-react';
 import { AdminUser, AppDisplayConfig, SchoolProfile } from '../types';
 
@@ -27,6 +31,13 @@ interface GuestUploadDashboardProps {
   currentUser?: AdminUser | null;
   displayConfig: AppDisplayConfig;
   schoolProfile: SchoolProfile;
+  onPullData?: () => void;
+  isSyncing?: boolean;
+  onQuickSync?: () => void;
+  students?: any[];
+  teachers?: any[];
+  sarpras?: any[];
+  reports?: any[];
 }
 
 interface QueuedFile {
@@ -42,7 +53,14 @@ interface QueuedFile {
 export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
   currentUser,
   displayConfig,
-  schoolProfile
+  schoolProfile,
+  onPullData,
+  isSyncing = false,
+  onQuickSync,
+  students,
+  teachers,
+  sarpras,
+  reports
 }) => {
   const [senderName, setSenderName] = useState<string>(() => {
     try {
@@ -103,6 +121,68 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
   const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [showCameraModeModal, setShowCameraModeModal] = useState<boolean>(false);
+  const [isPullingData, setIsPullingData] = useState<boolean>(false);
+  const [pullFeedback, setPullFeedback] = useState<string | null>(null);
+  const [lastSyncTime, setLastSyncTime] = useState<string>(() => {
+    return new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+  });
+
+  const studentCount = useMemo(() => {
+    let list = students;
+    if (!list || list.length === 0) {
+      try {
+        const s = localStorage.getItem('dapodik_students');
+        list = s ? JSON.parse(s) : [];
+      } catch {
+        list = [];
+      }
+    }
+    return (list || []).filter((s: any) => 
+      s && 
+      (!s.status || s.status === 'Aktif' || s.status === 'aktif') && 
+      s.status !== 'Lulus' && 
+      s.status !== 'Mutasi' && 
+      s.status !== 'Keluar' && 
+      s.status !== 'Dikeluarkan' && 
+      s.status !== 'Putus Sekolah' && 
+      s.status !== 'Wafat/Meninggal' && 
+      s.status !== 'Mengundurkan Diri'
+    ).length;
+  }, [students]);
+
+  const teacherCount = useMemo(() => {
+    let list = teachers;
+    if (!list || list.length === 0) {
+      try {
+        const t = localStorage.getItem('dapodik_teachers');
+        list = t ? JSON.parse(t) : [];
+      } catch {
+        list = [];
+      }
+    }
+    return (list || []).filter((t: any) => t && (!t.status || t.status === 'Aktif')).length;
+  }, [teachers]);
+
+  const handleTarikData = async () => {
+    if (isSyncing || isPullingData) return;
+    setIsPullingData(true);
+    setPullFeedback(null);
+    try {
+      if (onPullData) {
+        await onPullData();
+      }
+      await fetchHistory();
+      setLastSyncTime(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }));
+      setPullFeedback('✅ Data Berhasil Diperbarui!');
+      setTimeout(() => setPullFeedback(null), 4000);
+    } catch (err: any) {
+      console.warn('Tarik data warning:', err);
+      setPullFeedback('⚠️ Selesai memperbarui data.');
+      setTimeout(() => setPullFeedback(null), 3000);
+    } finally {
+      setIsPullingData(false);
+    }
+  };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -1073,6 +1153,76 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
           <p className="text-xs sm:text-sm text-sky-100 max-w-2xl mx-auto font-medium leading-relaxed">
             Kirim, simpan, dan kelola seluruh berkas penting, tugas sekolah, dokumen PTK, atau dokumen penunjang lainnya langsung ke cloud Google Drive sekolah tanpa ribet.
           </p>
+
+          {/* Quick Action: Tarik Data Button for Public / Parents / Guests */}
+          <div className="pt-3 pb-1 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <button
+              type="button"
+              id="guest-tarik-data-btn"
+              onClick={handleTarikData}
+              disabled={isSyncing || isPullingData}
+              className={`w-full sm:w-auto px-6 py-3 rounded-2xl font-black text-xs sm:text-sm uppercase tracking-wider flex items-center justify-center gap-2.5 shadow-xl transition-all cursor-pointer ${
+                isSyncing || isPullingData
+                  ? 'bg-amber-400/95 text-slate-950 border border-amber-300 animate-pulse cursor-wait'
+                  : 'bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 hover:from-emerald-300 hover:to-cyan-300 text-slate-950 hover:scale-[1.03] active:scale-[0.98] border border-emerald-200/60 shadow-emerald-950/20'
+              }`}
+              title="Klik untuk mengambil semua data terbaru dari Google Spreadsheet ke aplikasi ini"
+            >
+              {isSyncing || isPullingData ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+                  <span>Sedang Menarik Data...</span>
+                </>
+              ) : (
+                <>
+                  <CloudDownload className="w-5 h-5 text-slate-950 stroke-[2.5]" />
+                  <span>Tarik Data</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Real-time sync and count summary badges */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 max-w-3xl mx-auto">
+            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-2.5 border border-white/15 text-center">
+              <div className="text-[10px] uppercase font-bold text-sky-200 tracking-wider flex items-center justify-center gap-1">
+                <GraduationCap className="w-3 h-3 text-cyan-300" />
+                <span>Total Siswa</span>
+              </div>
+              <div className="text-base sm:text-lg font-black text-white mt-0.5">{studentCount}</div>
+            </div>
+            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-2.5 border border-white/15 text-center">
+              <div className="text-[10px] uppercase font-bold text-sky-200 tracking-wider flex items-center justify-center gap-1">
+                <Users className="w-3 h-3 text-amber-300" />
+                <span>Total PTK/Guru</span>
+              </div>
+              <div className="text-base sm:text-lg font-black text-white mt-0.5">{teacherCount}</div>
+            </div>
+            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-2.5 border border-white/15 text-center">
+              <div className="text-[10px] uppercase font-bold text-sky-200 tracking-wider flex items-center justify-center gap-1">
+                <FileText className="w-3 h-3 text-emerald-300" />
+                <span>Berkas Tersimpan</span>
+              </div>
+              <div className="text-base sm:text-lg font-black text-white mt-0.5">{historyFiles.length}</div>
+            </div>
+            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-2.5 border border-white/15 text-center">
+              <div className="text-[10px] uppercase font-bold text-emerald-300 tracking-wider flex items-center justify-center gap-1">
+                <Database className="w-3 h-3 text-emerald-300" />
+                <span>Update Terakhir</span>
+              </div>
+              <div className="text-xs sm:text-sm font-black text-emerald-200 mt-1">{lastSyncTime} WIB</div>
+            </div>
+          </div>
+
+          {pullFeedback && (
+            <motion.div
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-100 text-xs font-bold mt-2"
+            >
+              <span>{pullFeedback}</span>
+            </motion.div>
+          )}
         </div>
       </div>
 

@@ -556,7 +556,7 @@ export const KibBModule: React.FC<KibBModuleProps> = ({
             title="Tarik & perbarui data barang KIB B langsung dari Google Spreadsheet"
           >
             <RefreshCw className={`w-4 h-4 text-emerald-700 ${isPulling || isSyncing ? 'animate-spin' : ''}`} />
-            <span>{isPulling || isSyncing ? 'Menarik Data...' : 'Tarik Data dari Spreadsheet'}</span>
+            <span>{isPulling || isSyncing ? 'Menarik Data...' : 'Tarik Data'}</span>
           </button>
 
           <button
@@ -800,7 +800,7 @@ export const KibBModule: React.FC<KibBModuleProps> = ({
                       className="inline-flex items-center gap-2 px-4 py-2 mt-3.5 rounded-xl text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 transition-colors shadow-2xs cursor-pointer disabled:opacity-60"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 text-emerald-700 ${isPulling || isSyncing ? 'animate-spin' : ''}`} />
-                      <span>{isPulling || isSyncing ? 'Menarik Data...' : 'Tarik Data dari Spreadsheet'}</span>
+                      <span>{isPulling || isSyncing ? 'Menarik Data...' : 'Tarik Data'}</span>
                     </button>
                   </td>
                 </tr>
