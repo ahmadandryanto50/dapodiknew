@@ -9,11 +9,15 @@ import {
   Trash2,
   Filter,
   CheckCircle,
+  CheckCircle2,
+  PlusCircle,
+  Layers,
   AlertTriangle,
   XSquare,
   X,
   Printer,
   FileSpreadsheet,
+  FileText,
   Coins,
   ShieldAlert,
   Info,
@@ -141,7 +145,7 @@ function generateShortKibBId(): string {
 interface KibBModuleProps {
   kibB: KibBItem[];
   onAddKibB: (item: KibBItem) => void;
-  onBulkAddKibB?: (items: KibBItem[]) => void;
+  onBulkAddKibB?: (items: KibBItem[], replaceAll?: boolean) => void;
   onUpdateKibB: (item: KibBItem) => void;
   onDeleteKibB: (id: string) => void;
   onSync?: () => Promise<void> | void;
@@ -164,6 +168,12 @@ export const KibBModule: React.FC<KibBModuleProps> = ({
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importMode, setImportMode] = useState<'append' | 'replace'>('append');
+  const [stagedFile, setStagedFile] = useState<File | null>(null);
+  const [stagedItems, setStagedItems] = useState<KibBItem[]>([]);
+  const [isParsingFile, setIsParsingFile] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [isExecutingImport, setIsExecutingImport] = useState(false);
   const [editingItem, setEditingItem] = useState<KibBItem | null>(null);
   const [deletingItem, setDeletingItem] = useState<KibBItem | null>(null);
   const [isPulling, setIsPulling] = useState(false);
@@ -184,6 +194,29 @@ export const KibBModule: React.FC<KibBModuleProps> = ({
         const cfg = getSavedSyncConfig();
         const res = await loadFromGoogleSheets(cfg);
         if (res && res.success) {
+          if (res.data && Array.isArray(res.data.kibB)) {
+            const cleanItems = res.data.kibB.map((k: any, idx: number) => ({
+              id: k.id || `kibb-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
+              no: Number(k.no) || (idx + 1),
+              namaBarang: String(k.namaBarang || '').trim(),
+              kodeBarang: String(k.kodeBarang || '').trim(),
+              kondisi: (['Baik', 'Rusak Ringan', 'Rusak Berat'].includes(k.kondisi) ? k.kondisi : 'Baik') as any,
+              merkType: String(k.merkType || '').trim(),
+              ukuranCc: String(k.ukuranCc || '').trim(),
+              bahan: String(k.bahan || '').trim(),
+              tahun: String(k.tahun || '').trim(),
+              noPabrik: String(k.noPabrik || '').trim(),
+              noRangka: String(k.noRangka || '').trim(),
+              noMesin: String(k.noMesin || '').trim(),
+              noPolisi: String(k.noPolisi || '').trim(),
+              noBpkb: String(k.noBpkb || '').trim(),
+              asalUsul: String(k.asalUsul || '').trim(),
+              harga: String(k.harga || '').trim(),
+              keterangan: String(k.keterangan || '').trim()
+            }));
+            localStorage.setItem('dapodik_kib_b', JSON.stringify(cleanItems));
+            window.location.reload();
+          }
           showLocalToast('success', `Berhasil menarik data KIB B terbaru dari Google Spreadsheet!`);
         } else {
           showLocalToast('error', res?.message || 'Gagal memuat data dari Spreadsheet.');
@@ -356,60 +389,122 @@ export const KibBModule: React.FC<KibBModuleProps> = ({
     showLocalToast('success', 'Template Excel (.xlsx) KIB B berhasil diunduh! Silakan isi data dan unggah kembali.');
   };
 
-  const handleFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const parseFileItems = async (file: File): Promise<KibBItem[]> => {
+    const parsedRows = await readExcelOrCSVFile(file);
+    if (parsedRows.length === 0) {
+      throw new Error('File kosong atau format Excel / CSV tidak dapat dibaca.');
+    }
 
+    const newItemsToImport: KibBItem[] = [];
+    parsedRows.forEach((row, idx) => {
+      const namaBarang = getCSVValue(row, ['jenisbarangnamabarang', 'namabarang', 'jenisbarang', 'nama', 'barang', 'item']);
+      if (!namaBarang || !namaBarang.trim()) return;
+
+      const rawNo = getCSVValue(row, ['no', 'nomor', 'no.']);
+      const parsedNo = rawNo ? (parseInt(rawNo, 10) || (idx + 1)) : (idx + 1);
+
+      const newItem: KibBItem = {
+        id: generateShortKibBId(),
+        no: parsedNo,
+        namaBarang: namaBarang.trim(),
+        kodeBarang: getCSVValue(row, ['nomorkodebarang', 'kodebarang', 'kode', 'nomorkode']) || `1.3.2.${Math.floor(10 + Math.random() * 89)}.${Math.floor(10 + Math.random() * 89)}.${Math.floor(100 + Math.random() * 899)}`,
+        kondisi: (['Baik', 'Rusak Ringan', 'Rusak Berat'].includes(getCSVValue(row, ['kondisi'])) ? getCSVValue(row, ['kondisi']) : 'Baik') as any,
+        merkType: getCSVValue(row, ['merktype', 'merk', 'tipe', 'type']) || '',
+        ukuranCc: getCSVValue(row, ['ukurancc', 'ukuran', 'cc']) || '',
+        bahan: getCSVValue(row, ['bahan']) || '',
+        tahun: getCSVValue(row, ['tahunpengadaan', 'tahun']) || String(new Date().getFullYear()),
+        noPabrik: getCSVValue(row, ['nopabrik', 'pabrik']) || '',
+        noRangka: getCSVValue(row, ['norangka', 'rangka']) || '',
+        noMesin: getCSVValue(row, ['nomesin', 'mesin']) || '',
+        noPolisi: getCSVValue(row, ['nopolisi', 'polisi', 'plat']) || '',
+        noBpkb: getCSVValue(row, ['nobpkb', 'bpkb']) || '',
+        asalUsul: getCSVValue(row, ['asalusul', 'asal', 'sumber']) || 'DAK / P2HP',
+        harga: getCSVValue(row, ['harga', 'nilaiharga', 'biaya']) || '',
+        keterangan: getCSVValue(row, ['keterangan', 'ket', 'lokasi', 'ruang']) || ''
+      };
+
+      newItemsToImport.push(newItem);
+    });
+
+    return newItemsToImport;
+  };
+
+  const handleFileSelect = async (file: File) => {
+    setIsParsingFile(true);
     try {
-      const parsedRows = await readExcelOrCSVFile(file);
-      if (parsedRows.length === 0) {
-        showLocalToast('error', 'File kosong atau format Excel / CSV tidak dapat dibaca.');
+      const items = await parseFileItems(file);
+      if (items.length === 0) {
+        showLocalToast('error', 'Tidak ditemukan baris barang valid dengan kolom nama barang pada berkas ini.');
+        setStagedFile(null);
+        setStagedItems([]);
         return;
       }
-
-      const newItemsToImport: KibBItem[] = [];
-      parsedRows.forEach((row, idx) => {
-        const namaBarang = getCSVValue(row, ['namabarang', 'jenisbarang', 'nama', 'barang', 'item']);
-        if (!namaBarang) return;
-
-        const newItem: KibBItem = {
-          id: generateShortKibBId(),
-          namaBarang: namaBarang,
-          kodeBarang: getCSVValue(row, ['kodebarang', 'kode', 'nomorkode']) || `1.3.2.${Math.floor(10 + Math.random() * 89)}.${Math.floor(10 + Math.random() * 89)}.${Math.floor(100 + Math.random() * 899)}`,
-          kondisi: (getCSVValue(row, ['kondisi']) || 'Baik') as any,
-          merkType: getCSVValue(row, ['merktype', 'merk', 'tipe', 'type']) || '',
-          ukuranCc: getCSVValue(row, ['ukurancc', 'ukuran', 'cc']) || '',
-          bahan: getCSVValue(row, ['bahan']) || '',
-          tahun: getCSVValue(row, ['tahunpengadaan', 'tahun']) || String(new Date().getFullYear()),
-          noPabrik: getCSVValue(row, ['nopabrik', 'pabrik']) || '',
-          noRangka: getCSVValue(row, ['norangka', 'rangka']) || '',
-          noMesin: getCSVValue(row, ['nomesin', 'mesin']) || '',
-          noPolisi: getCSVValue(row, ['nopolisi', 'polisi', 'plat']) || '',
-          noBpkb: getCSVValue(row, ['nobpkb', 'bpkb']) || '',
-          asalUsul: getCSVValue(row, ['asalusul', 'asal', 'sumber']) || 'DAK / P2HP',
-          harga: getCSVValue(row, ['harga', 'nilaiharga', 'biaya']) || '',
-          keterangan: getCSVValue(row, ['keterangan', 'ket', 'lokasi', 'ruang']) || ''
-        };
-
-        newItemsToImport.push(newItem);
-      });
-
-      if (newItemsToImport.length > 0) {
-        if (onBulkAddKibB) {
-          onBulkAddKibB(newItemsToImport);
-        } else {
-          newItemsToImport.forEach(item => onAddKibB(item));
-        }
-        showLocalToast('success', 'Tersimpan');
-        setIsImportModalOpen(false);
-      } else {
-        showLocalToast('error', 'Tidak ada baris data valid yang memiliki nama barang dalam file.');
-      }
+      setStagedFile(file);
+      setStagedItems(items);
+      showLocalToast('success', `Berkas valid: ${items.length} baris barang KIB B siap diproses.`);
     } catch (err: any) {
-      showLocalToast('error', `Gagal memproses file: ${err?.message || 'Error parsing file'}`);
+      showLocalToast('error', err?.message || 'Gagal membaca isi berkas.');
+      setStagedFile(null);
+      setStagedItems([]);
     } finally {
-      e.target.value = '';
+      setIsParsingFile(false);
     }
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleFileSelect(file);
+    }
+    e.target.value = '';
+  };
+
+  const handleDropFile = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      handleFileSelect(file);
+    }
+  };
+
+  const handleConfirmImport = () => {
+    if (!stagedItems || stagedItems.length === 0) {
+      showLocalToast('error', 'Silakan pilih atau unggah berkas Excel / CSV terlebih dahulu.');
+      return;
+    }
+
+    setIsExecutingImport(true);
+    try {
+      const isReplace = importMode === 'replace';
+      if (onBulkAddKibB) {
+        onBulkAddKibB(stagedItems, isReplace);
+      } else {
+        if (isReplace) {
+          kibB.forEach(item => onDeleteKibB(item.id));
+        }
+        stagedItems.forEach(item => onAddKibB(item));
+      }
+
+      showLocalToast('success', isReplace
+        ? `Berhasil! Seluruh data lama KIB B diganti dengan ${stagedItems.length} barang baru.`
+        : `Berhasil! ${stagedItems.length} barang baru berhasil ditambahkan ke KIB B.`
+      );
+
+      handleCloseImportModal();
+    } catch (err: any) {
+      showLocalToast('error', `Gagal mengimpor data: ${err?.message || 'Terjadi kesalahan'}`);
+    } finally {
+      setIsExecutingImport(false);
+    }
+  };
+
+  const handleCloseImportModal = () => {
+    setIsImportModalOpen(false);
+    setStagedFile(null);
+    setStagedItems([]);
+    setImportMode('append');
+    setIsDragOver(false);
   };
 
   const handleExportExcel = () => {
@@ -727,14 +822,7 @@ export const KibBModule: React.FC<KibBModuleProps> = ({
                         {item.no !== undefined && item.no !== '' ? item.no : index + 1}
                       </td>
                       <td className="py-2.5 px-3">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-bold text-slate-900">{item.namaBarang}</span>
-                          {item.id && (
-                            <span className="inline-flex font-mono text-[9px] font-extrabold text-indigo-700 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded shadow-2xs">
-                              {item.id}
-                            </span>
-                          )}
-                        </div>
+                        <span className="font-bold text-slate-900 block">{item.namaBarang}</span>
                         {item.keterangan && (
                           <span className="text-[11px] text-slate-500 block truncate max-w-[200px]">
                             {item.keterangan}
@@ -1125,64 +1213,305 @@ export const KibBModule: React.FC<KibBModuleProps> = ({
 
       {/* Modal Upload / Impor Data KIB B */}
       {isImportModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
-          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl p-6 space-y-5 my-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl p-5 sm:p-6 space-y-5 my-auto max-h-[92vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0">
               <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100">
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-200">
                   <Upload className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-slate-900">Upload / Impor Data KIB B</h3>
-                  <p className="text-xs text-slate-500">Impor file Excel (.xlsx / .xls) sesuai format database Spreadsheet</p>
+                  <h3 className="text-base font-bold text-slate-900">Upload & Impor Data KIB B</h3>
+                  <p className="text-xs text-slate-500">Pilih model impor dan unggah berkas Excel (.xlsx / .xls) atau CSV</p>
                 </div>
               </div>
               <button
-                onClick={() => setIsImportModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
+                type="button"
+                onClick={handleCloseImportModal}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+                title="Tutup Modal"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-4 text-xs text-slate-600">
-              <div className="p-3.5 bg-emerald-50/80 border border-emerald-200 rounded-xl flex items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <p className="font-semibold text-emerald-900">1. Unduh Template Excel KIB B</p>
-                  <p className="text-[11px] text-emerald-700">Gunakan template file Excel (.xlsx) KIB B agar nama kolom presisi dengan database (tanpa kolom No).</p>
+            {/* Scrollable Body */}
+            <div className="space-y-4 overflow-y-auto pr-1 text-xs text-slate-600 flex-1">
+              {/* Langkah 1: Pilihan Model Impor */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[11px] font-bold">1</span>
+                    Pilih Model Impor Data
+                  </label>
+                  <span className="text-[11px] text-slate-400">Pilih salah satu metode</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Model 1: Tambahkan (Append) */}
+                  <div
+                    onClick={() => setImportMode('append')}
+                    className={`p-3.5 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
+                      importMode === 'append'
+                        ? 'border-emerald-600 bg-emerald-50/50 shadow-xs'
+                        : 'border-slate-200 bg-slate-50/50 hover:border-slate-300 hover:bg-white'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+                            importMode === 'append' ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600'
+                          }`}>
+                            <Layers className="w-4 h-4" />
+                          </div>
+                          <span className="font-bold text-slate-900 text-xs">Tambahkan Data</span>
+                        </div>
+                        <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                          importMode === 'append' ? 'border-emerald-600 bg-emerald-600' : 'border-slate-300'
+                        }`}>
+                          {importMode === 'append' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </div>
+                      </div>
+                      <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 mb-1.5 border border-emerald-200">
+                        Aman • Data Lama Tetap Ada
+                      </span>
+                      <p className="text-[11px] text-slate-600 leading-relaxed">
+                        Menambahkan data baru dari file tanpa menghapus data lama. Sebanyak <strong>{kibB.length} barang</strong> lama Anda tetap utuh.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Model 2: Hapus Semua & Timpa (Replace All) */}
+                  <div
+                    onClick={() => setImportMode('replace')}
+                    className={`p-3.5 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
+                      importMode === 'replace'
+                        ? 'border-rose-600 bg-rose-50/60 shadow-xs'
+                        : 'border-slate-200 bg-slate-50/50 hover:border-slate-300 hover:bg-white'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+                            importMode === 'replace' ? 'bg-rose-600 text-white' : 'bg-slate-200 text-slate-600'
+                          }`}>
+                            <Trash2 className="w-4 h-4" />
+                          </div>
+                          <span className="font-bold text-slate-900 text-xs">Hapus Semua & Timpa</span>
+                        </div>
+                        <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                          importMode === 'replace' ? 'border-rose-600 bg-rose-600' : 'border-slate-300'
+                        }`}>
+                          {importMode === 'replace' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </div>
+                      </div>
+                      <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 mb-1.5 border border-rose-200">
+                        Timpa Total • Data Lama Terhapus
+                      </span>
+                      <p className="text-[11px] text-slate-600 leading-relaxed">
+                        Menghapus seluruh <strong>{kibB.length} data lama</strong> di KIB B secara permanen, dan hanya menyimpan data baru dari file ini.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Unduh Template Banner */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <p className="font-semibold text-slate-800 text-[11px]">Format Kolom Sesuai Database</p>
+                  <p className="text-[10px] text-slate-500">Unduh template Excel KIB B jika Anda belum menyiapkan berkas.</p>
                 </div>
                 <button
+                  type="button"
                   onClick={handleDownloadTemplate}
-                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition-colors shrink-0 flex items-center gap-1.5 shadow-xs cursor-pointer"
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition-colors shrink-0 flex items-center gap-1.5 shadow-2xs cursor-pointer"
                 >
-                  <FileSpreadsheet className="w-4 h-4" />
-                  <span>Download Excel</span>
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  <span>Download Template</span>
                 </button>
               </div>
 
+              {/* Langkah 2: Upload File Area */}
               <div className="space-y-2">
-                <p className="font-semibold text-slate-800">2. Pilih File Excel / CSV KIB B untuk Diunggah</p>
-                <label className="border-2 border-dashed border-slate-200 hover:border-emerald-500 bg-slate-50 hover:bg-emerald-50/50 transition-all rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer group">
-                  <Upload className="w-8 h-8 text-slate-400 group-hover:text-emerald-600 transition-colors mb-2" />
-                  <span className="font-bold text-slate-700 group-hover:text-emerald-800">Klik di sini untuk memilih file Excel (.xlsx / .xls / .csv)</span>
-                  <span className="text-[11px] text-slate-400 mt-1">Format yang didukung: .xlsx, .xls, .csv</span>
-                  <input
-                    type="file"
-                    accept=".xlsx,.xls,.csv,.txt"
-                    className="hidden"
-                    onChange={handleFileImport}
-                  />
+                <label className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[11px] font-bold">2</span>
+                  Pilih Berkas Excel / CSV KIB B
                 </label>
+
+                {!stagedFile ? (
+                  <label
+                    onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                    onDragLeave={() => setIsDragOver(false)}
+                    onDrop={handleDropFile}
+                    className={`border-2 border-dashed transition-all rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer group ${
+                      isDragOver
+                        ? 'border-emerald-500 bg-emerald-50/70 scale-[0.99]'
+                        : 'border-slate-300 hover:border-emerald-500 bg-slate-50/70 hover:bg-emerald-50/30'
+                    }`}
+                  >
+                    {isParsingFile ? (
+                      <div className="flex flex-col items-center py-2">
+                        <RefreshCw className="w-8 h-8 text-emerald-600 animate-spin mb-2" />
+                        <span className="font-bold text-slate-800 text-xs">Membaca isi berkas...</span>
+                        <span className="text-[11px] text-slate-500 mt-0.5">Memvalidasi baris data KIB B</span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="w-12 h-12 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center mb-2.5 group-hover:scale-105 transition-transform">
+                          <Upload className="w-6 h-6" />
+                        </div>
+                        <span className="font-bold text-slate-800 group-hover:text-emerald-800 text-xs">
+                          Klik untuk memilih berkas atau tarik (drag & drop) ke sini
+                        </span>
+                        <span className="text-[11px] text-slate-400 mt-1">
+                          Mendukung format .xlsx, .xls, .csv, dan .txt
+                        </span>
+                        <input
+                          type="file"
+                          accept=".xlsx,.xls,.csv,.txt"
+                          className="hidden"
+                          onChange={handleFileInputChange}
+                        />
+                      </>
+                    )}
+                  </label>
+                ) : (
+                  <div className="space-y-3">
+                    {/* File Info Bar */}
+                    <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5 overflow-hidden">
+                        <div className="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0 border border-emerald-200">
+                          <FileSpreadsheet className="w-5 h-5" />
+                        </div>
+                        <div className="truncate">
+                          <p className="font-bold text-slate-900 text-xs truncate">{stagedFile.name}</p>
+                          <p className="text-[10px] text-slate-500">
+                            {(stagedFile.size / 1024).toFixed(1)} KB • <span className="text-emerald-700 font-semibold">{stagedItems.length} baris barang valid</span>
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { setStagedFile(null); setStagedItems([]); }}
+                        className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 bg-white hover:bg-slate-100 border border-slate-200 transition-colors shrink-0 cursor-pointer"
+                      >
+                        Ganti File
+                      </button>
+                    </div>
+
+                    {/* Impact Simulation Alert */}
+                    {importMode === 'append' ? (
+                      <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-start gap-2.5">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                        <div className="space-y-0.5 text-[11px]">
+                          <p className="font-bold text-emerald-950">Model Tambahkan Data (Append) Aktif</p>
+                          <p className="text-emerald-800 leading-relaxed">
+                            Sebanyak <strong>{stagedItems.length} barang baru</strong> akan ditambahkan ke <strong>{kibB.length} data lama</strong> yang sudah ada. Total barang setelah proses ini adalah <strong>{kibB.length + stagedItems.length} barang</strong>. Data lama tetap aman.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 flex items-start gap-2.5">
+                        <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                        <div className="space-y-0.5 text-[11px]">
+                          <p className="font-bold text-rose-950">Perhatian: Model Hapus Semua Data Lama Aktif</p>
+                          <p className="text-rose-800 leading-relaxed">
+                            Sebanyak <strong>{kibB.length} data lama</strong> di KIB B akan <strong>DIHAPUS KESELURUHAN</strong> dan digantikan secara utuh oleh <strong>{stagedItems.length} data baru</strong> dari berkas ini. Perubahan akan disinkronkan ke Google Spreadsheet.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Preview Table */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="font-bold text-slate-700 text-[11px]">Pratinjau Data yang Akan Diimpor:</span>
+                        <span className="text-[10px] text-slate-400">Menampilkan {Math.min(3, stagedItems.length)} dari {stagedItems.length} data</span>
+                      </div>
+                      <div className="border border-slate-200 rounded-xl overflow-x-auto bg-white shadow-2xs">
+                        <table className="w-full text-[10px] text-left">
+                          <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold">
+                            <tr>
+                              <th className="px-2.5 py-1.5">No</th>
+                              <th className="px-2.5 py-1.5">Nama Barang</th>
+                              <th className="px-2.5 py-1.5">Kode Barang</th>
+                              <th className="px-2.5 py-1.5">Kondisi</th>
+                              <th className="px-2.5 py-1.5">Merk / Type</th>
+                              <th className="px-2.5 py-1.5">Harga</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {stagedItems.slice(0, 3).map((item, idx) => (
+                              <tr key={idx} className="hover:bg-slate-50/60">
+                                <td className="px-2.5 py-1.5 font-medium text-slate-500">{importMode === 'append' ? (kibB.length + idx + 1) : (idx + 1)}</td>
+                                <td className="px-2.5 py-1.5 font-semibold text-slate-900">{item.namaBarang}</td>
+                                <td className="px-2.5 py-1.5 text-slate-600 font-mono">{item.kodeBarang}</td>
+                                <td className="px-2.5 py-1.5">
+                                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${
+                                    item.kondisi === 'Baik' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                                  }`}>
+                                    {item.kondisi}
+                                  </span>
+                                </td>
+                                <td className="px-2.5 py-1.5 text-slate-600">{item.merkType || '-'}</td>
+                                <td className="px-2.5 py-1.5 text-slate-600">{item.harga ? `Rp ${item.harga}` : '-'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      {stagedItems.length > 3 && (
+                        <p className="text-[10px] text-slate-400 mt-1 italic text-right">
+                          ...dan {stagedItems.length - 3} barang lainnya siap diproses.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="flex justify-end pt-2 border-t border-slate-100">
+            {/* Footer Buttons */}
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100 shrink-0">
               <button
                 type="button"
-                onClick={() => setIsImportModalOpen(false)}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+                onClick={handleCloseImportModal}
+                disabled={isExecutingImport}
+                className="px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
               >
-                Tutup
+                Batal
+              </button>
+
+              <button
+                type="button"
+                onClick={handleConfirmImport}
+                disabled={!stagedFile || stagedItems.length === 0 || isExecutingImport}
+                className={`px-5 py-2 text-xs font-bold rounded-xl transition-all shadow-sm flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                  importMode === 'replace'
+                    ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                    : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                }`}
+              >
+                {isExecutingImport ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Menyimpan ke Database...</span>
+                  </>
+                ) : importMode === 'replace' ? (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Hapus Semua & Impor {stagedItems.length > 0 ? `(${stagedItems.length})` : ''}</span>
+                  </>
+                ) : (
+                  <>
+                    <PlusCircle className="w-3.5 h-3.5" />
+                    <span>Tambahkan Data {stagedItems.length > 0 ? `(${stagedItems.length})` : ''}</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

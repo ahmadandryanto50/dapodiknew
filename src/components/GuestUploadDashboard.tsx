@@ -61,7 +61,31 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
   });
 
   const [queue, setQueue] = useState<QueuedFile[]>([]);
-  const [historyFiles, setHistoryFiles] = useState<any[]>([]);
+  const [historyFiles, setHistoryFiles] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('dapodik_school_files') || localStorage.getItem('dapodik_berkas');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          let localDeletedIds: string[] = [];
+          try {
+            const storedDel = localStorage.getItem('dapodik_deleted_file_ids');
+            if (storedDel) localDeletedIds = JSON.parse(storedDel);
+          } catch (e) {}
+          const delSet = new Set(localDeletedIds.map((id) => String(id)));
+          return parsed.filter(
+            (f: any) =>
+              f &&
+              (f.id || f.name) &&
+              !delSet.has(String(f.id)) &&
+              !delSet.has(String(f.name)) &&
+              !delSet.has(String(f.driveFileUrl || ''))
+          );
+        }
+      }
+    } catch (e) {}
+    return [];
+  });
   const [isLoadingHistory, setIsLoadingHistory] = useState<boolean>(false);
   const [historySearch, setHistorySearch] = useState<string>('');
   const [globalError, setGlobalError] = useState<string | null>(null);
@@ -277,114 +301,197 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
 
   const fetchHistory = async () => {
     setIsLoadingHistory(true);
-    let loadedFiles: any[] = [];
-
-    // Load deleted IDs list first
-    let localDeletedIds: string[] = [];
     try {
-      const stored = localStorage.getItem('dapodik_deleted_file_ids');
-      if (stored) localDeletedIds = JSON.parse(stored);
-    } catch (e) {}
-    const deletedSet = new Set(localDeletedIds.map(id => String(id)));
+      let loadedFiles: any[] = [];
 
-    // 0. Check localStorage first for instant display
-    try {
-      const savedLocal = localStorage.getItem('dapodik_school_files') || localStorage.getItem('dapodik_berkas');
-      if (savedLocal) {
-        const parsedLocal = JSON.parse(savedLocal);
-        if (Array.isArray(parsedLocal) && parsedLocal.length > 0) {
-          loadedFiles = parsedLocal;
+      // Load deleted IDs list first
+      let localDeletedIds: string[] = [];
+      try {
+        const stored = localStorage.getItem('dapodik_deleted_file_ids');
+        if (stored) localDeletedIds = JSON.parse(stored);
+      } catch (e) {}
+      const deletedSet = new Set(localDeletedIds.map((id) => String(id)));
+
+      // 0. Check localStorage first for instant display
+      try {
+        const savedLocal = localStorage.getItem('dapodik_school_files') || localStorage.getItem('dapodik_berkas');
+        if (savedLocal) {
+          const parsedLocal = JSON.parse(savedLocal);
+          if (Array.isArray(parsedLocal) && parsedLocal.length > 0) {
+            loadedFiles = parsedLocal;
+            const validLocal = parsedLocal.filter(
+              (f: any) =>
+                f &&
+                (f.id || f.name) &&
+                !deletedSet.has(String(f.id)) &&
+                !deletedSet.has(String(f.name)) &&
+                !deletedSet.has(String(f.driveFileUrl || ''))
+            );
+            if (validLocal.length > 0) {
+              setHistoryFiles(validLocal);
+            }
+          }
         }
-      }
-    } catch (e) {}
+      } catch (e) {}
 
-    // 1. First, fetch from server cache (/api/app-data)
-    try {
-      const res = await fetch(`/api/app-data?t=${Date.now()}`);
-      if (res.ok) {
-        const serverData = await res.json();
-        if (serverData && Array.isArray(serverData.schoolFiles) && serverData.schoolFiles.length > 0) {
-          loadedFiles = serverData.schoolFiles;
-        } else if (serverData && Array.isArray(serverData.berkas) && serverData.berkas.length > 0) {
-          loadedFiles = serverData.berkas;
-        }
-      }
-    } catch (e) {
-      console.warn('Failed to fetch file history from server endpoint:', e);
-    }
-
-    // 2. Fallback or Sync Direct from Google Apps Script Spreadsheet if server cache is empty
-    if (!loadedFiles || loadedFiles.length === 0) {
+      // 1. Resolve active Google Apps Script & Spreadsheet URLs (Priority: localStorage > /api/sync-config)
       let targetWebAppUrl = "https://script.google.com/macros/s/AKfycbwOjTnhqqQFCvRGK_5NPVICqUbK-yHUTq1b0CwX3aXqcYjOITfoaogfBWDS3I1bdL6hZA/exec";
       let targetSpreadsheetUrl = "";
+
       try {
-        const configRes = await fetch('/api/sync-config');
+        const localCfgRaw = localStorage.getItem('dapodik_sync_config');
+        if (localCfgRaw) {
+          const localCfg = JSON.parse(localCfgRaw);
+          if (localCfg?.webAppUrl && String(localCfg.webAppUrl).startsWith('http')) {
+            targetWebAppUrl = localCfg.webAppUrl;
+          }
+          if (localCfg?.spreadsheetUrl) {
+            targetSpreadsheetUrl = localCfg.spreadsheetUrl;
+          }
+        }
+      } catch (e) {}
+
+      try {
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 4000);
+        const configRes = await fetch('/api/sync-config', { signal: ctrl.signal });
+        clearTimeout(tid);
         if (configRes.ok) {
           const configData = await configRes.json();
-          if (configData && configData.webAppUrl) {
+          if (configData?.webAppUrl && (!targetWebAppUrl || targetWebAppUrl.includes('AKfycbwOjTnhqqQFCvRGK_5NPVICqUbK-yHUTq1b0CwX3aXqcYjOITfoaogfBWDS3I1bdL6hZA'))) {
             targetWebAppUrl = configData.webAppUrl;
           }
-          if (configData && configData.spreadsheetUrl) {
+          if (configData?.spreadsheetUrl && !targetSpreadsheetUrl) {
             targetSpreadsheetUrl = configData.spreadsheetUrl;
           }
         }
-      } catch (cfgErr) {
-        // ignore
+      } catch (cfgErr) {}
+
+      // 2. Fetch from server cache (/api/app-data) with 6s timeout
+      try {
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 6000);
+        const res = await fetch(`/api/app-data?t=${Date.now()}`, { signal: ctrl.signal });
+        clearTimeout(tid);
+        if (res.ok) {
+          const serverData = await res.json();
+          if (serverData && Array.isArray(serverData.schoolFiles) && serverData.schoolFiles.length > 0) {
+            loadedFiles = serverData.schoolFiles;
+          } else if (serverData && Array.isArray(serverData.berkas) && serverData.berkas.length > 0) {
+            loadedFiles = serverData.berkas;
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to fetch file history from server endpoint:', e);
       }
 
-      if (targetWebAppUrl) {
-        try {
-          const loadRes = await fetch('/api/load-sheets', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ webAppUrl: targetWebAppUrl, spreadsheetUrl: targetSpreadsheetUrl })
-          });
-          if (loadRes.ok) {
-            const loadData = await loadRes.json();
-            const berkasArr = loadData && (loadData.berkas || loadData["Data_Berkas"] || loadData["Data Berkas"] || loadData.schoolFiles || loadData.files);
-            if (Array.isArray(berkasArr) && berkasArr.length > 0) {
-              loadedFiles = berkasArr;
+      // 3. Fallback or Sync Direct from Google Apps Script Spreadsheet if server cache is empty
+      if (!loadedFiles || loadedFiles.length === 0) {
+        if (targetWebAppUrl) {
+          try {
+            const ctrl = new AbortController();
+            const tid = setTimeout(() => ctrl.abort(), 12000);
+            const loadRes = await fetch('/api/load-sheets', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ webAppUrl: targetWebAppUrl, spreadsheetUrl: targetSpreadsheetUrl }),
+              signal: ctrl.signal
+            });
+            clearTimeout(tid);
+            if (loadRes.ok) {
+              const loadData = await loadRes.json();
+              const berkasArr =
+                loadData &&
+                (loadData.berkas ||
+                  loadData.data?.berkas ||
+                  loadData.data?.payload?.berkas ||
+                  loadData["Data_Berkas"] ||
+                  loadData.data?.["Data_Berkas"] ||
+                  loadData["Data Berkas"] ||
+                  loadData.data?.["Data Berkas"] ||
+                  loadData.schoolFiles ||
+                  loadData.data?.schoolFiles ||
+                  loadData.files ||
+                  loadData.data?.files);
+              if (Array.isArray(berkasArr) && berkasArr.length > 0) {
+                loadedFiles = berkasArr;
+              }
             }
+          } catch (gasErr) {
+            console.warn('Fetch from Google Sheets via /api/load-sheets proxy failed:', gasErr);
           }
-        } catch (gasErr) {
-          console.warn('Fetch from Google Sheets via /api/load-sheets proxy failed:', gasErr);
+        }
+
+        // 4. Direct Client-Side GET fallback from Google Apps Script if proxy failed or timed out (Vercel protection)
+        if ((!loadedFiles || loadedFiles.length === 0) && targetWebAppUrl) {
+          try {
+            let directUrl = targetWebAppUrl;
+            if (targetSpreadsheetUrl) {
+              const sep = directUrl.includes('?') ? '&' : '?';
+              directUrl = `${directUrl}${sep}spreadsheetUrl=${encodeURIComponent(targetSpreadsheetUrl)}&spreadsheetId=${encodeURIComponent(targetSpreadsheetUrl)}`;
+            }
+            const ctrl = new AbortController();
+            const tid = setTimeout(() => ctrl.abort(), 12000);
+            const directRes = await fetch(directUrl, { method: 'GET', redirect: 'follow', signal: ctrl.signal });
+            clearTimeout(tid);
+            if (directRes.ok) {
+              const directText = await directRes.text();
+              const directData = JSON.parse(directText);
+              const berkasDirect =
+                directData &&
+                (directData.berkas ||
+                  directData.data?.berkas ||
+                  directData["Data_Berkas"] ||
+                  directData["Data Berkas"] ||
+                  directData.schoolFiles ||
+                  directData.files);
+              if (Array.isArray(berkasDirect) && berkasDirect.length > 0) {
+                loadedFiles = berkasDirect;
+              }
+            }
+          } catch (directErr) {
+            console.warn('Direct client-side fetch from Apps Script warning:', directErr);
+          }
         }
       }
+
+      // 5. Normalize, Filter Deleted, & Sort History Items
+      if (Array.isArray(loadedFiles) && loadedFiles.length > 0) {
+        const normalized = loadedFiles
+          .filter((f: any) => f && (f.id || f.name || f['Nama Berkas'] || f['Link Drive'] || f.driveFileUrl))
+          .map((f: any, idx: number) => {
+            const rawId = f.id || f.fileId || f['Link Drive'] || f['Nama Berkas'] || `file-idx-${idx}`;
+            return {
+              ...f,
+              id: String(rawId),
+              name: f.name || f['Nama Berkas'] || f.Name || 'Berkas Dokumen',
+              uploadedBy: f.uploadedBy || f['Nama Pengirim/Orang Tua'] || f.UploadedBy || 'Tamu / Orang Tua',
+              category: f.category || f['Kategori'] || f.Category || 'Umum',
+              uploadedAt: f.uploadedAt || f['Tanggal'] || f.UploadedAt || '',
+              driveFileUrl: f.driveFileUrl || f['Link Drive'] || f.DriveFileUrl || f.url || '',
+              fileSize: Number(f.fileSize || f['Ukuran File'] || f.FileSize || f.size || 0)
+            };
+          })
+          .filter((f: any) => !deletedSet.has(String(f.id)) && !deletedSet.has(String(f.name)) && !deletedSet.has(String(f.driveFileUrl)));
+
+        const sorted = normalized.sort((a, b) => {
+          const timeA = a.uploadedAt ? new Date(String(a.uploadedAt).replace(/-/g, '/')).getTime() : 0;
+          const timeB = b.uploadedAt ? new Date(String(b.uploadedAt).replace(/-/g, '/')).getTime() : 0;
+          return timeB - timeA;
+        });
+        try {
+          localStorage.setItem('dapodik_school_files', JSON.stringify(sorted));
+        } catch (e) {}
+        setHistoryFiles(sorted);
+      } else {
+        // If loadedFiles was empty, keep existing state if any
+        setHistoryFiles((prev) => (prev.length > 0 ? prev : []));
+      }
+    } catch (outerErr) {
+      console.error('Error in fetchHistory:', outerErr);
+    } finally {
+      setIsLoadingHistory(false);
     }
-
-    // 3. Normalize, Filter Deleted, & Sort History Items
-    if (Array.isArray(loadedFiles) && loadedFiles.length > 0) {
-      const normalized = loadedFiles
-        .filter((f: any) => f && (f.id || f.name || f['Nama Berkas'] || f['Link Drive'] || f.driveFileUrl))
-        .map((f: any, idx: number) => {
-          const rawId = f.id || f.fileId || f['Link Drive'] || f['Nama Berkas'] || `file-idx-${idx}`;
-          return {
-            ...f,
-            id: String(rawId),
-            name: f.name || f['Nama Berkas'] || f.Name || 'Berkas Dokumen',
-            uploadedBy: f.uploadedBy || f['Nama Pengirim/Orang Tua'] || f.UploadedBy || 'Tamu / Orang Tua',
-            category: f.category || f['Kategori'] || f.Category || 'Umum',
-            uploadedAt: f.uploadedAt || f['Tanggal'] || f.UploadedAt || '',
-            driveFileUrl: f.driveFileUrl || f['Link Drive'] || f.DriveFileUrl || f.url || '',
-            fileSize: Number(f.fileSize || f['Ukuran File'] || f.FileSize || f.size || 0)
-          };
-        })
-        .filter((f: any) => !deletedSet.has(String(f.id)) && !deletedSet.has(String(f.name)) && !deletedSet.has(String(f.driveFileUrl)));
-
-      const sorted = normalized.sort((a, b) => {
-        const timeA = a.uploadedAt ? new Date(String(a.uploadedAt).replace(/-/g, '/')).getTime() : 0;
-        const timeB = b.uploadedAt ? new Date(String(b.uploadedAt).replace(/-/g, '/')).getTime() : 0;
-        return timeB - timeA;
-      });
-      try {
-        localStorage.setItem('dapodik_school_files', JSON.stringify(sorted));
-      } catch (e) {}
-      setHistoryFiles(sorted);
-    } else {
-      setHistoryFiles([]);
-    }
-
-    setIsLoadingHistory(false);
   };
 
   const handleDeleteHistoryFile = async (fileId: string) => {
@@ -409,8 +516,18 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
         localStorage.setItem('dapodik_deleted_file_ids', JSON.stringify(currentDeleted));
       } catch (e) {}
 
-      // Get current active webAppUrl
+      // Get current active webAppUrl (Priority: localStorage > /api/sync-config)
       let targetWebAppUrl = "https://script.google.com/macros/s/AKfycbwpbGWjF08VqIedbu5UJxQKvstzR6VDOujjbKZ7YeldA0o3XZZZPZNxL072KZYgE1e82g/exec";
+      try {
+        const localCfgRaw = localStorage.getItem('dapodik_sync_config');
+        if (localCfgRaw) {
+          const localCfg = JSON.parse(localCfgRaw);
+          if (localCfg?.webAppUrl && String(localCfg.webAppUrl).startsWith('http')) {
+            targetWebAppUrl = localCfg.webAppUrl;
+          }
+        }
+      } catch (e) {}
+
       try {
         const configRes = await fetch('/api/sync-config');
         if (configRes.ok) {
@@ -678,17 +795,31 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
       }
     }
 
-    // Load active webAppUrl dynamically from sync-config
+    // Load active webAppUrl dynamically from sync-config (Priority: localStorage > /api/sync-config)
     let targetWebAppUrl = "https://script.google.com/macros/s/AKfycbwpbGWjF08VqIedbu5UJxQKvstzR6VDOujjbKZ7YeldA0o3XZZZPZNxL072KZYgE1e82g/exec";
     let targetSpreadsheetUrl = "";
+
+    try {
+      const localCfgRaw = localStorage.getItem('dapodik_sync_config');
+      if (localCfgRaw) {
+        const localCfg = JSON.parse(localCfgRaw);
+        if (localCfg?.webAppUrl && String(localCfg.webAppUrl).startsWith('http')) {
+          targetWebAppUrl = localCfg.webAppUrl;
+        }
+        if (localCfg?.spreadsheetUrl) {
+          targetSpreadsheetUrl = localCfg.spreadsheetUrl;
+        }
+      }
+    } catch (e) {}
+
     try {
       const configRes = await fetch('/api/sync-config');
       if (configRes.ok) {
         const configData = await configRes.json();
-        if (configData && configData.webAppUrl) {
+        if (configData && configData.webAppUrl && (!targetWebAppUrl || targetWebAppUrl.includes('AKfycbwpbGWjF08VqIedbu5UJxQKvstzR6VDOujjbKZ7YeldA0o3XZZZPZNxL072KZYgE1e82g'))) {
           targetWebAppUrl = configData.webAppUrl;
         }
-        if (configData && configData.spreadsheetUrl) {
+        if (configData && configData.spreadsheetUrl && !targetSpreadsheetUrl) {
           targetSpreadsheetUrl = configData.spreadsheetUrl;
         }
       }
@@ -790,6 +921,26 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
     }
 
     const finalDriveUrl = json.file?.driveFileUrl || directDriveUrl;
+
+    // Optimistically prepend to historyFiles so it is immediately visible in Riwayat Berkas Tersimpan
+    const newHistoryItem = {
+      id: json.file?.id || directDriveId || `BRK-${Date.now().toString(36).toUpperCase()}`,
+      name: finalFileName,
+      uploadedBy: uploader,
+      category: targetFolder,
+      uploadedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
+      driveFileUrl: finalDriveUrl || directDriveUrl || '',
+      fileSize: fileToUpload.size
+    };
+
+    setHistoryFiles((prev) => {
+      const filtered = prev.filter((p) => p.id !== newHistoryItem.id && p.name !== newHistoryItem.name);
+      const nextList = [newHistoryItem, ...filtered];
+      try {
+        localStorage.setItem('dapodik_school_files', JSON.stringify(nextList));
+      } catch (e) {}
+      return nextList;
+    });
 
     setQueue((prev) =>
       prev.map((item) => (item.id === id ? { 

@@ -1052,25 +1052,12 @@ export default function App() {
           }
           if (Array.isArray(pulledKibB)) {
             const clean = cleanKibBItems(pulledKibB);
-            const localKibB = kibBRef.current || kibB || [];
             
-            // Merge by ID to prevent losing any local changes that haven't been synced
-            const mergedKibB = [...clean];
-            let hasNewLocal = false;
-            localKibB.forEach(localItem => {
-              if (localItem && localItem.id && !mergedKibB.some(item => item.id === localItem.id)) {
-                mergedKibB.push(localItem);
-                hasNewLocal = true;
-              }
-            });
-            
-            setKibB(mergedKibB);
-            localStorage.setItem(getStorageKey('dapodik_kib_b'), JSON.stringify(mergedKibB));
-            
-            if (hasNewLocal || (clean.length === 0 && localKibB.length > 0)) {
-              console.warn("Found local KIB B items not present on Sheets, trigger back-sync:", mergedKibB);
-              syncKibBToGoogleSheets(currentCfg, mergedKibB).catch(e => console.error("Auto merge back-sync failed:", e));
-            }
+            // Perbarui state KIB B sesuai data spreadsheet yang ditarik
+            // Jika baris dihapus dari spreadsheet, aplikasi akan mengikuti data spreadsheet sehingga data yang dihapus ikut terhapus di aplikasi
+            setKibB(clean);
+            kibBRef.current = clean;
+            localStorage.setItem(getStorageKey('dapodik_kib_b'), JSON.stringify(clean));
           }
           if (Array.isArray(rapor)) {
             const clean = sanitizeReports(rapor);
@@ -1121,6 +1108,10 @@ export default function App() {
             pulledSchoolProfile = cleanProf;
             setSchoolProfile(cleanProf);
             localStorage.setItem(getStorageKey('dapodik_school_profile'), JSON.stringify(cleanProf));
+          }
+
+          if (Array.isArray(pulledBerkas) && pulledBerkas.length > 0) {
+            localStorage.setItem('dapodik_school_files', JSON.stringify(pulledBerkas));
           }
 
           // Update server cache with updated displayConfig & schoolProfile
@@ -2380,14 +2371,34 @@ export default function App() {
     );
   };
 
-  const handleBulkAddKibB = (newItems: KibBItem[]) => {
+  const handleBulkAddKibB = (newItems: KibBItem[], replaceAll: boolean = false) => {
     if (!Array.isArray(newItems) || newItems.length === 0) return;
     lastLocalMutationRef.current = Date.now();
-    const updated = [...newItems, ...kibB];
+    
+    let updated: KibBItem[];
+    if (replaceAll) {
+      // Model 1: Hapus semua data lama dan ganti dengan data baru
+      updated = newItems.map((item, idx) => ({
+        ...item,
+        no: idx + 1
+      }));
+    } else {
+      // Model 2: Tambahkan ke data lama tanpa merusak data lama
+      const currentLength = kibB.length;
+      const indexedNew = newItems.map((item, idx) => ({
+        ...item,
+        no: currentLength + idx + 1
+      }));
+      updated = [...kibB, ...indexedNew];
+    }
+
     setKibB(updated);
     kibBRef.current = updated;
     localStorage.setItem(getStorageKey('dapodik_kib_b'), JSON.stringify(updated));
-    showToast(`Menyimpan ${newItems.length} barang KIB B ke database & Spreadsheet...`);
+    showToast(replaceAll 
+      ? `Seluruh data lama KIB B diganti dengan ${newItems.length} barang baru!`
+      : `Berhasil menambahkan ${newItems.length} barang baru ke KIB B!`
+    );
 
     // Auto-sync ke server cache & Google Sheets menggunakan Sinkronisasi Penuh
     triggerAutoSync(
@@ -2400,7 +2411,13 @@ export default function App() {
       administrators,
       true, // force = true
       notificationsRef.current,
-      undefined,
+      {
+        title: replaceAll ? 'KIB B: Data Lama Diganti' : 'KIB B: Data Ditambahkan',
+        message: replaceAll 
+          ? `Seluruh data lama KIB B diganti dengan ${newItems.length} barang baru.`
+          : `${newItems.length} barang baru berhasil ditambahkan ke KIB B.`,
+        type: replaceAll ? 'warning' : 'success'
+      },
       aplikasiLinks,
       schoolAccounts,
       updated,

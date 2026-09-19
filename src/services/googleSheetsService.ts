@@ -4,7 +4,7 @@ import { Student, TeacherStaff, SarprasItem, KibBItem, StudentReport, SyncConfig
 export const APPS_SCRIPT_TEMPLATE = `/**
  * =========================================================================
  * GOOGLE APPS SCRIPT UNTUK DAPODIK TERINTEGRASI 2026
- * Versi Script: v3.3 (Pure Google Sheets, Drive Sync & KIB B Inventarisasi Barang)
+ * Versi Script: v3.5 (Safe Color Headers, Drive Sync & KIB B Auto-Sync)
  * =========================================================================
  * 
  * FUNGSI UTAMA OTORISASI GOOGLE DRIVE (Jalankan ini jika butuh izin ulang):
@@ -233,7 +233,7 @@ function doGet(e) {
     berkas: getSheetData(ss, 'Data_Berkas'),
     schoolAccounts: getSheetData(ss, 'Data_Multi_Sekolah'),
     status: 'success',
-    version: '2026.3.3',
+    version: '2026.3.5',
     timestamp: new Date().toLocaleString('id-ID')
   };
   

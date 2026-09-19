@@ -29,7 +29,7 @@ interface SarprasModuleProps {
   onBackToHome: () => void;
   kibB?: KibBItem[];
   onAddKibB?: (item: KibBItem) => void;
-  onBulkAddKibB?: (items: KibBItem[]) => void;
+  onBulkAddKibB?: (items: KibBItem[], replaceAll?: boolean) => void;
   onUpdateKibB?: (item: KibBItem) => void;
   onDeleteKibB?: (id: string) => void;
   onSync?: () => Promise<void> | void;
