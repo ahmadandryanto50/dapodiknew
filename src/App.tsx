@@ -1466,8 +1466,25 @@ export default function App() {
       if (currentCfg && currentCfg.webAppUrl) {
         handlePullFromSheets(true);
       }
-    }, 60000);
-    return () => clearInterval(interval);
+    }, 45000);
+
+    const handleWindowFocus = () => {
+      if (document.visibilityState === 'visible') {
+        const currentCfg = getEffectiveSyncConfig();
+        if (currentCfg && currentCfg.webAppUrl) {
+          handlePullFromSheets(true);
+        }
+      }
+    };
+
+    window.addEventListener('focus', handleWindowFocus);
+    document.addEventListener('visibilitychange', handleWindowFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleWindowFocus);
+      document.removeEventListener('visibilitychange', handleWindowFocus);
+    };
   }, [isInitialized, activeSchoolNpsn]);
 
 
@@ -2648,6 +2665,7 @@ export default function App() {
         displayConfig={displayConfig}
         administrators={administrators}
         syncConfig={syncConfig}
+        isSyncing={isSyncing}
         onPullData={() => handlePullFromSheets(false)}
         schoolProfile={schoolProfile}
         teachers={teachers}

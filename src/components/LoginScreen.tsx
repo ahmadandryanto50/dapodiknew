@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SafeImage } from './SafeImage';
 import { LaporanModule } from './LaporanModule';
 import { 
@@ -28,7 +28,9 @@ import {
   ExternalLink,
   Download,
   Plus,
-  Moon
+  Moon,
+  CloudDownload,
+  Loader2
 } from 'lucide-react';
 import { AdminUser, AppDisplayConfig, SyncConfig, TeacherStaff, Student, SarprasItem, StudentReport, SchoolAccount } from '../types';
 import { validateCentralLogin } from '../services/googleSheetsService';
@@ -43,7 +45,8 @@ interface LoginScreenProps {
   sarpras?: SarprasItem[];
   reports?: StudentReport[];
   syncConfig?: SyncConfig;
-  onPullData?: () => Promise<boolean>;
+  isSyncing?: boolean;
+  onPullData?: () => Promise<boolean> | void;
   schoolAccounts?: SchoolAccount[];
   onUpdateSchoolAccounts?: (accounts: SchoolAccount[]) => void;
 }
@@ -58,6 +61,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   sarpras,
   reports,
   syncConfig,
+  isSyncing = false,
   onPullData,
   schoolAccounts = [],
   onUpdateSchoolAccounts
@@ -67,7 +71,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [internalSyncing, setInternalSyncing] = useState(false);
   const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -214,24 +218,26 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     }
   };
 
+  const isSyncingActive = isSyncing || internalSyncing;
+
   const handleManualSync = async () => {
-    if (!onPullData || isSyncing) return;
-    setIsSyncing(true);
-    setSyncStatusMsg('Menyinkronkan dengan Cloud Database...');
+    if (!onPullData || isSyncingActive) return;
+    setInternalSyncing(true);
+    setSyncStatusMsg('Sedang Menarik Data...');
     try {
       const ok = await onPullData();
-      if (ok) {
-        setSyncStatusMsg('✅ Data Cloud Database berhasil ditarik!');
+      if (ok !== false) {
+        setSyncStatusMsg('✅ Data Berhasil Diperbarui!');
         setTimeout(() => setSyncStatusMsg(null), 3500);
       } else {
-        setSyncStatusMsg('Gagal terhubung ke Cloud Database.');
+        setSyncStatusMsg('⚠️ Gagal terhubung ke Cloud Database.');
         setTimeout(() => setSyncStatusMsg(null), 3500);
       }
     } catch (e) {
-      setSyncStatusMsg('Terjadi kesalahan saat menyinkronkan.');
+      setSyncStatusMsg('⚠️ Terjadi kesalahan saat menyinkronkan.');
       setTimeout(() => setSyncStatusMsg(null), 3500);
     } finally {
-      setIsSyncing(false);
+      setInternalSyncing(false);
     }
   };
 
@@ -556,9 +562,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
 
       // If no match found, try pulling latest data from Google Spreadsheet database on demand!
       if (!matched && onPullData) {
-        setIsSyncing(true);
+        setInternalSyncing(true);
         await onPullData();
-        setIsSyncing(false);
+        setInternalSyncing(false);
 
         // Fetch fresh lists from localStorage or updated props
         let freshAdmins: AdminUser[] = [];
@@ -658,13 +664,39 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         </div>
 
         {/* Right Header Navigation Buttons as explicitly requested */}
-        <div className="flex items-center gap-3.5 flex-wrap">
+        <div className="flex items-center gap-2.5 sm:gap-3.5 flex-wrap">
+          {/* Menu "Tarik Data" (Public Dashboard) */}
+          <button
+            type="button"
+            id="header-btn-tarik-data-public"
+            onClick={handleManualSync}
+            disabled={isSyncingActive}
+            className={`px-4 sm:px-5 py-2.5 rounded-full font-black text-xs flex items-center gap-2 transition-all cursor-pointer border shadow-lg ${
+              isSyncingActive
+                ? 'bg-amber-400 text-slate-950 border-amber-300 animate-pulse cursor-wait'
+                : 'bg-gradient-to-r from-emerald-500/20 to-teal-500/20 hover:from-emerald-500/30 hover:to-teal-500/30 text-emerald-200 hover:text-white border-emerald-400/40 hover:border-emerald-300 shadow-emerald-950/20 active:scale-[0.97]'
+            }`}
+            title="Tarik & sinkronkan data terbaru ke perangkat ini"
+          >
+            {isSyncingActive ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+                <span>Menarik Data...</span>
+              </>
+            ) : (
+              <>
+                <CloudDownload className="w-4 h-4 text-emerald-300 stroke-[2.5]" />
+                <span>Tarik Data</span>
+              </>
+            )}
+          </button>
+
           {/* Menu "Upload Berkas" */}
           <button
             type="button"
             id="header-btn-guest"
             onClick={handleGuestLogin}
-            className="px-5 py-2.5 rounded-full bg-white/5 hover:bg-white/15 active:scale-[0.97] text-white font-extrabold text-xs flex items-center gap-2 transition-all cursor-pointer border border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.1)] hover:shadow-[0_4px_20px_rgba(34,211,238,0.15)] hover:border-cyan-400/40"
+            className="px-4 sm:px-5 py-2.5 rounded-full bg-white/5 hover:bg-white/15 active:scale-[0.97] text-white font-extrabold text-xs flex items-center gap-2 transition-all cursor-pointer border border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.1)] hover:shadow-[0_4px_20px_rgba(34,211,238,0.15)] hover:border-cyan-400/40"
             title="Upload Berkas tanpa login"
           >
             <Upload className="w-4 h-4 text-cyan-400 stroke-[2.5]" />
@@ -676,7 +708,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             type="button"
             id="header-btn-login-modal"
             onClick={() => setShowLoginModal(true)}
-            className="px-6 py-2.5 rounded-full bg-gradient-to-r from-[#00f2fe] to-[#4facfe] hover:from-[#00e1f0] hover:to-[#3b9eff] active:scale-[0.97] text-slate-950 font-black text-xs tracking-wider flex items-center gap-2.5 transition-all cursor-pointer shadow-[0_4px_15px_rgba(0,242,254,0.3)] hover:shadow-[0_4px_25px_rgba(0,242,254,0.45)] border border-white/50"
+            className="px-5 sm:px-6 py-2.5 rounded-full bg-gradient-to-r from-[#00f2fe] to-[#4facfe] hover:from-[#00e1f0] hover:to-[#3b9eff] active:scale-[0.97] text-slate-950 font-black text-xs tracking-wider flex items-center gap-2.5 transition-all cursor-pointer shadow-[0_4px_15px_rgba(0,242,254,0.3)] hover:shadow-[0_4px_25px_rgba(0,242,254,0.45)] border border-white/50"
             title="Buka Form Login Administrator / Operator / PTK / Siswa"
           >
             <KeyRound className="w-4 h-4 text-slate-950 stroke-[2.5] -rotate-45" />
@@ -690,12 +722,17 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         
         {/* Banner Informatif Dashboard Publik */}
         <div className="bg-white/10 backdrop-blur-xl border border-white/20 p-5 sm:p-6 rounded-3xl text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-400/20 text-emerald-200 border border-emerald-300/30 flex items-center gap-1.5">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" />
                 DAPODIK Live Public Statistics
               </span>
+              {syncStatusMsg && (
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/30 text-emerald-100 border border-emerald-400/40 animate-fadeIn">
+                  {syncStatusMsg}
+                </span>
+              )}
             </div>
             <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white">
               Laporan &amp; Rekapitulasi Data Pokok Pendidikan
@@ -703,6 +740,34 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             <p className="text-xs sm:text-sm text-sky-100 font-medium max-w-3xl leading-relaxed">
               Halaman laporan publik berisi informasi statistik agregat data siswa, PTK (pendidik &amp; tenaga kependidikan), rekapitulasi alumni per tahun, demografi tempat tinggal, serta kelaikan sarana &amp; prasarana sekolah.
             </p>
+          </div>
+
+          {/* Quick Action: Tarik Data Button in Banner */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0">
+            <button
+              type="button"
+              id="banner-btn-tarik-data-public"
+              onClick={handleManualSync}
+              disabled={isSyncingActive}
+              className={`px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2.5 shadow-xl transition-all cursor-pointer ${
+                isSyncingActive
+                  ? 'bg-amber-400 text-slate-950 border border-amber-300 animate-pulse cursor-wait'
+                  : 'bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 hover:from-emerald-300 hover:to-cyan-300 text-slate-950 hover:scale-[1.03] active:scale-[0.98] border border-emerald-200/60 shadow-emerald-950/20'
+              }`}
+              title="Tarik data terbaru dari Google Spreadsheet ke aplikasi"
+            >
+              {isSyncingActive ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+                  <span>Sedang Menarik Data...</span>
+                </>
+              ) : (
+                <>
+                  <CloudDownload className="w-4 h-4 text-slate-950 stroke-[2.5]" />
+                  <span>Tarik Data</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
 
