@@ -302,6 +302,8 @@ function doPost(e) {
         alumni: getSheetData(ss, 'Data_Alumni'),
         ptk: getSheetData(ss, 'Data_PTK'),
         sarpras: getSheetData(ss, 'Data_Sarpras'),
+        bangunan: getSheetData(ss, 'Data_Bangunan'),
+        ruang: getSheetData(ss, 'Data_Ruang'),
         kibB: kibData,
         'KIB B': kibData,
         rapor: getSheetData(ss, 'Data_Rapor'),

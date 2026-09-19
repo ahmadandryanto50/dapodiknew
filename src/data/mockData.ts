@@ -28398,41 +28398,115 @@ export const initialAdministrators: AdminUser[] = [
 
 export const initialBangunan: BangunanItem[] = [
   {
-    "id": "bgn-869221",
+    "id": "bgn-004",
     "no": 1,
+    "namaBangunan": "Gedung D",
+    "kodeBangunan": "BGN-004",
+    "tahunPembangunan": "1991",
+    "luasTapak": "105.0",
+    "jumlahLantai": "1",
+    "jumlahRuang": "1",
+    "kondisi": "Rusak Sedang",
+    "bobotKerusakan": "31.91",
+    "keterangan": "Ruang Perpustakaan"
+  },
+  {
+    "id": "bgn-003",
+    "no": 2,
+    "namaBangunan": "Gedung C",
+    "kodeBangunan": "BGN-003",
+    "tahunPembangunan": "2004",
+    "luasTapak": "126.0",
+    "jumlahLantai": "1",
+    "jumlahRuang": "2",
+    "kondisi": "Tidak ada kerusakan",
+    "bobotKerusakan": "0.0",
+    "keterangan": "Ruang 8B,8C"
+  },
+  {
+    "id": "bgn-869221",
+    "no": 3,
     "namaBangunan": "Gedung B",
-    "kodeBangunan": "",
+    "kodeBangunan": "BGN-002",
     "tahunPembangunan": "1991",
     "luasTapak": "252.0",
     "jumlahLantai": "1",
     "jumlahRuang": "4",
     "kondisi": "Tidak ada kerusakan",
     "bobotKerusakan": "0.0",
-    "keterangan": "Ruang Kelas"
+    "keterangan": "Ruang 9A,9B,9C,8A"
   },
   {
     "id": "bgn-749460",
-    "no": 2,
+    "no": 4,
     "namaBangunan": "Gedung A",
-    "kodeBangunan": "",
+    "kodeBangunan": "BGN-001",
     "tahunPembangunan": "2003",
     "luasTapak": "150.0",
     "jumlahLantai": "1",
     "jumlahRuang": "4",
     "kondisi": "Tidak ada kerusakan",
     "bobotKerusakan": "0.0",
-    "keterangan": "Ruang Kepsek dan TU"
+    "keterangan": "Ruang Kepsek,TU,Wakasek,& WC"
   }
 ];
 
 export const initialRuang: RuangItem[] = [
   {
-    "id": "rng-097710",
+    "id": "rng-004",
     "no": 1,
+    "jenisPrasarana": "Ruang TU",
+    "namaBangunan": "Gedung A",
+    "namaRuang": "Ruang TU",
+    "kodeRuang": "RNG-004",
+    "lantai": "1",
+    "panjang": "3.0",
+    "lebar": "4.0",
+    "luas": "12.0",
+    "bobotKerusakan": "15.0",
+    "klasifikasiKerusakan": "Rusak Ringan",
+    "kondisi": "Rusak Ringan",
+    "keterangan": "Ruang TU"
+  },
+  {
+    "id": "rng-003",
+    "no": 2,
+    "jenisPrasarana": "Ruang Wakil Kepala Sekolah",
+    "namaBangunan": "Gedung A",
+    "namaRuang": "Ruang Wakasek",
+    "kodeRuang": "RNG-003",
+    "lantai": "1",
+    "panjang": "4.0",
+    "lebar": "3.0",
+    "luas": "12.0",
+    "bobotKerusakan": "0.0",
+    "klasifikasiKerusakan": "Tidak Ada",
+    "kondisi": "Baik",
+    "keterangan": "Ruang Wakil Kepala Sekolah"
+  },
+  {
+    "id": "rng-002",
+    "no": 3,
+    "jenisPrasarana": "Ruang Kepala Sekolah",
+    "namaBangunan": "Gedung A",
+    "namaRuang": "Kepala sekolah",
+    "kodeRuang": "RNG-002",
+    "lantai": "1",
+    "panjang": "3.0",
+    "lebar": "4.0",
+    "luas": "12.0",
+    "bobotKerusakan": "15.0",
+    "klasifikasiKerusakan": "Rusak Ringan",
+    "kondisi": "Rusak Ringan",
+    "keterangan": "Ruang Kepala Sekolah"
+  },
+  {
+    "id": "rng-097710",
+    "no": 4,
     "jenisPrasarana": "Kamar Mandi/WC Guru Laki-laki",
     "namaBangunan": "Gedung A",
     "namaRuang": "WC Guru",
-    "kodeRuang": "",
+    "kodeRuang": "RNG-001",
     "lantai": "1",
     "panjang": "2.0",
     "lebar": "2.0",
@@ -28440,6 +28514,6 @@ export const initialRuang: RuangItem[] = [
     "bobotKerusakan": "0.0",
     "klasifikasiKerusakan": "Tidak Ada",
     "kondisi": "Baik",
-    "keterangan": "Runag Kepsek"
+    "keterangan": "Kamar Mandi/WC Guru Laki-laki"
   }
 ];
