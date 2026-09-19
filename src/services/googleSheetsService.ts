@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { Student, TeacherStaff, SarprasItem, KibBItem, StudentReport, SyncConfig, AppDisplayConfig, SchoolProfile, AdminUser, NotificationItem, SchoolAccount } from '../types';
+import { Student, TeacherStaff, SarprasItem, KibBItem, BangunanItem, RuangItem, StudentReport, SyncConfig, AppDisplayConfig, SchoolProfile, AdminUser, NotificationItem, SchoolAccount } from '../types';
 
 export const APPS_SCRIPT_TEMPLATE = `/**
  * =========================================================================
@@ -85,8 +85,10 @@ const HEADERS_MAP = {
   'Data_Alumni': ['id', 'nisn', 'nik', 'nama', 'jenisKelamin', 'tempatLahir', 'tanggalLahir', 'rombel', 'tahunLulus', 'noSeriIjazah', 'namaIbu', 'namaAyah', 'alamat', 'hp', 'status', 'alasanKeluar', 'agama', 'nis', 'skhun', 'sekolahAsal'],
   'Data_PTK': ['id', 'nuptk', 'nip', 'nama', 'jenisKelamin', 'statusKepegawaian', 'jenisPtk', 'mapel', 'pendidikanTerakhir', 'noHp', 'email', 'statusSertifikasi', 'tempatLahir', 'tanggalLahir', 'agama', 'alamatJalan', 'rt', 'rw', 'namaDusun', 'desaKelurahan', 'kecamatan', 'kodePos', 'tugasTambahan', 'skCpns', 'tanggalCpns', 'skPengangkatan', 'tmtPengangkatan', 'pangkatGolongan', 'nik', 'noKk'],
   'Data_Sarpras': ['id', 'kodeBarang', 'namaBarang', 'kategori', 'kondisi', 'jumlah', 'satuan', 'letakRuang', 'tahunPengadaan', 'layakPakai'],
-  'KIB B': ['id', 'No', 'Nama Barang', 'Kode Barang', 'Kondisi', 'Merk / Type', 'Ukuran / CC', 'Bahan', 'Tahun', 'No Pabrik', 'No Rangka', 'No Mesin', 'No Polisi', 'No Bpkb', 'Asal Usul', 'Harga', 'Keterangan'],
-  'Data_KIB_B': ['id', 'No', 'Nama Barang', 'Kode Barang', 'Kondisi', 'Merk / Type', 'Ukuran / CC', 'Bahan', 'Tahun', 'No Pabrik', 'No Rangka', 'No Mesin', 'No Polisi', 'No Bpkb', 'Asal Usul', 'Harga', 'Keterangan'],
+  'Data_Bangunan': ['id', 'namaBangunan', 'tahunPembangunan', 'luasTapak', 'jumlahLantai', 'jumlahRuang', 'kondisi', 'bobotKerusakan', 'keterangan'],
+  'Data_Ruang': ['id', 'jenisPrasarana', 'namaBangunan', 'namaRuang', 'lantai', 'panjang', 'lebar', 'bobotKerusakan', 'klasifikasiKerusakan', 'keterangan'],
+  'KIB B': ['id', 'No', 'NAMA / JENIS BARANG', 'MEREK / MODEL', 'NO SERI PABRIK', 'BAHAN', 'TAHUN PEMBUATAN / PEMBELIAN', 'KODE BARANG', 'JUMLAH BARANG / REGISTER', 'HARGA BELI', 'BAIK', 'KURANG BAIK', 'RUSAK BERAT', 'KETERANGAN MUTASI', 'Kondisi', 'Ukuran / CC', 'No Rangka', 'No Mesin', 'No Polisi', 'No Bpkb', 'Asal Usul', 'Keterangan'],
+  'Data_KIB_B': ['id', 'No', 'NAMA / JENIS BARANG', 'MEREK / MODEL', 'NO SERI PABRIK', 'BAHAN', 'TAHUN PEMBUATAN / PEMBELIAN', 'KODE BARANG', 'JUMLAH BARANG / REGISTER', 'HARGA BELI', 'BAIK', 'KURANG BAIK', 'RUSAK BERAT', 'KETERANGAN MUTASI', 'Kondisi', 'Ukuran / CC', 'No Rangka', 'No Mesin', 'No Polisi', 'No Bpkb', 'Asal Usul', 'Keterangan'],
   'Data_Rapor': ['id', 'studentId', 'nisn', 'studentName', 'rombel', 'semester', 'tahunAjaran', 'scores', 'kehadiran', 'catatanWaliKelas', 'statusKenaikan'],
   'Notifikasi': ['id', 'title', 'message', 'time', 'type', 'read'],
   'Permintaan_Akses_Berkas': ['id', 'fileId', 'fileName', 'requesterName', 'requesterRole', 'requesterEmail', 'requestedAt', 'reason', 'status', 'reviewedBy', 'reviewedAt', 'reviewNotes'],
@@ -223,6 +225,8 @@ function doGet(e) {
     sarpras: getSheetData(ss, 'Data_Sarpras'),
     kibB: kibData,
     'KIB B': kibData,
+    bangunan: getSheetData(ss, 'Data_Bangunan'),
+    ruang: getSheetData(ss, 'Data_Ruang'),
     rapor: getSheetData(ss, 'Data_Rapor'),
     pengaturan: getSheetData(ss, 'Data_Pengaturan'),
     administrator: getSheetData(ss, 'Administrator'),
@@ -321,6 +325,8 @@ function doPost(e) {
       if (data.alumni !== undefined) saveSheetData(ss, 'Data_Alumni', data.alumni, HEADERS_MAP['Data_Alumni']);
       if (data.ptk !== undefined) saveSheetData(ss, 'Data_PTK', data.ptk, HEADERS_MAP['Data_PTK']);
       if (data.sarpras !== undefined) saveSheetData(ss, 'Data_Sarpras', data.sarpras, HEADERS_MAP['Data_Sarpras']);
+      if (data.bangunan !== undefined) saveSheetData(ss, 'Data_Bangunan', data.bangunan, HEADERS_MAP['Data_Bangunan']);
+      if (data.ruang !== undefined) saveSheetData(ss, 'Data_Ruang', data.ruang, HEADERS_MAP['Data_Ruang']);
       if (data.kibB !== undefined || data['KIB B'] !== undefined) {
         var kibItems = data.kibB !== undefined ? data.kibB : data['KIB B'];
         var targetKibSheet = ss.getSheetByName('KIB B') || ss.getSheetByName('Data_KIB_B');
@@ -353,6 +359,18 @@ function doPost(e) {
       saveSheetData(ss, 'Data_PTK', data.payload, HEADERS_MAP['Data_PTK']);
     } else if (data.type === 'SYNC_SARPRAS') {
       saveSheetData(ss, 'Data_Sarpras', data.payload, HEADERS_MAP['Data_Sarpras']);
+    } else if (data.type === 'SYNC_BANGUNAN') {
+      saveSheetData(ss, 'Data_Bangunan', data.payload, HEADERS_MAP['Data_Bangunan']);
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        message: 'Data Bangunan berhasil disimpan ke Google Spreadsheet pada sheet "Data_Bangunan"!'
+      })).setMimeType(ContentService.MimeType.JSON);
+    } else if (data.type === 'SYNC_RUANG') {
+      saveSheetData(ss, 'Data_Ruang', data.payload, HEADERS_MAP['Data_Ruang']);
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        message: 'Data Ruang berhasil disimpan ke Google Spreadsheet pada sheet "Data_Ruang"!'
+      })).setMimeType(ContentService.MimeType.JSON);
     } else if (data.type === 'SYNC_KIB_B') {
       var targetKibSheet = ss.getSheetByName('KIB B') || ss.getSheetByName('Data_KIB_B');
       var targetSheetName = 'KIB B';
@@ -610,22 +628,37 @@ function saveSheetData(ss, sheetName, items, fallbackHeaders) {
         else if (key === 'Tanggal') val = items[i]['uploadedAt'] || items[i]['UploadedAt'];
         else if (key === 'Link Drive') val = items[i]['driveFileUrl'] || items[i]['DriveFileUrl'] || items[i]['url'];
         else if (key === 'Ukuran File') val = items[i]['fileSize'] || items[i]['FileSize'] || items[i]['size'];
-        // KIB B field aliases
-        else if (key === 'No' || key === 'No.' || key === 'no') val = items[i]['no'] !== undefined ? items[i]['no'] : (i + 1);
-        else if (key === 'Nama Barang' || key === 'namaBarang' || key === 'Jenis Barang / Nama Barang') val = items[i]['namaBarang'] || items[i]['Nama Barang'];
-        else if (key === 'Kode Barang' || key === 'kodeBarang' || key === 'Nomor Kode Barang') val = items[i]['kodeBarang'] || items[i]['Kode Barang'];
+        // KIB B field aliases matching official template and document image
+        else if (key === 'No' || key === 'No.' || key === 'no' || key === 'NO') val = items[i]['no'] !== undefined ? items[i]['no'] : (i + 1);
+        else if (key === 'NAMA / JENIS BARANG' || key === 'Nama Barang' || key === 'namaBarang' || key === 'Jenis Barang / Nama Barang' || key === 'Jenis Barang') val = items[i]['namaBarang'] || items[i]['Nama Barang'] || items[i]['NAMA / JENIS BARANG'];
+        else if (key === 'MEREK / MODEL' || key === 'Merk / Type' || key === 'merkType' || key === 'Merk/Type' || key === 'Merek / Model') val = items[i]['merkType'] || items[i]['Merk / Type'] || items[i]['MEREK / MODEL'];
+        else if (key === 'NO SERI PABRIK' || key === 'No Pabrik' || key === 'noPabrik' || key === 'No. Pabrik' || key === 'No Seri Pabrik') val = items[i]['noPabrik'] || items[i]['No Pabrik'] || items[i]['NO SERI PABRIK'];
+        else if (key === 'BAHAN' || key === 'Bahan' || key === 'bahan') val = items[i]['bahan'] || items[i]['Bahan'] || items[i]['BAHAN'];
+        else if (key === 'TAHUN PEMBUATAN / PEMBELIAN' || key === 'Tahun' || key === 'tahun' || key === 'Tahun Pembelian' || key === 'Tahun Pembuatan') val = items[i]['tahun'] || items[i]['Tahun'] || items[i]['TAHUN PEMBUATAN / PEMBELIAN'];
+        else if (key === 'KODE BARANG' || key === 'Kode Barang' || key === 'kodeBarang' || key === 'Nomor Kode Barang') val = items[i]['kodeBarang'] || items[i]['Kode Barang'] || items[i]['KODE BARANG'];
+        else if (key === 'JUMLAH BARANG / REGISTER' || key === 'Jumlah' || key === 'jumlah' || key === 'Register' || key === 'register') val = items[i]['jumlah'] !== undefined && items[i]['jumlah'] !== '' ? items[i]['jumlah'] : (items[i]['register'] || 1);
+        else if (key === 'HARGA BELI' || key === 'Harga' || key === 'harga' || key === 'Harga (Rp)') val = items[i]['harga'] || items[i]['Harga'] || items[i]['HARGA BELI'];
+        else if (key === 'BAIK' || key === 'Baik' || key === 'keadaanBaik') {
+          if (items[i]['keadaanBaik'] !== undefined && items[i]['keadaanBaik'] !== '') val = items[i]['keadaanBaik'];
+          else val = (items[i]['kondisi'] || '').toLowerCase() === 'baik' ? (items[i]['jumlah'] || 1) : 0;
+        }
+        else if (key === 'KURANG BAIK' || key === 'Kurang Baik' || key === 'keadaanKurangBaik') {
+          if (items[i]['keadaanKurangBaik'] !== undefined && items[i]['keadaanKurangBaik'] !== '') val = items[i]['keadaanKurangBaik'];
+          else val = (items[i]['kondisi'] || '').toLowerCase().includes('kurang') || (items[i]['kondisi'] || '').toLowerCase().includes('ringan') ? (items[i]['jumlah'] || 1) : 0;
+        }
+        else if (key === 'RUSAK BERAT' || key === 'Rusak Berat' || key === 'keadaanRusakBerat') {
+          if (items[i]['keadaanRusakBerat'] !== undefined && items[i]['keadaanRusakBerat'] !== '') val = items[i]['keadaanRusakBerat'];
+          else val = (items[i]['kondisi'] || '').toLowerCase().includes('berat') ? (items[i]['jumlah'] || 1) : 0;
+        }
+        else if (key === 'KETERANGAN MUTASI' || key === 'Keterangan Mutasi' || key === 'keteranganMutasi') val = items[i]['keteranganMutasi'] || items[i]['Keterangan Mutasi'] || items[i]['keterangan'] || '';
         else if (key === 'Kondisi' || key === 'kondisi') val = items[i]['kondisi'] || items[i]['Kondisi'];
-        else if (key === 'Merk / Type' || key === 'merkType' || key === 'Merk/Type') val = items[i]['merkType'] || items[i]['Merk / Type'];
         else if (key === 'Ukuran / CC' || key === 'ukuranCc' || key === 'Ukuran/CC') val = items[i]['ukuranCc'] || items[i]['Ukuran / CC'];
-        else if (key === 'Bahan' || key === 'bahan') val = items[i]['bahan'] || items[i]['Bahan'];
-        else if (key === 'Tahun' || key === 'tahun' || key === 'Tahun Pembelian') val = items[i]['tahun'] || items[i]['Tahun'];
-        else if (key === 'No Pabrik' || key === 'noPabrik' || key === 'No. Pabrik') val = items[i]['noPabrik'] || items[i]['No Pabrik'];
         else if (key === 'No Rangka' || key === 'noRangka' || key === 'No. Rangka') val = items[i]['noRangka'] || items[i]['No Rangka'];
         else if (key === 'No Mesin' || key === 'noMesin' || key === 'No. Mesin') val = items[i]['noMesin'] || items[i]['No Mesin'];
         else if (key === 'No Polisi' || key === 'noPolisi' || key === 'No. Polisi') val = items[i]['noPolisi'] || items[i]['No Polisi'];
         else if (key === 'No Bpkb' || key === 'noBpkb' || key === 'No. BPKB') val = items[i]['noBpkb'] || items[i]['No Bpkb'];
         else if (key === 'Asal Usul' || key === 'asalUsul' || key === 'Asal Usul Perolehan') val = items[i]['asalUsul'] || items[i]['Asal Usul'];
-        else if (key === 'Harga' || key === 'harga' || key === 'Harga (Rp)') val = items[i]['harga'] || items[i]['Harga'];
+        else if (key === 'Harga' || key === 'harga') val = items[i]['harga'] || items[i]['Harga'];
         else if (key === 'Keterangan' || key === 'keterangan') val = items[i]['keterangan'] || items[i]['Keterangan'];
       }
       if (typeof val === 'object' && val !== null) {
@@ -716,6 +749,14 @@ function checkAndInitializeSheets(ss) {
     ],
     'Data_Sarpras': [
       HEADERS_MAP['Data_Sarpras']
+    ],
+    'Data_Bangunan': [
+      HEADERS_MAP['Data_Bangunan'],
+      ['bgn-001', 'Gedung E', '2020', '24.0', '1', '5', 'Tidak ada kerusakan', '0.0', 'Gedung Kelas & Administrasi']
+    ],
+    'Data_Ruang': [
+      HEADERS_MAP['Data_Ruang'],
+      ['rng-001', 'Bilik Perempuan', 'Gedung P', 'WC Perempuan', '1', '4.0', '8.0', '0.0', 'Tidak Ada', 'Fasilitas Sanitasi Siswa']
     ],
     'KIB B': [
       HEADERS_MAP['KIB B'],
@@ -992,22 +1033,36 @@ function parseSheetsResult(result: any) {
           };
 
           const id = getVal('id', 'ID', 'Id') || `kib-${Date.now()}-${idx}`;
-          const noVal = getVal('no', 'No', 'No.', 'Nomor') || String(idx + 1);
-          const namaBarang = getVal('namaBarang', 'Nama Barang', 'Jenis Barang / Nama Barang', 'nama_barang', 'Jenis Barang', 'Nama', 'nama');
-          const kodeBarang = getVal('kodeBarang', 'Kode Barang', 'Nomor Kode Barang', 'kode_barang', 'Kode');
-          const kondisi = getVal('kondisi', 'Kondisi', 'Keadaan Barang', 'Keadaan') || 'Baik';
-          const merkType = getVal('merkType', 'Merk / Type', 'Merk/Type', 'merk', 'Type', 'Merk', 'Tipe', 'Merk / Tipe');
+          const noVal = getVal('no', 'No', 'No.', 'Nomor', 'NO') || String(idx + 1);
+          const namaBarang = getVal('namaBarang', 'NAMA / JENIS BARANG', 'Nama / Jenis Barang', 'Nama Barang', 'Jenis Barang / Nama Barang', 'nama_barang', 'Jenis Barang', 'Nama', 'nama');
+          const merkType = getVal('merkType', 'MEREK / MODEL', 'Merek / Model', 'Merk / Type', 'Merk/Type', 'merk', 'Type', 'Merk', 'Tipe', 'Merk / Tipe');
+          const noPabrik = getVal('noPabrik', 'NO SERI PABRIK', 'No Seri Pabrik', 'No Pabrik', 'No. Pabrik', 'Nomor Pabrik', 'No Seri');
+          const bahan = getVal('bahan', 'BAHAN', 'Bahan', 'Material');
+          const tahun = getVal('tahun', 'TAHUN PEMBUATAN / PEMBELIAN', 'Tahun Pembuatan / Pembelian', 'Tahun', 'Tahun Pembelian', 'Tahun Pengadaan', 'Tahun Perolehan');
+          const kodeBarang = getVal('kodeBarang', 'KODE BARANG', 'Kode Barang', 'Nomor Kode Barang', 'kode_barang', 'Kode');
+          const jumlah = getVal('jumlah', 'JUMLAH BARANG / REGISTER', 'Jumlah Barang / Register', 'Jumlah', 'Register', 'register', 'Jml') || '1';
+          const register = getVal('register', 'Register', 'No Register', 'No. Register');
+          const harga = getVal('harga', 'HARGA BELI', 'Harga Beli', 'Harga', 'Harga (Rp)', 'Nilai');
+
+          const keadaanBaik = getVal('keadaanBaik', 'BAIK', 'Baik', 'Keadaan Baik');
+          const keadaanKurangBaik = getVal('keadaanKurangBaik', 'KURANG BAIK', 'Kurang Baik', 'Keadaan Kurang Baik');
+          const keadaanRusakBerat = getVal('keadaanRusakBerat', 'RUSAK BERAT', 'Rusak Berat', 'Keadaan Rusak Berat');
+          const keteranganMutasi = getVal('keteranganMutasi', 'KETERANGAN MUTASI', 'Keterangan Mutasi', 'Keterangan / Mutasi', 'Mutasi');
+
+          let kondisi = getVal('kondisi', 'Kondisi', 'Keadaan Barang', 'Keadaan');
+          if (!kondisi) {
+            if (keadaanRusakBerat && Number(keadaanRusakBerat) > 0) kondisi = 'Rusak Berat';
+            else if (keadaanKurangBaik && Number(keadaanKurangBaik) > 0) kondisi = 'Kurang Baik';
+            else kondisi = 'Baik';
+          }
+
           const ukuranCc = getVal('ukuranCc', 'Ukuran / CC', 'Ukuran/CC', 'ukuran', 'Ukuran', 'CC');
-          const bahan = getVal('bahan', 'Bahan', 'Material');
-          const tahun = getVal('tahun', 'Tahun', 'Tahun Pembelian', 'Tahun Pengadaan', 'Tahun Perolehan');
-          const noPabrik = getVal('noPabrik', 'No Pabrik', 'No. Pabrik', 'Nomor Pabrik');
           const noRangka = getVal('noRangka', 'No Rangka', 'No. Rangka', 'Nomor Rangka');
           const noMesin = getVal('noMesin', 'No Mesin', 'No. Mesin', 'Nomor Mesin');
           const noPolisi = getVal('noPolisi', 'No Polisi', 'No. Polisi', 'Nomor Polisi', 'No Plat');
           const noBpkb = getVal('noBpkb', 'No Bpkb', 'No. BPKB', 'Nomor BPKB');
           const asalUsul = getVal('asalUsul', 'Asal Usul', 'Asal Usul Perolehan', 'Asal-Usul', 'Sumber Dana');
-          const harga = getVal('harga', 'Harga', 'Harga (Rp)', 'Harga Beli', 'Nilai');
-          const keterangan = getVal('keterangan', 'Keterangan', 'Ket', 'Ket.', 'Lokasi', 'Letak Ruang');
+          const keterangan = getVal('keterangan', 'Keterangan', 'Ket', 'Ket.', 'Lokasi', 'Letak Ruang') || keteranganMutasi;
 
           return {
             id,
@@ -1016,19 +1071,82 @@ function parseSheetsResult(result: any) {
             kodeBarang,
             kondisi,
             merkType,
-            ukuranCc,
+            noPabrik,
             bahan,
             tahun,
-            noPabrik,
+            jumlah: Number(jumlah) || 1,
+            register,
+            harga,
+            keadaanBaik: keadaanBaik !== '' ? (Number(keadaanBaik) || 0) : (kondisi.toLowerCase() === 'baik' ? (Number(jumlah) || 1) : 0),
+            keadaanKurangBaik: keadaanKurangBaik !== '' ? (Number(keadaanKurangBaik) || 0) : (kondisi.toLowerCase().includes('kurang') || kondisi.toLowerCase().includes('ringan') ? (Number(jumlah) || 1) : 0),
+            keadaanRusakBerat: keadaanRusakBerat !== '' ? (Number(keadaanRusakBerat) || 0) : (kondisi.toLowerCase().includes('berat') ? (Number(jumlah) || 1) : 0),
+            keteranganMutasi,
+            ukuranCc,
             noRangka,
             noMesin,
             noPolisi,
             noBpkb,
             asalUsul,
-            harga,
             keterangan
           };
         }).filter((k: any) => k && (k.namaBarang || k.kodeBarang || k.merkType || k.harga || k.asalUsul || k.keterangan || k.id));
+      })(),
+      bangunan: (function() {
+        const raw = Array.isArray(result.bangunan) ? result.bangunan : (Array.isArray(result.Data_Bangunan) ? result.Data_Bangunan : []);
+        return raw.map((item: any, idx: number) => {
+          if (!item || typeof item !== 'object') return null;
+          const getVal = (...keys: string[]) => {
+            for (const k of keys) {
+              if (item[k] !== undefined && item[k] !== null && String(item[k]).trim() !== '') return String(item[k]).trim();
+              const matchKey = Object.keys(item).find(ik => ik.toLowerCase().replace(/[^a-z0-9]/g, '') === k.toLowerCase().replace(/[^a-z0-9]/g, ''));
+              if (matchKey && item[matchKey] !== undefined && item[matchKey] !== null && String(item[matchKey]).trim() !== '') return String(item[matchKey]).trim();
+            }
+            return '';
+          };
+          return {
+            id: getVal('id', 'ID', 'Id') || `bgn-${Date.now()}-${idx}`,
+            no: parseInt(getVal('no', 'No', 'NO') || String(idx + 1), 10),
+            namaBangunan: getVal('namaBangunan', 'Nama Bangunan', 'Nama', 'nama_bangunan'),
+            kodeBangunan: getVal('kodeBangunan', 'Kode Bangunan', 'Kode'),
+            tahunPembangunan: getVal('tahunPembangunan', 'Tahun Pembangunan', 'Tahun', 'tahun_pembangunan'),
+            luasTapak: getVal('luasTapak', 'Luas Tapak', 'Luas Tapak (m2)', 'Luas Tapak (m²)', 'luas_tapak'),
+            jumlahLantai: getVal('jumlahLantai', 'Jumlah Lantai', 'Lantai', 'jumlah_lantai') || '1',
+            jumlahRuang: getVal('jumlahRuang', 'Jumlah Ruang', 'Ruang', 'jumlah_ruang') || '1',
+            kondisi: getVal('kondisi', 'Kondisi', 'Kondisi Bangunan') || 'Tidak ada kerusakan',
+            bobotKerusakan: getVal('bobotKerusakan', 'Bobot Kerusakan', 'Bobot Kerusakan (%)', 'bobot_kerusakan') || '0.0',
+            keterangan: getVal('keterangan', 'Keterangan', 'Ket')
+          };
+        }).filter((b: any) => b && (b.namaBangunan || b.id));
+      })(),
+      ruang: (function() {
+        const raw = Array.isArray(result.ruang) ? result.ruang : (Array.isArray(result.Data_Ruang) ? result.Data_Ruang : []);
+        return raw.map((item: any, idx: number) => {
+          if (!item || typeof item !== 'object') return null;
+          const getVal = (...keys: string[]) => {
+            for (const k of keys) {
+              if (item[k] !== undefined && item[k] !== null && String(item[k]).trim() !== '') return String(item[k]).trim();
+              const matchKey = Object.keys(item).find(ik => ik.toLowerCase().replace(/[^a-z0-9]/g, '') === k.toLowerCase().replace(/[^a-z0-9]/g, ''));
+              if (matchKey && item[matchKey] !== undefined && item[matchKey] !== null && String(item[matchKey]).trim() !== '') return String(item[matchKey]).trim();
+            }
+            return '';
+          };
+          return {
+            id: getVal('id', 'ID', 'Id') || `rng-${Date.now()}-${idx}`,
+            no: parseInt(getVal('no', 'No', 'NO') || String(idx + 1), 10),
+            jenisPrasarana: getVal('jenisPrasarana', 'Jenis Prasarana', 'Jenis', 'jenis_prasarana'),
+            namaBangunan: getVal('namaBangunan', 'Nama Bangunan', 'Bangunan', 'nama_bangunan'),
+            namaRuang: getVal('namaRuang', 'Nama Ruang', 'Ruang', 'nama_ruang'),
+            kodeRuang: getVal('kodeRuang', 'Kode Ruang', 'Kode'),
+            lantai: getVal('lantai', 'Lantai') || '1',
+            panjang: getVal('panjang', 'Panjang', 'Panjang (m)'),
+            lebar: getVal('lebar', 'Lebar', 'Lebar (m)'),
+            luas: getVal('luas', 'Luas', 'Luas (m2)'),
+            bobotKerusakan: getVal('bobotKerusakan', 'Bobot Kerusakan', 'Bobot Kerusakan (%)'),
+            klasifikasiKerusakan: getVal('klasifikasiKerusakan', 'Klasifikasi Kerusakan', 'Klasifikasi'),
+            kondisi: getVal('kondisi', 'Kondisi') || 'Baik',
+            keterangan: getVal('keterangan', 'Keterangan', 'Ket')
+          };
+        }).filter((r: any) => r && (r.namaRuang || r.jenisPrasarana || r.namaBangunan || r.id));
       })(),
       rapor: Array.isArray(result.rapor) ? result.rapor : [],
       pengaturan: Array.isArray(result.pengaturan) ? result.pengaturan : [],
@@ -1087,6 +1205,8 @@ export async function syncToGoogleSheets(
     ptk: TeacherStaff[];
     sarpras: SarprasItem[];
     kibB?: KibBItem[];
+    bangunan?: BangunanItem[];
+    ruang?: RuangItem[];
     rapor: StudentReport[];
     pengaturan?: Array<{ key: string; value: string }>;
     administrator?: AdminUser[];
@@ -1173,10 +1293,22 @@ export async function syncToGoogleSheets(
       'KIB B': (data.kibB || []).map((item, idx) => ({
         ...item,
         'id': item.id,
-        'No': idx + 1,
+        'No': item.no || (idx + 1),
+        'NAMA / JENIS BARANG': item.namaBarang,
+        'MEREK / MODEL': item.merkType || '',
+        'NO SERI PABRIK': item.noPabrik || '',
+        'BAHAN': item.bahan || '',
+        'TAHUN PEMBUATAN / PEMBELIAN': item.tahun || '',
+        'KODE BARANG': item.kodeBarang,
+        'JUMLAH BARANG / REGISTER': item.jumlah !== undefined && item.jumlah !== '' ? item.jumlah : (item.register || 1),
+        'HARGA BELI': item.harga || '',
+        'BAIK': item.keadaanBaik !== undefined && item.keadaanBaik !== '' ? item.keadaanBaik : ((item.kondisi || '').toLowerCase() === 'baik' ? (item.jumlah || 1) : 0),
+        'KURANG BAIK': item.keadaanKurangBaik !== undefined && item.keadaanKurangBaik !== '' ? item.keadaanKurangBaik : ((item.kondisi || '').toLowerCase().includes('kurang') || (item.kondisi || '').toLowerCase().includes('ringan') ? (item.jumlah || 1) : 0),
+        'RUSAK BERAT': item.keadaanRusakBerat !== undefined && item.keadaanRusakBerat !== '' ? item.keadaanRusakBerat : ((item.kondisi || '').toLowerCase().includes('berat') ? (item.jumlah || 1) : 0),
+        'KETERANGAN MUTASI': item.keteranganMutasi || item.keterangan || '',
         'Nama Barang': item.namaBarang,
         'Kode Barang': item.kodeBarang,
-        'Kondisi': item.kondisi,
+        'Kondisi': item.kondisi || 'Baik',
         'Merk / Type': item.merkType || '',
         'Ukuran / CC': item.ukuranCc || '',
         'Bahan': item.bahan || '',
@@ -1188,8 +1320,10 @@ export async function syncToGoogleSheets(
         'No Bpkb': item.noBpkb || '',
         'Asal Usul': item.asalUsul || '',
         'Harga': item.harga || '',
-        'Keterangan': item.keterangan || ''
+        'Keterangan': item.keterangan || item.keteranganMutasi || ''
       })),
+      bangunan: data.bangunan || [],
+      ruang: data.ruang || [],
       rapor: data.rapor || [],
       pengaturan: data.pengaturan || [],
       administrator: data.administrator || [],
@@ -1228,10 +1362,22 @@ export async function syncKibBToGoogleSheets(
   const mappedItems = (items || []).map((item, idx) => ({
     ...item,
     'id': item.id,
-    'No': idx + 1,
+    'No': item.no || (idx + 1),
+    'NAMA / JENIS BARANG': item.namaBarang,
+    'MEREK / MODEL': item.merkType || '',
+    'NO SERI PABRIK': item.noPabrik || '',
+    'BAHAN': item.bahan || '',
+    'TAHUN PEMBUATAN / PEMBELIAN': item.tahun || '',
+    'KODE BARANG': item.kodeBarang,
+    'JUMLAH BARANG / REGISTER': item.jumlah !== undefined && item.jumlah !== '' ? item.jumlah : (item.register || 1),
+    'HARGA BELI': item.harga || '',
+    'BAIK': item.keadaanBaik !== undefined && item.keadaanBaik !== '' ? item.keadaanBaik : ((item.kondisi || '').toLowerCase() === 'baik' ? (item.jumlah || 1) : 0),
+    'KURANG BAIK': item.keadaanKurangBaik !== undefined && item.keadaanKurangBaik !== '' ? item.keadaanKurangBaik : ((item.kondisi || '').toLowerCase().includes('kurang') || (item.kondisi || '').toLowerCase().includes('ringan') ? (item.jumlah || 1) : 0),
+    'RUSAK BERAT': item.keadaanRusakBerat !== undefined && item.keadaanRusakBerat !== '' ? item.keadaanRusakBerat : ((item.kondisi || '').toLowerCase().includes('berat') ? (item.jumlah || 1) : 0),
+    'KETERANGAN MUTASI': item.keteranganMutasi || item.keterangan || '',
     'Nama Barang': item.namaBarang,
     'Kode Barang': item.kodeBarang,
-    'Kondisi': item.kondisi,
+    'Kondisi': item.kondisi || 'Baik',
     'Merk / Type': item.merkType || '',
     'Ukuran / CC': item.ukuranCc || '',
     'Bahan': item.bahan || '',
@@ -1243,7 +1389,7 @@ export async function syncKibBToGoogleSheets(
     'No Bpkb': item.noBpkb || '',
     'Asal Usul': item.asalUsul || '',
     'Harga': item.harga || '',
-    'Keterangan': item.keterangan || ''
+    'Keterangan': item.keterangan || item.keteranganMutasi || ''
   }));
   const payload = {
     type: 'SYNC_KIB_B',
@@ -1252,6 +1398,50 @@ export async function syncKibBToGoogleSheets(
     'KIB B': mappedItems,
     spreadsheetUrl: config.spreadsheetUrl || '',
     spreadsheetId: config.spreadsheetUrl || '',
+    timestamp: new Date().toLocaleString('id-ID')
+  };
+  return await callProxyOrDirectPost(config.webAppUrl, payload);
+}
+
+/**
+ * Fungsi khusus sinkronisasi instan Data Bangunan langsung ke sheet "Data_Bangunan" di Google Spreadsheet
+ */
+export async function syncBangunanToGoogleSheets(
+  config: SyncConfig,
+  items: BangunanItem[]
+): Promise<{ success: boolean; message: string; data?: any }> {
+  if (!config.webAppUrl) {
+    return {
+      success: false,
+      message: 'URL Google Apps Script belum diisi di Pengaturan.'
+    };
+  }
+  const payload = {
+    type: 'SYNC_BANGUNAN',
+    spreadsheetUrl: config.spreadsheetUrl || '',
+    payload: items,
+    timestamp: new Date().toLocaleString('id-ID')
+  };
+  return await callProxyOrDirectPost(config.webAppUrl, payload);
+}
+
+/**
+ * Fungsi khusus sinkronisasi instan Data Ruang langsung ke sheet "Data_Ruang" di Google Spreadsheet
+ */
+export async function syncRuangToGoogleSheets(
+  config: SyncConfig,
+  items: RuangItem[]
+): Promise<{ success: boolean; message: string; data?: any }> {
+  if (!config.webAppUrl) {
+    return {
+      success: false,
+      message: 'URL Google Apps Script belum diisi di Pengaturan.'
+    };
+  }
+  const payload = {
+    type: 'SYNC_RUANG',
+    spreadsheetUrl: config.spreadsheetUrl || '',
+    payload: items,
     timestamp: new Date().toLocaleString('id-ID')
   };
   return await callProxyOrDirectPost(config.webAppUrl, payload);
@@ -1288,6 +1478,8 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
     ptk: TeacherStaff[];
     sarpras: SarprasItem[];
     kibB?: KibBItem[];
+    bangunan?: BangunanItem[];
+    ruang?: RuangItem[];
     rapor: StudentReport[];
     pengaturan: Array<{ key: string; value: string }>;
     administrator: AdminUser[];

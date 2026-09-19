@@ -19,14 +19,16 @@ import {
   FileSpreadsheet,
   FileText,
   Coins,
+  Link,
   ShieldAlert,
   Info,
   Database,
   RefreshCw,
+  Send,
   Sparkles
 } from 'lucide-react';
 import { KibBItem } from '../types';
-import { exportToCSV, exportToExcel, readExcelOrCSVFile, getSavedSyncConfig, loadFromGoogleSheets } from '../services/googleSheetsService';
+import { exportToCSV, exportToExcel, readExcelOrCSVFile, getSavedSyncConfig, loadFromGoogleSheets, syncToGoogleSheets } from '../services/googleSheetsService';
 
 function parseCSVContent(text: string): Record<string, string>[] {
   const lines: string[] = [];
@@ -177,11 +179,39 @@ export const KibBModule: React.FC<KibBModuleProps> = ({
   const [editingItem, setEditingItem] = useState<KibBItem | null>(null);
   const [deletingItem, setDeletingItem] = useState<KibBItem | null>(null);
   const [isPulling, setIsPulling] = useState(false);
+  const [isPushing, setIsPushing] = useState(false);
   const [localFeedback, setLocalFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const showLocalToast = (type: 'success' | 'error', message: string) => {
     setLocalFeedback({ type, message });
     setTimeout(() => setLocalFeedback(null), 4000);
+  };
+
+  const handlePushData = async () => {
+    setIsPushing(true);
+    try {
+      const cfg = getSavedSyncConfig();
+      if (!cfg || !cfg.webAppUrl) {
+        showLocalToast('error', 'URL Google Apps Script belum diisi. Silakan atur di menu Pengaturan / Database Cloud.');
+        return;
+      }
+      const res = await syncToGoogleSheets(cfg, {
+        siswa: [],
+        ptk: [],
+        sarpras: [],
+        kibB: kibB,
+        rapor: []
+      });
+      if (res && res.success) {
+        showLocalToast('success', `Berhasil mengirim ${kibB.length} data barang KIB B ke Google Spreadsheet di sheet "KIB B"!`);
+      } else {
+        showLocalToast('error', res?.message || 'Gagal mengirim data KIB B ke Spreadsheet.');
+      }
+    } catch (err: any) {
+      showLocalToast('error', err?.message || 'Terjadi kesalahan saat mengirim data ke Spreadsheet.');
+    } finally {
+      setIsPushing(false);
+    }
   };
 
   const handlePullData = async () => {
@@ -236,15 +266,21 @@ export const KibBModule: React.FC<KibBModuleProps> = ({
     kondisi: 'Baik',
     merkType: '',
     ukuranCc: '',
-    bahan: '',
+    bahan: 'Campuran',
     tahun: new Date().getFullYear().toString(),
     noPabrik: '',
     noRangka: '',
     noMesin: '',
     noPolisi: '',
     noBpkb: '',
-    asalUsul: 'DAK / P2HP',
+    asalUsul: 'BOS Reguler',
     harga: '',
+    jumlah: 1,
+    register: '1',
+    keadaanBaik: 1,
+    keadaanKurangBaik: 0,
+    keadaanRusakBerat: 0,
+    keteranganMutasi: '',
     keterangan: ''
   };
 
@@ -263,7 +299,8 @@ export const KibBModule: React.FC<KibBModuleProps> = ({
       (item.noPabrik || '').toLowerCase().includes(q) ||
       (item.noRangka || '').toLowerCase().includes(q) ||
       (item.asalUsul || '').toLowerCase().includes(q) ||
-      (item.keterangan || '').toLowerCase().includes(q);
+      (item.keterangan || '').toLowerCase().includes(q) ||
+      (item.keteranganMutasi || '').toLowerCase().includes(q);
 
     const matchKondisi = filterKondisi === 'ALL' || item.kondisi === filterKondisi;
     const matchAsal = filterAsalUsul === 'ALL' || item.asalUsul === filterAsalUsul;
@@ -274,8 +311,17 @@ export const KibBModule: React.FC<KibBModuleProps> = ({
 
   // Calculate statistics
   const totalBarang = kibB.length;
-  const totalBaik = kibB.filter(i => (i.kondisi || '').toLowerCase() === 'baik').length;
-  const totalRusak = kibB.filter(i => (i.kondisi || '').toLowerCase().includes('rusak')).length;
+  const totalBaik = kibB.reduce((acc, curr) => {
+    const kb = Number(curr.keadaanBaik);
+    if (!isNaN(kb) && kb > 0) return acc + kb;
+    return (curr.kondisi || '').toLowerCase() === 'baik' ? acc + (Number(curr.jumlah) || 1) : acc;
+  }, 0);
+  const totalRusak = kibB.reduce((acc, curr) => {
+    const kkb = Number(curr.keadaanKurangBaik) || 0;
+    const krb = Number(curr.keadaanRusakBerat) || 0;
+    if (kkb > 0 || krb > 0) return acc + kkb + krb;
+    return (curr.kondisi || '').toLowerCase().includes('rusak') || (curr.kondisi || '').toLowerCase().includes('kurang') ? acc + (Number(curr.jumlah) || 1) : acc;
+  }, 0);
 
   const parseHargaToNumber = (val?: string | number): number => {
     if (!val) return 0;
@@ -291,13 +337,22 @@ export const KibBModule: React.FC<KibBModuleProps> = ({
     setFormData({
       ...initialFormState,
       no: kibB.length + 1,
-      kodeBarang: `1.3.2.${Math.floor(10 + Math.random() * 89)}.${Math.floor(10 + Math.random() * 89)}.${Math.floor(100 + Math.random() * 899)}`
+      kodeBarang: `1.3.2.${Math.floor(10 + Math.random() * 89)}.${Math.floor(10 + Math.random() * 89)}.${Math.floor(100 + Math.random() * 899)}`,
+      jumlah: 1,
+      keadaanBaik: 1,
+      keadaanKurangBaik: 0,
+      keadaanRusakBerat: 0
     });
     setIsModalOpen(true);
   };
 
   const handleOpenEdit = (item: KibBItem) => {
     setEditingItem(item);
+    const itemJumlah = item.jumlah !== undefined && item.jumlah !== '' ? item.jumlah : (item.register || 1);
+    const itemBaik = item.keadaanBaik !== undefined && item.keadaanBaik !== '' ? item.keadaanBaik : ((item.kondisi || '').toLowerCase() === 'baik' ? itemJumlah : 0);
+    const itemKurangBaik = item.keadaanKurangBaik !== undefined && item.keadaanKurangBaik !== '' ? item.keadaanKurangBaik : ((item.kondisi || '').toLowerCase().includes('kurang') || (item.kondisi || '').toLowerCase().includes('ringan') ? itemJumlah : 0);
+    const itemRusakBerat = item.keadaanRusakBerat !== undefined && item.keadaanRusakBerat !== '' ? item.keadaanRusakBerat : ((item.kondisi || '').toLowerCase().includes('berat') ? itemJumlah : 0);
+
     setFormData({
       no: item.no || 1,
       namaBarang: item.namaBarang || '',
@@ -312,8 +367,14 @@ export const KibBModule: React.FC<KibBModuleProps> = ({
       noMesin: item.noMesin || '',
       noPolisi: item.noPolisi || '',
       noBpkb: item.noBpkb || '',
-      asalUsul: item.asalUsul || 'DAK / P2HP',
+      asalUsul: item.asalUsul || 'BOS Reguler',
       harga: item.harga || '',
+      jumlah: itemJumlah,
+      register: item.register || String(itemJumlah),
+      keadaanBaik: itemBaik,
+      keadaanKurangBaik: itemKurangBaik,
+      keadaanRusakBerat: itemRusakBerat,
+      keteranganMutasi: item.keteranganMutasi || '',
       keterangan: item.keterangan || ''
     });
     setIsModalOpen(true);
@@ -350,38 +411,67 @@ export const KibBModule: React.FC<KibBModuleProps> = ({
   const handleDownloadTemplate = () => {
     const templateData = [
       {
-        'Jenis Barang / Nama Barang': 'Laptop Asus Core i5 (Contoh)',
-        'Nomor Kode Barang': '1.3.2.04.01.01.001',
-        'Kondisi': 'Baik',
-        'Merk / Type': 'Asus ExpertBook P14',
-        'Ukuran / CC': '14 inch',
-        'Bahan': 'Aluminium / Plastik',
-        'Tahun Pengadaan': '2024',
-        'No. Pabrik': 'ASUS-998231',
-        'No. Rangka': '-',
-        'No. Mesin': '-',
-        'No. Polisi': '-',
-        'No. BPKB': '-',
-        'Asal Usul': 'BOS Reguler',
-        'Harga (ribuan Rp)': '9500000',
-        'Keterangan': 'Laboratorium Komputer'
+        'No': 1,
+        'Nama / Jenis Barang': 'MEJA KERJA',
+        'Merek / Model': 'Lokal',
+        'No Seri Pabrik': '-',
+        'Bahan': 'Campuran',
+        'Tahun Pembuatan / Pembelian': '2023',
+        'Kode Barang': '1.3.2.04.01.01.001',
+        'Jumlah Barang / Register': 1,
+        'Harga Beli': '500000',
+        'Baik': 1,
+        'Kurang Baik': 0,
+        'Rusak Berat': 0,
+        'Keterangan Mutasi': '-',
+        'Ukuran / CC': '-',
+        'No Rangka': '-',
+        'No Mesin': '-',
+        'No Polisi': '-',
+        'No Bpkb': '-',
+        'Asal Usul': 'BOS Reguler'
       },
       {
-        'Jenis Barang / Nama Barang': 'Proyektor Epson (Contoh)',
-        'Nomor Kode Barang': '1.3.2.05.02.01.002',
-        'Kondisi': 'Baik',
-        'Merk / Type': 'Epson EB-E500',
-        'Ukuran / CC': '3300 Lumens',
-        'Bahan': 'Plastik ABS',
-        'Tahun Pengadaan': '2023',
-        'No. Pabrik': 'EPS-77120',
-        'No. Rangka': '-',
-        'No. Mesin': '-',
-        'No. Polisi': '-',
-        'No. BPKB': '-',
-        'Asal Usul': 'DAK / P2HP',
-        'Harga (ribuan Rp)': '6250000',
-        'Keterangan': 'Ruang Laboratorium IPA'
+        'No': 2,
+        'Nama / Jenis Barang': 'KURSI KERJA',
+        'Merek / Model': 'Lokal',
+        'No Seri Pabrik': '-',
+        'Bahan': 'Campuran',
+        'Tahun Pembuatan / Pembelian': '2023',
+        'Kode Barang': '1.3.2.04.01.01.002',
+        'Jumlah Barang / Register': 1,
+        'Harga Beli': '350000',
+        'Baik': 1,
+        'Kurang Baik': 0,
+        'Rusak Berat': 0,
+        'Keterangan Mutasi': '-',
+        'Ukuran / CC': '-',
+        'No Rangka': '-',
+        'No Mesin': '-',
+        'No Polisi': '-',
+        'No Bpkb': '-',
+        'Asal Usul': 'BOS Reguler'
+      },
+      {
+        'No': 3,
+        'Nama / Jenis Barang': 'LAPTOP ASUS',
+        'Merek / Model': 'ExpertBook P14',
+        'No Seri Pabrik': 'ASUS-998231',
+        'Bahan': 'Aluminium',
+        'Tahun Pembuatan / Pembelian': '2024',
+        'Kode Barang': '1.3.2.05.02.01.003',
+        'Jumlah Barang / Register': 1,
+        'Harga Beli': '9500000',
+        'Baik': 1,
+        'Kurang Baik': 0,
+        'Rusak Berat': 0,
+        'Keterangan Mutasi': 'Ruang Lab Komputer',
+        'Ukuran / CC': '14 inch',
+        'No Rangka': '-',
+        'No Mesin': '-',
+        'No Polisi': '-',
+        'No Bpkb': '-',
+        'Asal Usul': 'DAK Fisik'
       }
     ];
 
@@ -397,29 +487,58 @@ export const KibBModule: React.FC<KibBModuleProps> = ({
 
     const newItemsToImport: KibBItem[] = [];
     parsedRows.forEach((row, idx) => {
-      const namaBarang = getCSVValue(row, ['jenisbarangnamabarang', 'namabarang', 'jenisbarang', 'nama', 'barang', 'item']);
+      const namaBarang = getCSVValue(row, ['namajenisbarang', 'jenisbarangnamabarang', 'namabarang', 'jenisbarang', 'nama', 'barang', 'item']);
       if (!namaBarang || !namaBarang.trim()) return;
 
       const rawNo = getCSVValue(row, ['no', 'nomor', 'no.']);
       const parsedNo = rawNo ? (parseInt(rawNo, 10) || (idx + 1)) : (idx + 1);
 
+      const rawJumlah = getCSVValue(row, ['jumlahbarangregister', 'jumlahbarang', 'jumlah', 'register', 'qty']);
+      const parsedJumlah = rawJumlah ? (Number(rawJumlah.replace(/[^0-9.]/g, '')) || 1) : 1;
+
+      const rawBaik = getCSVValue(row, ['baik', 'keadaanbaik']);
+      const rawKurangBaik = getCSVValue(row, ['kurangbaik', 'keadaankurangbaik', 'rusakringan']);
+      const rawRusakBerat = getCSVValue(row, ['rusakberat', 'keadaanrusakberat']);
+
+      const parsedBaik = rawBaik !== '' ? (Number(rawBaik) || 0) : undefined;
+      const parsedKurangBaik = rawKurangBaik !== '' ? (Number(rawKurangBaik) || 0) : undefined;
+      const parsedRusakBerat = rawRusakBerat !== '' ? (Number(rawRusakBerat) || 0) : undefined;
+
+      let inferredKondisi: 'Baik' | 'Rusak Ringan' | 'Rusak Berat' = 'Baik';
+      const rawKondisi = getCSVValue(row, ['kondisi', 'keadaanbarang', 'keadaan']);
+      if (rawKondisi) {
+        if (rawKondisi.toLowerCase().includes('berat')) inferredKondisi = 'Rusak Berat';
+        else if (rawKondisi.toLowerCase().includes('kurang') || rawKondisi.toLowerCase().includes('ringan')) inferredKondisi = 'Rusak Ringan';
+        else inferredKondisi = 'Baik';
+      } else if (parsedRusakBerat && parsedRusakBerat > 0) {
+        inferredKondisi = 'Rusak Berat';
+      } else if (parsedKurangBaik && parsedKurangBaik > 0) {
+        inferredKondisi = 'Rusak Ringan';
+      }
+
       const newItem: KibBItem = {
         id: generateShortKibBId(),
         no: parsedNo,
         namaBarang: namaBarang.trim(),
-        kodeBarang: getCSVValue(row, ['nomorkodebarang', 'kodebarang', 'kode', 'nomorkode']) || `1.3.2.${Math.floor(10 + Math.random() * 89)}.${Math.floor(10 + Math.random() * 89)}.${Math.floor(100 + Math.random() * 899)}`,
-        kondisi: (['Baik', 'Rusak Ringan', 'Rusak Berat'].includes(getCSVValue(row, ['kondisi'])) ? getCSVValue(row, ['kondisi']) : 'Baik') as any,
-        merkType: getCSVValue(row, ['merktype', 'merk', 'tipe', 'type']) || '',
+        kodeBarang: getCSVValue(row, ['kodebarang', 'nomorkodebarang', 'kode', 'nomorkode']) || `1.3.2.${Math.floor(10 + Math.random() * 89)}.${Math.floor(10 + Math.random() * 89)}.${Math.floor(100 + Math.random() * 899)}`,
+        kondisi: inferredKondisi,
+        merkType: getCSVValue(row, ['merekmodel', 'merkmodel', 'merek', 'model', 'merktype', 'merk', 'tipe', 'type']) || '',
         ukuranCc: getCSVValue(row, ['ukurancc', 'ukuran', 'cc']) || '',
-        bahan: getCSVValue(row, ['bahan']) || '',
-        tahun: getCSVValue(row, ['tahunpengadaan', 'tahun']) || String(new Date().getFullYear()),
-        noPabrik: getCSVValue(row, ['nopabrik', 'pabrik']) || '',
+        bahan: getCSVValue(row, ['bahan', 'material']) || 'Campuran',
+        tahun: getCSVValue(row, ['tahunpembuatanpembelian', 'tahunpembuatan', 'tahunpembelian', 'tahunpengadaan', 'tahun']) || String(new Date().getFullYear()),
+        noPabrik: getCSVValue(row, ['noseripabrik', 'nopabrik', 'noseri', 'pabrik']) || '',
         noRangka: getCSVValue(row, ['norangka', 'rangka']) || '',
         noMesin: getCSVValue(row, ['nomesin', 'mesin']) || '',
         noPolisi: getCSVValue(row, ['nopolisi', 'polisi', 'plat']) || '',
         noBpkb: getCSVValue(row, ['nobpkb', 'bpkb']) || '',
-        asalUsul: getCSVValue(row, ['asalusul', 'asal', 'sumber']) || 'DAK / P2HP',
-        harga: getCSVValue(row, ['harga', 'nilaiharga', 'biaya']) || '',
+        asalUsul: getCSVValue(row, ['asalusul', 'asal', 'sumber']) || 'BOS Reguler',
+        harga: getCSVValue(row, ['hargabeli', 'harga', 'nilaiharga', 'biaya']) || '',
+        jumlah: parsedJumlah,
+        register: String(parsedJumlah),
+        keadaanBaik: parsedBaik !== undefined ? parsedBaik : (inferredKondisi === 'Baik' ? parsedJumlah : 0),
+        keadaanKurangBaik: parsedKurangBaik !== undefined ? parsedKurangBaik : (inferredKondisi === 'Rusak Ringan' ? parsedJumlah : 0),
+        keadaanRusakBerat: parsedRusakBerat !== undefined ? parsedRusakBerat : (inferredKondisi === 'Rusak Berat' ? parsedJumlah : 0),
+        keteranganMutasi: getCSVValue(row, ['keteranganmutasi', 'mutasi']) || '',
         keterangan: getCSVValue(row, ['keterangan', 'ket', 'lokasi', 'ruang']) || ''
       };
 
@@ -508,22 +627,26 @@ export const KibBModule: React.FC<KibBModuleProps> = ({
   };
 
   const handleExportExcel = () => {
-    const dataForExport = filteredItems.map((item) => ({
-      'Jenis Barang / Nama Barang': item.namaBarang,
-      'Nomor Kode Barang': item.kodeBarang,
-      'Kondisi': item.kondisi,
-      'Merk / Type': item.merkType || '-',
-      'Ukuran / CC': item.ukuranCc || '-',
+    const dataForExport = filteredItems.map((item, idx) => ({
+      'No': item.no || (idx + 1),
+      'Nama / Jenis Barang': item.namaBarang,
+      'Merek / Model': item.merkType || '-',
+      'No Seri Pabrik': item.noPabrik || '-',
       'Bahan': item.bahan || '-',
-      'Tahun Pengadaan': item.tahun || '-',
-      'No. Pabrik': item.noPabrik || '-',
+      'Tahun Pembuatan / Pembelian': item.tahun || '-',
+      'Kode Barang': item.kodeBarang || '-',
+      'Jumlah Barang / Register': item.jumlah !== undefined && item.jumlah !== '' ? item.jumlah : (item.register || 1),
+      'Harga Beli': item.harga || '-',
+      'Baik': item.keadaanBaik !== undefined && item.keadaanBaik !== '' ? item.keadaanBaik : ((item.kondisi || '').toLowerCase() === 'baik' ? (item.jumlah || 1) : 0),
+      'Kurang Baik': item.keadaanKurangBaik !== undefined && item.keadaanKurangBaik !== '' ? item.keadaanKurangBaik : ((item.kondisi || '').toLowerCase().includes('kurang') || (item.kondisi || '').toLowerCase().includes('ringan') ? (item.jumlah || 1) : 0),
+      'Rusak Berat': item.keadaanRusakBerat !== undefined && item.keadaanRusakBerat !== '' ? item.keadaanRusakBerat : ((item.kondisi || '').toLowerCase().includes('berat') ? (item.jumlah || 1) : 0),
+      'Keterangan Mutasi': item.keteranganMutasi || item.keterangan || '-',
+      'Ukuran / CC': item.ukuranCc || '-',
       'No. Rangka': item.noRangka || '-',
       'No. Mesin': item.noMesin || '-',
       'No. Polisi': item.noPolisi || '-',
       'No. BPKB': item.noBpkb || '-',
-      'Asal Usul': item.asalUsul || '-',
-      'Harga (ribuan Rp)': item.harga || '-',
-      'Keterangan': item.keterangan || '-'
+      'Asal Usul': item.asalUsul || '-'
     }));
 
     exportToExcel(dataForExport, 'KIB_B_Peralatan_dan_Mesin.xlsx', 'KIB B Data');
@@ -548,60 +671,66 @@ export const KibBModule: React.FC<KibBModuleProps> = ({
           <h2 className="text-xl font-bold text-slate-900 mt-1">Kartu Inventaris Barang (KIB) B</h2>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            onClick={handlePullData}
-            disabled={isPulling || isSyncing}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 transition-all shadow-2xs cursor-pointer disabled:opacity-60"
-            title="Tarik & perbarui data barang KIB B langsung dari Google Spreadsheet"
-          >
-            <RefreshCw className={`w-4 h-4 text-emerald-700 ${isPulling || isSyncing ? 'animate-spin' : ''}`} />
-            <span>{isPulling || isSyncing ? 'Menarik Data...' : 'Tarik Data'}</span>
-          </button>
+        <div className="flex flex-col gap-2.5">
+          {/* Row 1 Action Buttons (Gambar 3) */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={handlePullData}
+              disabled={isPulling || isSyncing}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 transition-all shadow-2xs cursor-pointer disabled:opacity-60"
+              title="Tarik & perbarui data barang KIB B langsung dari Google Spreadsheet"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-emerald-700 ${isPulling || isSyncing ? 'animate-spin' : ''}`} />
+              <span>{isPulling || isSyncing ? 'Menarik Data...' : 'Tarik Data'}</span>
+            </button>
 
-          <button
-            onClick={handleDownloadTemplate}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors shadow-2xs cursor-pointer"
-            title="Unduh file template Excel (.xlsx) format KIB B"
-          >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-            <span className="hidden sm:inline">Unduh Template Excel</span>
-          </button>
+            <button
+              onClick={handleDownloadTemplate}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors shadow-2xs cursor-pointer"
+              title="Unduh file template Excel (.xlsx) format KIB B"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Unduh Template Excel</span>
+            </button>
 
-          <button
-            onClick={() => setIsImportModalOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-colors shadow-2xs cursor-pointer"
-            title="Upload file Excel (.xlsx / .xls) atau CSV data KIB B"
-          >
-            <Upload className="w-4 h-4 text-blue-600" />
-            <span className="hidden sm:inline">Upload / Impor Excel</span>
-          </button>
+            <button
+              onClick={() => setIsImportModalOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-colors shadow-2xs cursor-pointer"
+              title="Upload file Excel (.xlsx / .xls) atau CSV data KIB B"
+            >
+              <Upload className="w-3.5 h-3.5 text-blue-600" />
+              <span>Upload / Impor Excel</span>
+            </button>
 
-          <button
-            onClick={handleExportExcel}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 transition-colors shadow-2xs cursor-pointer"
-            title="Ekspor ke format file Excel (.xlsx)"
-          >
-            <Download className="w-4 h-4 text-emerald-600" />
-            <span className="hidden sm:inline">Ekspor Excel</span>
-          </button>
+            <button
+              onClick={handleExportExcel}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 transition-colors shadow-2xs cursor-pointer"
+              title="Ekspor ke format file Excel (.xlsx)"
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Ekspor Excel</span>
+            </button>
 
-          <button
-            onClick={handlePrint}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 transition-colors shadow-2xs cursor-pointer"
-            title="Cetak KIB B"
-          >
-            <Printer className="w-4 h-4 text-slate-600" />
-            <span className="hidden sm:inline">Cetak</span>
-          </button>
+            <button
+              onClick={handlePrint}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 transition-colors shadow-2xs cursor-pointer"
+              title="Cetak KIB B"
+            >
+              <Printer className="w-3.5 h-3.5 text-slate-600" />
+              <span>Cetak</span>
+            </button>
+          </div>
 
-          <button
-            onClick={handleOpenAdd}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-sm cursor-pointer ml-auto sm:ml-0"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Tambah Barang KIB B</span>
-          </button>
+          {/* Row 2 Action Button (Gambar 3) */}
+          <div className="flex items-center">
+            <button
+              onClick={handleOpenAdd}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-sm cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Tambah Barang KIB B</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -764,33 +893,29 @@ export const KibBModule: React.FC<KibBModuleProps> = ({
         </div>
       </div>
 
-      {/* Main Table KIB B */}
+      {/* Main Table KIB B (Gambar 1) */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="bg-slate-50/90 text-slate-700 border-b border-slate-200 font-semibold uppercase tracking-wider text-[11px]">
-                <th className="py-3 px-3 w-12 text-center">No.</th>
-                <th className="py-3 px-3 min-w-[220px]">Jenis Barang / Nama Barang</th>
-                <th className="py-3 px-3 min-w-[140px]">Kode Barang / No Register</th>
-                <th className="py-3 px-3 min-w-[100px] text-center">Kondisi</th>
-                <th className="py-3 px-3 min-w-[130px]">Merk / Type</th>
-                <th className="py-3 px-3 min-w-[90px]">Ukuran / CC</th>
-                <th className="py-3 px-3 min-w-[90px]">Bahan</th>
-                <th className="py-3 px-3 min-w-[70px] text-center">Tahun</th>
-                <th className="py-3 px-3 min-w-[140px]">No. Pabrik</th>
-                <th className="py-3 px-3 min-w-[160px]">No. Rangka</th>
-                <th className="py-3 px-3 min-w-[100px]">No. Mesin / Polisi</th>
-                <th className="py-3 px-3 min-w-[110px]">Asal Usul</th>
-                <th className="py-3 px-3 min-w-[120px] text-right">Harga (Rp)</th>
-                <th className="py-3 px-3 min-w-[150px]">Keterangan</th>
-                <th className="py-3 px-3 w-20 text-center sticky right-0 bg-slate-50 border-l border-slate-200">Aksi</th>
+              <tr className="bg-slate-50/80 text-slate-800 border-b border-slate-200 font-bold uppercase tracking-wider text-[11px]">
+                <th className="py-3.5 px-3 text-center border-r border-slate-100 w-12">NO.</th>
+                <th className="py-3.5 px-4 border-r border-slate-100 min-w-[220px]">JENIS BARANG / NAMA BARANG</th>
+                <th className="py-3.5 px-4 border-r border-slate-100 min-w-[160px]">KODE BARANG / NO REGISTER</th>
+                <th className="py-3.5 px-3 text-center border-r border-slate-100 min-w-[110px]">KONDISI</th>
+                <th className="py-3.5 px-3 border-r border-slate-100 min-w-[130px]">MERK / TYPE</th>
+                <th className="py-3.5 px-3 border-r border-slate-100 min-w-[110px]">UKURAN / CC</th>
+                <th className="py-3.5 px-3 border-r border-slate-100 min-w-[100px]">BAHAN</th>
+                <th className="py-3.5 px-3 text-center border-r border-slate-100 min-w-[90px]">TAHUN</th>
+                <th className="py-3.5 px-3 border-r border-slate-100 min-w-[120px]">NO. PABRIK</th>
+                <th className="py-3.5 px-3 border-r border-slate-100 min-w-[120px]">NO. RANGKA</th>
+                <th className="py-3.5 px-3 text-center sticky right-0 bg-slate-50 border-l border-slate-200 w-20">AKSI</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-800">
               {filteredItems.length === 0 ? (
                 <tr>
-                  <td colSpan={15} className="py-12 text-center text-slate-400">
+                  <td colSpan={11} className="py-12 text-center text-slate-400">
                     <Package className="w-10 h-10 mx-auto mb-2 text-slate-300 stroke-[1.5]" />
                     <p className="font-semibold text-slate-600">Belum ada data barang KIB B</p>
                     <p className="text-xs text-slate-400 mt-1">Tarik data dari Google Spreadsheet atau klik tombol "Tambah Barang KIB B" di atas.</p>
@@ -806,85 +931,66 @@ export const KibBModule: React.FC<KibBModuleProps> = ({
                 </tr>
               ) : (
                 filteredItems.map((item, index) => {
-                  const isBaik = (item.kondisi || '').toLowerCase() === 'baik';
-                  const isRusakBerat = (item.kondisi || '').toLowerCase().includes('berat');
-
                   return (
-                    <tr key={item.id || index} className="hover:bg-slate-50/75 transition-colors">
-                      <td className="py-2.5 px-3 text-center text-slate-500 font-mono">
+                    <tr key={item.id || index} className="hover:bg-slate-50/80 transition-colors border-b border-slate-100">
+                      <td className="py-3 px-3 text-center text-slate-600 font-normal border-r border-slate-100">
                         {item.no !== undefined && item.no !== '' ? item.no : index + 1}
                       </td>
-                      <td className="py-2.5 px-3">
-                        <span className="font-bold text-slate-900 block">{item.namaBarang}</span>
+                      <td className="py-3 px-4 border-r border-slate-100">
+                        <span className="font-bold text-slate-900 block text-xs">{item.namaBarang}</span>
                         {item.keterangan && (
-                          <span className="text-[11px] text-slate-500 block truncate max-w-[200px]">
+                          <span className="text-[11px] text-slate-500 block truncate max-w-[220px]">
                             {item.keterangan}
                           </span>
                         )}
                       </td>
-                      <td className="py-2.5 px-3 font-mono text-[11px] text-slate-700">
+                      <td className="py-3 px-4 font-mono text-[11px] text-slate-700 border-r border-slate-100">
                         {item.kodeBarang || '-'}
                       </td>
-                      <td className="py-2.5 px-3 text-center">
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                            isBaik
-                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                              : isRusakBerat
-                              ? 'bg-rose-100 text-rose-800 border border-rose-200'
-                              : 'bg-amber-100 text-amber-800 border border-amber-200'
-                          }`}
-                        >
+                      <td className="py-3 px-3 text-center border-r border-slate-100">
+                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
+                          (item.kondisi || '').toLowerCase().includes('rusak berat')
+                            ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                            : (item.kondisi || '').toLowerCase().includes('kurang') || (item.kondisi || '').toLowerCase().includes('ringan')
+                            ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                            : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                        }`}>
                           {item.kondisi || 'Baik'}
                         </span>
                       </td>
-                      <td className="py-2.5 px-3 text-slate-700">
+                      <td className="py-3 px-3 text-slate-700 border-r border-slate-100">
                         {item.merkType || '-'}
                       </td>
-                      <td className="py-2.5 px-3 text-slate-600">
+                      <td className="py-3 px-3 text-slate-700 border-r border-slate-100">
                         {item.ukuranCc || '-'}
                       </td>
-                      <td className="py-2.5 px-3 text-slate-600">
+                      <td className="py-3 px-3 text-slate-700 border-r border-slate-100">
                         {item.bahan || '-'}
                       </td>
-                      <td className="py-2.5 px-3 text-center text-slate-600 font-mono">
+                      <td className="py-3 px-3 text-center text-slate-700 font-mono border-r border-slate-100">
                         {item.tahun || '-'}
                       </td>
-                      <td className="py-2.5 px-3 font-mono text-[11px] text-slate-600 truncate max-w-[140px]" title={item.noPabrik}>
+                      <td className="py-3 px-3 font-mono text-[11px] text-slate-700 border-r border-slate-100">
                         {item.noPabrik || '-'}
                       </td>
-                      <td className="py-2.5 px-3 font-mono text-[11px] text-slate-600 truncate max-w-[160px]" title={item.noRangka}>
+                      <td className="py-3 px-3 font-mono text-[11px] text-slate-700 border-r border-slate-100">
                         {item.noRangka || '-'}
                       </td>
-                      <td className="py-2.5 px-3 font-mono text-[11px] text-slate-600">
-                        {item.noMesin || item.noPolisi ? `${item.noMesin || ''} ${item.noPolisi || ''}`.trim() : '-'}
-                      </td>
-                      <td className="py-2.5 px-3 text-slate-700">
-                        <span className="inline-block px-1.5 py-0.5 rounded bg-slate-100 text-slate-800 text-[11px]">
-                          {item.asalUsul || '-'}
-                        </span>
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-mono font-medium text-slate-900">
-                        {item.harga ? item.harga : '-'}
-                      </td>
-                      <td className="py-2.5 px-3 text-slate-600 truncate max-w-[150px]" title={item.keterangan}>
-                        {item.keterangan || '-'}
-                      </td>
-                      <td className="py-2.5 px-3 text-center sticky right-0 bg-white group-hover:bg-slate-50 border-l border-slate-200">
+                      <td className="py-3 px-3 text-center sticky right-0 bg-white group-hover:bg-slate-50 border-l border-slate-200">
                         <div className="flex items-center justify-center gap-1.5">
                           <button
                             onClick={() => handleOpenEdit(item)}
-                            className="p-1 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer"
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-slate-100 transition-colors cursor-pointer"
                             title="Edit Barang"
                           >
-                            <Edit3 className="w-3.5 h-3.5" />
+                            <Edit3 className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => setDeletingItem(item)}
-                            className="p-1 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-100 transition-colors cursor-pointer"
                             title="Hapus Barang"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       </td>
@@ -900,7 +1006,7 @@ export const KibBModule: React.FC<KibBModuleProps> = ({
       {/* Modal Tambah / Edit KIB B */}
       {isModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto animate-fadeIn">
-          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-3xl overflow-hidden shadow-2xl my-auto max-h-[92vh] flex flex-col">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-4xl overflow-hidden shadow-2xl my-auto max-h-[92vh] flex flex-col">
             {/* Modal Header */}
             <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
               <div>
@@ -920,221 +1026,242 @@ export const KibBModule: React.FC<KibBModuleProps> = ({
             </div>
 
             {/* Modal Form */}
-            <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-5 text-xs">
-              {/* Seksi 1: Identitas Pokok Barang */}
+            <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-6 text-xs">
+              {/* Seksi 1: IDENTITAS & KONDISI BARANG */}
               <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-lg mb-3 flex items-center gap-1.5">
-                  <Package className="w-3.5 h-3.5 text-emerald-600" />
-                  1. Identitas & Kondisi Barang
-                </h4>
+                <div className="bg-emerald-50/90 border border-emerald-100 rounded-xl px-3.5 py-2 mb-3.5 flex items-center gap-2 text-emerald-900 font-bold text-xs tracking-wide">
+                  <Package className="w-4 h-4 text-emerald-600" />
+                  <span>1. IDENTITAS & KONDISI BARANG</span>
+                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div className="md:col-span-2">
-                    <label className="block text-slate-700 font-semibold mb-1">
-                      Jenis Barang / Nama Barang <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.namaBarang}
-                      onChange={(e) => setFormData({ ...formData, namaBarang: e.target.value })}
-                      placeholder="Contoh: LCD Projector, Lemari Besi, Timbangan Meja..."
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none"
-                    />
+                <div className="space-y-3">
+                  {/* Row 1 */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="md:col-span-2">
+                      <label className="block text-slate-700 font-semibold mb-1">
+                        Jenis Barang / Nama Barang <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.namaBarang}
+                        onChange={(e) => setFormData({ ...formData, namaBarang: e.target.value })}
+                        placeholder="Contoh: LCD Projector, Lemari Besi, Timbangan Meja..."
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-700 font-semibold mb-1">
+                        No. Urut / Register
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.no !== undefined && formData.no !== '' ? formData.no : (formData.register || '')}
+                        onChange={(e) => setFormData({ ...formData, no: e.target.value ? Number(e.target.value) || e.target.value : '', register: e.target.value })}
+                        placeholder="517"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none font-mono"
+                      />
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">
-                      No. Urut / Register
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.no !== undefined ? formData.no : ''}
-                      onChange={(e) => setFormData({ ...formData, no: e.target.value ? Number(e.target.value) : '' })}
-                      placeholder="1"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none font-mono"
-                    />
+                  {/* Row 2 */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-slate-700 font-semibold mb-1">
+                        Nomor Kode Barang
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.kodeBarang}
+                        onChange={(e) => setFormData({ ...formData, kodeBarang: e.target.value })}
+                        placeholder="1.3.2.45.15.249"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-700 font-semibold mb-1">
+                        Kondisi Barang
+                      </label>
+                      <select
+                        value={formData.kondisi}
+                        onChange={(e) => setFormData({ ...formData, kondisi: e.target.value as any })}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none cursor-pointer"
+                      >
+                        <option value="Baik">Baik (Bisa Digunakan)</option>
+                        <option value="Rusak Ringan">Rusak Ringan</option>
+                        <option value="Rusak Berat">Rusak Berat</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-slate-700 font-semibold mb-1">
+                        Tahun Pengadaan / Pembuatan
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.tahun}
+                        onChange={(e) => setFormData({ ...formData, tahun: e.target.value })}
+                        placeholder="2026"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none font-mono"
+                      />
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">
-                      Nomor Kode Barang
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.kodeBarang}
-                      onChange={(e) => setFormData({ ...formData, kodeBarang: e.target.value })}
-                      placeholder="1.3.2.05.01.05.0043"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">
-                      Kondisi Barang
-                    </label>
-                    <select
-                      value={formData.kondisi}
-                      onChange={(e) => setFormData({ ...formData, kondisi: e.target.value })}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none cursor-pointer"
-                    >
-                      <option value="Baik">Baik (Bisa Digunakan)</option>
-                      <option value="Rusak Ringan">Rusak Ringan</option>
-                      <option value="Rusak Berat">Rusak Berat</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">
-                      Tahun Pengadaan / Pembuatan
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.tahun}
-                      onChange={(e) => setFormData({ ...formData, tahun: e.target.value })}
-                      placeholder="2017"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">
-                      Merk / Type
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.merkType}
-                      onChange={(e) => setFormData({ ...formData, merkType: e.target.value })}
-                      placeholder="Contoh: Optoma, Epson, Lion..."
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">
-                      Ukuran / CC
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.ukuranCc}
-                      onChange={(e) => setFormData({ ...formData, ukuranCc: e.target.value })}
-                      placeholder="Contoh: 5 kg, 125 cc, 42 inch..."
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">
-                      Bahan
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.bahan}
-                      onChange={(e) => setFormData({ ...formData, bahan: e.target.value })}
-                      placeholder="Contoh: Besi, Campuran, Kayu, Plastik..."
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none"
-                    />
+                  {/* Row 3 */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-slate-700 font-semibold mb-1">
+                        Merk / Type
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.merkType}
+                        onChange={(e) => setFormData({ ...formData, merkType: e.target.value })}
+                        placeholder="Contoh: Optoma, Epson, Lion..."
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-700 font-semibold mb-1">
+                        Ukuran / CC
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.ukuranCc}
+                        onChange={(e) => setFormData({ ...formData, ukuranCc: e.target.value })}
+                        placeholder="Contoh: 5 kg, 125 cc, 42 inch..."
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-700 font-semibold mb-1">
+                        Bahan
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.bahan}
+                        onChange={(e) => setFormData({ ...formData, bahan: e.target.value })}
+                        placeholder="Contoh: Besi, Campuran, Kayu, Plast..."
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Seksi 2: Nomor Seri, Pabrik, Rangka, & Kendaraan */}
+              {/* Seksi 2: NOMOR PABRIK, RANGKA & DOKUMEN MESIN / KENDARAAN */}
               <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 bg-slate-100 px-3 py-1.5 rounded-lg mb-3 flex items-center gap-1.5">
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-slate-600" />
-                  2. Nomor Pabrik, Rangka & Dokumen Mesin / Kendaraan
-                </h4>
+                <div className="bg-sky-50/90 border border-sky-100 rounded-xl px-3.5 py-2 mb-3.5 flex items-center gap-2 text-sky-900 font-bold text-xs tracking-wide">
+                  <FileText className="w-4 h-4 text-sky-600" />
+                  <span>2. NOMOR PABRIK, RANGKA & DOKUMEN MESIN / KENDARAAN</span>
+                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-slate-700 font-medium mb-1">No. Pabrik</label>
-                    <input
-                      type="text"
-                      value={formData.noPabrik}
-                      onChange={(e) => setFormData({ ...formData, noPabrik: e.target.value })}
-                      placeholder="Q737727AAAAACO453"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none font-mono"
-                    />
+                <div className="space-y-3">
+                  {/* Row 1 */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-slate-700 font-semibold mb-1">
+                        No. Pabrik
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.noPabrik}
+                        onChange={(e) => setFormData({ ...formData, noPabrik: e.target.value })}
+                        placeholder="Q737727AAAAAC0453"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-700 font-semibold mb-1">
+                        No. Rangka
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.noRangka}
+                        onChange={(e) => setFormData({ ...formData, noRangka: e.target.value })}
+                        placeholder="MRJSA1100K038002578400"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-700 font-semibold mb-1">
+                        No. Mesin
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.noMesin}
+                        onChange={(e) => setFormData({ ...formData, noMesin: e.target.value })}
+                        placeholder="Jika ada"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none font-mono"
+                      />
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="block text-slate-700 font-medium mb-1">No. Rangka</label>
-                    <input
-                      type="text"
-                      value={formData.noRangka}
-                      onChange={(e) => setFormData({ ...formData, noRangka: e.target.value })}
-                      placeholder="MRJSA1100K038002578400"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-700 font-medium mb-1">No. Mesin</label>
-                    <input
-                      type="text"
-                      value={formData.noMesin}
-                      onChange={(e) => setFormData({ ...formData, noMesin: e.target.value })}
-                      placeholder="Jika ada"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-700 font-medium mb-1">No. Polisi</label>
-                    <input
-                      type="text"
-                      value={formData.noPolisi}
-                      onChange={(e) => setFormData({ ...formData, noPolisi: e.target.value })}
-                      placeholder="Contoh: DN 1234 XY"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none uppercase font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-700 font-medium mb-1">No. BPKB</label>
-                    <input
-                      type="text"
-                      value={formData.noBpkb}
-                      onChange={(e) => setFormData({ ...formData, noBpkb: e.target.value })}
-                      placeholder="Jika ada"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none font-mono"
-                    />
+                  {/* Row 2 */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-slate-700 font-semibold mb-1">
+                        No. Polisi
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.noPolisi}
+                        onChange={(e) => setFormData({ ...formData, noPolisi: e.target.value })}
+                        placeholder="CONTOH: DN 1234 XY"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none font-mono uppercase"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-700 font-semibold mb-1">
+                        No. BPKB
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.noBpkb || ''}
+                        onChange={(e) => setFormData({ ...formData, noBpkb: e.target.value })}
+                        placeholder="Jika ada"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none font-mono"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Seksi 3: Perolehan, Nilai & Lokasi */}
+              {/* Seksi 3: ASAL USUL, NILAI PEROLEHAN & LOKASI */}
               <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-lg mb-3 flex items-center gap-1.5">
-                  <Coins className="w-3.5 h-3.5 text-emerald-600" />
-                  3. Asal Usul, Nilai Perolehan & Lokasi
-                </h4>
+                <div className="bg-emerald-50/80 border border-emerald-100 rounded-xl px-3.5 py-2 mb-3.5 flex items-center gap-2 text-emerald-900 font-bold text-xs tracking-wide">
+                  <Link className="w-4 h-4 text-emerald-600" />
+                  <span>3. ASAL USUL, NILAI PEROLEHAN & LOKASI</span>
+                </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-slate-700 font-semibold mb-1">Asal Usul Perolehan</label>
+                    <label className="block text-slate-700 font-semibold mb-1">
+                      Asal Usul Perolehan
+                    </label>
                     <input
                       type="text"
                       value={formData.asalUsul}
                       onChange={(e) => setFormData({ ...formData, asalUsul: e.target.value })}
-                      placeholder="DAK / P2HP, BOS, Hibah, APBD..."
+                      placeholder="Pembelian / Hibah / APBD"
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none"
                     />
                   </div>
-
                   <div>
-                    <label className="block text-slate-700 font-semibold mb-1">Harga (ribuan Rp)</label>
+                    <label className="block text-slate-700 font-semibold mb-1">
+                      Harga (ribuan Rp)
+                    </label>
                     <input
                       type="text"
                       value={formData.harga}
                       onChange={(e) => setFormData({ ...formData, harga: e.target.value })}
                       placeholder="Contoh: 1.467.800"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none font-mono"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none font-mono font-semibold"
                     />
                   </div>
-
                   <div>
-                    <label className="block text-slate-700 font-semibold mb-1">Keterangan / Lokasi Ruang</label>
+                    <label className="block text-slate-700 font-semibold mb-1">
+                      Keterangan / Lokasi Ruang
+                    </label>
                     <input
                       type="text"
                       value={formData.keterangan}
@@ -1147,7 +1274,7 @@ export const KibBModule: React.FC<KibBModuleProps> = ({
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200">
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}

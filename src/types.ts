@@ -159,18 +159,55 @@ export interface KibBItem {
   no?: number | string;
   namaBarang: string;
   kodeBarang: string;
-  kondisi: 'Baik' | 'Rusak Ringan' | 'Rusak Berat' | string;
+  kondisi: 'Baik' | 'Kurang Baik' | 'Rusak Ringan' | 'Rusak Berat' | string;
   merkType?: string;
-  ukuranCc?: string;
+  noPabrik?: string;
   bahan?: string;
   tahun?: string | number;
-  noPabrik?: string;
+  jumlah?: number | string;
+  register?: string;
+  harga?: string | number;
+  keadaanBaik?: number | string;
+  keadaanKurangBaik?: number | string;
+  keadaanRusakBerat?: number | string;
+  keteranganMutasi?: string;
+  ukuranCc?: string;
   noRangka?: string;
   noMesin?: string;
   noPolisi?: string;
   noBpkb?: string;
   asalUsul?: string;
-  harga?: string | number;
+  keterangan?: string;
+}
+
+export interface BangunanItem {
+  id: string;
+  no?: number;
+  namaBangunan: string;
+  kodeBangunan?: string;
+  tahunPembangunan?: string | number;
+  luasTapak?: string | number;
+  jumlahLantai?: string | number;
+  jumlahRuang?: string | number;
+  kondisi?: string;
+  bobotKerusakan?: string | number;
+  keterangan?: string;
+}
+
+export interface RuangItem {
+  id: string;
+  no?: number;
+  jenisPrasarana: string;
+  namaBangunan: string;
+  namaRuang: string;
+  kodeRuang?: string;
+  lantai?: string | number;
+  panjang?: string | number;
+  lebar?: string | number;
+  luas?: string | number;
+  bobotKerusakan?: string | number;
+  klasifikasiKerusakan?: string;
+  kondisi?: string;
   keterangan?: string;
 }
 

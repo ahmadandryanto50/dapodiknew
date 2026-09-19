@@ -545,6 +545,8 @@ async function startServer() {
             siswa: cachedData.students || [],
             ptk: cachedData.teachers || [],
             sarpras: cachedData.sarpras || [],
+            bangunan: cachedData.bangunan || [],
+            ruang: cachedData.ruang || [],
             kibB: cleanKibB(cachedData.kibB),
             rapor: cachedData.reports || [],
             administrator: cachedData.administrators || [],
@@ -576,6 +578,8 @@ async function startServer() {
           siswa: cached.students || [],
           ptk: cached.teachers || [],
           sarpras: cached.sarpras || [],
+          bangunan: cached.bangunan || [],
+          ruang: cached.ruang || [],
           kibB: cleanKibB(cached.kibB),
           rapor: cached.reports || [],
           administrator: cached.administrators || [],
@@ -662,6 +666,12 @@ async function startServer() {
               }
               if (Array.isArray(sheetsData.sarpras)) {
                 data.sarpras = sheetsData.sarpras;
+              }
+              if (Array.isArray(sheetsData.bangunan)) {
+                data.bangunan = sheetsData.bangunan;
+              }
+              if (Array.isArray(sheetsData.ruang)) {
+                data.ruang = sheetsData.ruang;
               }
               if (Array.isArray(sheetsData.kibB)) {
                 data.kibB = cleanKibB(sheetsData.kibB);

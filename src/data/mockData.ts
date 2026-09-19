@@ -1,4 +1,4 @@
-import { Student, TeacherStaff, SarprasItem, KibBItem, StudentReport, NotificationItem, AdminUser, SchoolAccount } from '../types';
+import { Student, TeacherStaff, SarprasItem, KibBItem, BangunanItem, RuangItem, StudentReport, NotificationItem, AdminUser, SchoolAccount } from '../types';
 
 export const initialStudents: Student[] = [
   {
@@ -28393,5 +28393,40 @@ export const initialAdministrators: AdminUser[] = [
     "noHp": "085172276665",
     "status": "Aktif",
     "lastLogin": ""
+  }
+];
+
+export const initialBangunan: BangunanItem[] = [
+  {
+    "id": "bgn-001",
+    "no": 1,
+    "namaBangunan": "Gedung E",
+    "kodeBangunan": "BGN-001",
+    "tahunPembangunan": "2020",
+    "luasTapak": "24.0",
+    "jumlahLantai": "1",
+    "jumlahRuang": "5",
+    "kondisi": "Tidak ada kerusakan",
+    "bobotKerusakan": "0.0",
+    "keterangan": "Gedung Kelas & Administrasi"
+  }
+];
+
+export const initialRuang: RuangItem[] = [
+  {
+    "id": "rng-001",
+    "no": 1,
+    "jenisPrasarana": "Bilik Perempuan",
+    "namaBangunan": "Gedung P",
+    "namaRuang": "WC Perempuan",
+    "kodeRuang": "RNG-001",
+    "lantai": "1",
+    "panjang": "4.0",
+    "lebar": "8.0",
+    "luas": "32.0",
+    "bobotKerusakan": "0.0",
+    "klasifikasiKerusakan": "Tidak Ada",
+    "kondisi": "Baik",
+    "keterangan": "Fasilitas Sanitasi Siswa"
   }
 ];

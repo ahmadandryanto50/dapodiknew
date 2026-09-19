@@ -10,6 +10,8 @@ import {
   TeacherStaff, 
   SarprasItem, 
   KibBItem,
+  BangunanItem,
+  RuangItem,
   StudentReport, 
   SyncConfig, 
   NotificationItem,
@@ -23,6 +25,8 @@ import {
   initialTeachers, 
   initialSarpras, 
   initialKibB,
+  initialBangunan,
+  initialRuang,
   initialReports, 
   initialNotifications,
   initialAdministrators,
@@ -45,7 +49,7 @@ import { NotificationDrawer } from './components/NotificationDrawer';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { SafeImage } from './components/SafeImage';
 import { formatDateIndonesian, cleanLeadingZerosCode } from './utils/dateUtils';
-import { loadFromGoogleSheets, syncToGoogleSheets, syncKibBToGoogleSheets, normalizeWebAppUrl } from './services/googleSheetsService';
+import { loadFromGoogleSheets, syncToGoogleSheets, syncKibBToGoogleSheets, syncBangunanToGoogleSheets, syncRuangToGoogleSheets, normalizeWebAppUrl } from './services/googleSheetsService';
 
 const SHARED_CONTAINER_URL = "https://ais-pre-rl7bj4twi2wve75vqpw7yr-169174220206.asia-east1.run.app";
 import { 
@@ -346,6 +350,32 @@ export default function App() {
     return cleanKibBItems(initialKibB);
   });
 
+  const [bangunan, setBangunan] = useState<BangunanItem[]>(() => {
+    const saved = localStorage.getItem('dapodik_bangunan');
+    if (saved !== null) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (e) {
+        console.error('Failed to parse dapodik_bangunan', e);
+      }
+    }
+    return initialBangunan;
+  });
+
+  const [ruang, setRuang] = useState<RuangItem[]>(() => {
+    const saved = localStorage.getItem('dapodik_ruang');
+    if (saved !== null) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (e) {
+        console.error('Failed to parse dapodik_ruang', e);
+      }
+    }
+    return initialRuang;
+  });
+
   const [reports, setReports] = useState<StudentReport[]>(() => {
     const saved = localStorage.getItem('dapodik_reports');
     if (saved !== null) {
@@ -540,6 +570,16 @@ export default function App() {
     kibBRef.current = kibB;
   }, [kibB]);
 
+  const bangunanRef = useRef<BangunanItem[]>(bangunan);
+  useEffect(() => {
+    bangunanRef.current = bangunan;
+  }, [bangunan]);
+
+  const ruangRef = useRef<RuangItem[]>(ruang);
+  useEffect(() => {
+    ruangRef.current = ruang;
+  }, [ruang]);
+
   const handleOpenEditDisplay = (filter: 'all' | '1' | '2' | '3' | '4' | '5' = 'all') => {
     setSettingsInitialFilter(filter);
     setActiveTab('pengaturan');
@@ -564,7 +604,9 @@ export default function App() {
     customDeletedNotifIds = getDeletedNotifIds(),
     customSchoolAccounts = schoolAccounts,
     customKibB = kibBRef.current,
-    customSchoolFiles?: any[]
+    customSchoolFiles?: any[],
+    customBangunan = bangunanRef.current,
+    customRuang = ruangRef.current
   ) => {
     if (!isInitialized) return;
     try {
@@ -576,6 +618,8 @@ export default function App() {
           teachers: customTeachers,
           sarpras: customSarpras,
           kibB: customKibB,
+          bangunan: customBangunan,
+          ruang: customRuang,
           reports: customReports,
           displayConfig: customDisplayConfig,
           schoolProfile: customSchoolProfile,
@@ -704,6 +748,12 @@ export default function App() {
         const sKib = localStorage.getItem(`dapodik_kib_b_${npsn}`);
         setKibB(sKib ? JSON.parse(sKib) : []);
 
+        const sBangunan = localStorage.getItem(`dapodik_bangunan_${npsn}`);
+        setBangunan(sBangunan ? JSON.parse(sBangunan) : []);
+
+        const sRuang = localStorage.getItem(`dapodik_ruang_${npsn}`);
+        setRuang(sRuang ? JSON.parse(sRuang) : []);
+
         const sR = localStorage.getItem(`dapodik_reports_${npsn}`);
         setReports(sR ? sanitizeReports(JSON.parse(sR)) : []);
 
@@ -827,6 +877,26 @@ export default function App() {
       saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks, getDeletedNotifIds(), schoolAccounts, kibB);
     }
   }, [kibB, isInitialized, activeSchoolNpsn]);
+
+  useEffect(() => {
+    if (!isInitialized) return;
+    if (loadedSchoolNpsnRef.current !== activeSchoolNpsn) return;
+    localStorage.setItem(getStorageKey('dapodik_bangunan'), JSON.stringify(bangunan));
+    if (!isSyncingFromServerRef.current) {
+      lastLocalMutationRef.current = Date.now();
+      saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks, getDeletedNotifIds(), schoolAccounts, kibB, undefined, bangunan, ruang);
+    }
+  }, [bangunan, isInitialized, activeSchoolNpsn]);
+
+  useEffect(() => {
+    if (!isInitialized) return;
+    if (loadedSchoolNpsnRef.current !== activeSchoolNpsn) return;
+    localStorage.setItem(getStorageKey('dapodik_ruang'), JSON.stringify(ruang));
+    if (!isSyncingFromServerRef.current) {
+      lastLocalMutationRef.current = Date.now();
+      saveCacheToServer(students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators, notificationsRef.current, aplikasiLinks, getDeletedNotifIds(), schoolAccounts, kibB, undefined, bangunan, ruang);
+    }
+  }, [ruang, isInitialized, activeSchoolNpsn]);
 
   useEffect(() => {
     if (!isInitialized) return;
@@ -1035,7 +1105,7 @@ export default function App() {
         const result = await loadFromGoogleSheets(currentCfg);
         if (result && result.success && result.data) {
           const {
-            siswa, ptk, sarpras, kibB: pulledKibB, rapor, administrator, pengaturan, profilSekolah, aplikasi, notifikasi, berkas: pulledBerkas, schoolAccounts: pulledSchoolAccounts
+            siswa, ptk, sarpras, kibB: pulledKibB, bangunan: pulledBangunan, ruang: pulledRuang, rapor, administrator, pengaturan, profilSekolah, aplikasi, notifikasi, berkas: pulledBerkas, schoolAccounts: pulledSchoolAccounts
           } = result.data;
 
           isSyncingFromServerRef.current = true;
@@ -1062,6 +1132,16 @@ export default function App() {
             setKibB(clean);
             kibBRef.current = clean;
             localStorage.setItem(getStorageKey('dapodik_kib_b'), JSON.stringify(clean));
+          }
+          if (Array.isArray(pulledBangunan)) {
+            setBangunan(pulledBangunan);
+            bangunanRef.current = pulledBangunan;
+            localStorage.setItem(getStorageKey('dapodik_bangunan'), JSON.stringify(pulledBangunan));
+          }
+          if (Array.isArray(pulledRuang)) {
+            setRuang(pulledRuang);
+            ruangRef.current = pulledRuang;
+            localStorage.setItem(getStorageKey('dapodik_ruang'), JSON.stringify(pulledRuang));
           }
           if (Array.isArray(rapor)) {
             const clean = sanitizeReports(rapor);
@@ -1664,7 +1744,9 @@ export default function App() {
     customAplikasiLinks = aplikasiLinks,
     customSchoolAccounts = schoolAccounts,
     customKibB = kibB,
-    skipSheetsSync = false
+    skipSheetsSync = false,
+    customBangunan = bangunanRef.current,
+    customRuang = ruangRef.current
   ) => {
     // Persiapkan notifikasi terbaru jika ada pendingNotification
     let activeNotifs = customNotifications || [];
@@ -1681,7 +1763,7 @@ export default function App() {
     // Safeguard: Cegah penghapusan database Spreadsheet jika data lokal masih kosong dan belum berhasil ditarik dari Sheets
     let effectiveSkipSheetsSync = skipSheetsSync;
     if (!effectiveSkipSheetsSync) {
-      const isLocalStateEmpty = (customStudents.length === 0 && customTeachers.length === 0 && customSarpras.length === 0 && customKibB.length === 0);
+      const isLocalStateEmpty = (customStudents.length === 0 && customTeachers.length === 0 && customSarpras.length === 0 && customKibB.length === 0 && customBangunan.length === 0 && customRuang.length === 0);
       if (isLocalStateEmpty && !hasSuccessfullyPulled && !force) {
         console.warn("[Safeguard] Sinkronisasi ke Spreadsheet dibatalkan karena data lokal masih kosong dan belum berhasil menarik data dari Cloud Database.");
         effectiveSkipSheetsSync = true;
@@ -1703,7 +1785,10 @@ export default function App() {
       currentAplikasi,
       getDeletedNotifIds(),
       customSchoolAccounts,
-      customKibB
+      customKibB,
+      undefined,
+      customBangunan,
+      customRuang
     );
 
     // Otomatis simpan & sync perubahan ke Google Spreadsheet
@@ -1723,6 +1808,8 @@ export default function App() {
         ptk: customTeachers,
         sarpras: customSarpras,
         kibB: customKibB,
+        bangunan: customBangunan,
+        ruang: customRuang,
         rapor: customReports,
         pengaturan: pengaturanArray,
         profilSekolah: profilSekolahArray,
@@ -2502,6 +2589,154 @@ export default function App() {
     );
   };
 
+  // Bangunan Handlers
+  const handleAddBangunan = (item: BangunanItem) => {
+    lastLocalMutationRef.current = Date.now();
+    const updated = [item, ...bangunan];
+    setBangunan(updated);
+    bangunanRef.current = updated;
+    localStorage.setItem(getStorageKey('dapodik_bangunan'), JSON.stringify(updated));
+    showToast(`Bangunan "${item.namaBangunan}" berhasil ditambahkan...`);
+    
+    const currentCfg = getEffectiveSyncConfig();
+    if (currentCfg && currentCfg.webAppUrl) {
+      syncBangunanToGoogleSheets(currentCfg, updated);
+    }
+    triggerAutoSync(
+      students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators,
+      true, notificationsRef.current,
+      {
+        title: 'Tambah Bangunan',
+        message: `Bangunan "${item.namaBangunan}" berhasil disimpan ke database.`,
+        type: 'success'
+      },
+      aplikasiLinks, schoolAccounts, kibB, false, updated, ruang
+    );
+  };
+
+  const handleUpdateBangunan = (item: BangunanItem) => {
+    lastLocalMutationRef.current = Date.now();
+    const updated = bangunan.map(b => b.id === item.id ? item : b);
+    setBangunan(updated);
+    bangunanRef.current = updated;
+    localStorage.setItem(getStorageKey('dapodik_bangunan'), JSON.stringify(updated));
+    showToast(`Data Bangunan "${item.namaBangunan}" diperbarui...`);
+
+    const currentCfg = getEffectiveSyncConfig();
+    if (currentCfg && currentCfg.webAppUrl) {
+      syncBangunanToGoogleSheets(currentCfg, updated);
+    }
+    triggerAutoSync(
+      students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators,
+      true, notificationsRef.current,
+      {
+        title: 'Update Bangunan',
+        message: `Data Bangunan "${item.namaBangunan}" diperbarui.`,
+        type: 'info'
+      },
+      aplikasiLinks, schoolAccounts, kibB, false, updated, ruang
+    );
+  };
+
+  const handleDeleteBangunan = (id: string) => {
+    lastLocalMutationRef.current = Date.now();
+    const target = bangunan.find(b => b.id === id);
+    const updated = bangunan.filter(b => b.id !== id);
+    setBangunan(updated);
+    bangunanRef.current = updated;
+    localStorage.setItem(getStorageKey('dapodik_bangunan'), JSON.stringify(updated));
+    showToast('Data Bangunan berhasil dihapus...');
+
+    const currentCfg = getEffectiveSyncConfig();
+    if (currentCfg && currentCfg.webAppUrl) {
+      syncBangunanToGoogleSheets(currentCfg, updated);
+    }
+    triggerAutoSync(
+      students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators,
+      true, notificationsRef.current,
+      {
+        title: 'Hapus Bangunan',
+        message: `Bangunan "${target?.namaBangunan || id}" dihapus.`,
+        type: 'warning'
+      },
+      aplikasiLinks, schoolAccounts, kibB, false, updated, ruang
+    );
+  };
+
+  // Ruang Handlers
+  const handleAddRuang = (item: RuangItem) => {
+    lastLocalMutationRef.current = Date.now();
+    const updated = [item, ...ruang];
+    setRuang(updated);
+    ruangRef.current = updated;
+    localStorage.setItem(getStorageKey('dapodik_ruang'), JSON.stringify(updated));
+    showToast(`Ruang "${item.namaRuang}" berhasil ditambahkan...`);
+
+    const currentCfg = getEffectiveSyncConfig();
+    if (currentCfg && currentCfg.webAppUrl) {
+      syncRuangToGoogleSheets(currentCfg, updated);
+    }
+    triggerAutoSync(
+      students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators,
+      true, notificationsRef.current,
+      {
+        title: 'Tambah Ruang',
+        message: `Ruang "${item.namaRuang}" berhasil disimpan ke database.`,
+        type: 'success'
+      },
+      aplikasiLinks, schoolAccounts, kibB, false, bangunan, updated
+    );
+  };
+
+  const handleUpdateRuang = (item: RuangItem) => {
+    lastLocalMutationRef.current = Date.now();
+    const updated = ruang.map(r => r.id === item.id ? item : r);
+    setRuang(updated);
+    ruangRef.current = updated;
+    localStorage.setItem(getStorageKey('dapodik_ruang'), JSON.stringify(updated));
+    showToast(`Data Ruang "${item.namaRuang}" diperbarui...`);
+
+    const currentCfg = getEffectiveSyncConfig();
+    if (currentCfg && currentCfg.webAppUrl) {
+      syncRuangToGoogleSheets(currentCfg, updated);
+    }
+    triggerAutoSync(
+      students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators,
+      true, notificationsRef.current,
+      {
+        title: 'Update Ruang',
+        message: `Data Ruang "${item.namaRuang}" diperbarui.`,
+        type: 'info'
+      },
+      aplikasiLinks, schoolAccounts, kibB, false, bangunan, updated
+    );
+  };
+
+  const handleDeleteRuang = (id: string) => {
+    lastLocalMutationRef.current = Date.now();
+    const target = ruang.find(r => r.id === id);
+    const updated = ruang.filter(r => r.id !== id);
+    setRuang(updated);
+    ruangRef.current = updated;
+    localStorage.setItem(getStorageKey('dapodik_ruang'), JSON.stringify(updated));
+    showToast('Data Ruang berhasil dihapus...');
+
+    const currentCfg = getEffectiveSyncConfig();
+    if (currentCfg && currentCfg.webAppUrl) {
+      syncRuangToGoogleSheets(currentCfg, updated);
+    }
+    triggerAutoSync(
+      students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators,
+      true, notificationsRef.current,
+      {
+        title: 'Hapus Ruang',
+        message: `Ruang "${target?.namaRuang || id}" dihapus.`,
+        type: 'warning'
+      },
+      aplikasiLinks, schoolAccounts, kibB, false, bangunan, updated
+    );
+  };
+
   // Reports Handlers
   const handleAddReport = (r: StudentReport) => {
     lastLocalMutationRef.current = Date.now();
@@ -2986,6 +3221,14 @@ export default function App() {
               onBulkAddKibB={handleBulkAddKibB}
               onUpdateKibB={handleUpdateKibB}
               onDeleteKibB={handleDeleteKibB}
+              bangunan={bangunan}
+              onAddBangunan={handleAddBangunan}
+              onUpdateBangunan={handleUpdateBangunan}
+              onDeleteBangunan={handleDeleteBangunan}
+              ruang={ruang}
+              onAddRuang={handleAddRuang}
+              onUpdateRuang={handleUpdateRuang}
+              onDeleteRuang={handleDeleteRuang}
               onBackToHome={() => setActiveTab('home')}
               onSync={handleManualSync}
               isSyncing={isSyncing}

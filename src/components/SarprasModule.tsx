@@ -15,11 +15,15 @@ import {
   X,
   Layers,
   ChevronDown,
-  Package
+  Package,
+  DoorOpen,
+  Building
 } from 'lucide-react';
-import { SarprasItem, KibBItem } from '../types';
+import { SarprasItem, KibBItem, BangunanItem, RuangItem } from '../types';
 import { exportToCSV } from '../services/googleSheetsService';
 import { KibBModule } from './KibBModule';
+import { BangunanModule } from './BangunanModule';
+import { RuangModule } from './RuangModule';
 
 interface SarprasModuleProps {
   sarpras: SarprasItem[];
@@ -32,6 +36,14 @@ interface SarprasModuleProps {
   onBulkAddKibB?: (items: KibBItem[], replaceAll?: boolean) => void;
   onUpdateKibB?: (item: KibBItem) => void;
   onDeleteKibB?: (id: string) => void;
+  bangunan?: BangunanItem[];
+  onAddBangunan?: (item: BangunanItem) => void;
+  onUpdateBangunan?: (item: BangunanItem) => void;
+  onDeleteBangunan?: (id: string) => void;
+  ruang?: RuangItem[];
+  onAddRuang?: (item: RuangItem) => void;
+  onUpdateRuang?: (item: RuangItem) => void;
+  onDeleteRuang?: (id: string) => void;
   onSync?: () => Promise<void> | void;
   isSyncing?: boolean;
 }
@@ -47,10 +59,18 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
   onBulkAddKibB,
   onUpdateKibB = () => {},
   onDeleteKibB = () => {},
+  bangunan = [],
+  onAddBangunan = () => {},
+  onUpdateBangunan = () => {},
+  onDeleteBangunan = () => {},
+  ruang = [],
+  onAddRuang = () => {},
+  onUpdateRuang = () => {},
+  onDeleteRuang = () => {},
   onSync,
   isSyncing = false
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'sarpras' | 'kib_b'>('sarpras');
+  const [activeSubTab, setActiveSubTab] = useState<'sarpras' | 'kib_b' | 'bangunan' | 'ruang'>('sarpras');
   const [search, setSearch] = useState('');
   const [filterKategori, setFilterKategori] = useState('ALL');
   const [filterKondisi, setFilterKondisi] = useState('ALL');
@@ -180,34 +200,43 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold text-slate-900">
-                {activeSubTab === 'sarpras' ? 'Sarana & Prasarana (Sarpras)' : 'Menu KIB B (Peralatan & Mesin)'}
+                {activeSubTab === 'sarpras' && 'Sarana & Prasarana (Sarpras)'}
+                {activeSubTab === 'kib_b' && 'Menu KIB B (Peralatan & Mesin)'}
+                {activeSubTab === 'bangunan' && 'Menu Bangunan'}
+                {activeSubTab === 'ruang' && 'Menu Ruang'}
               </h1>
               <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                {activeSubTab === 'sarpras' ? `${sarpras.length} Aset & Ruangan` : `${kibB.length} Barang KIB B`}
+                {activeSubTab === 'sarpras' && `${sarpras.length} Aset & Ruangan`}
+                {activeSubTab === 'kib_b' && `${kibB.length} Barang KIB B`}
+                {activeSubTab === 'bangunan' && `${bangunan.length} Bangunan`}
+                {activeSubTab === 'ruang' && `${ruang.length} Ruangan`}
               </span>
             </div>
-            {activeSubTab === 'sarpras' && (
-              <p className="text-xs text-slate-500">
-                Monitoring kondisi fisik ruangan, laboratorium, buku perpustakaan, dan inventaris sekolah
-              </p>
-            )}
+            <p className="text-xs text-slate-500">
+              {activeSubTab === 'sarpras' && 'Monitoring kondisi fisik ruangan, laboratorium, buku perpustakaan, dan inventaris sekolah'}
+              {activeSubTab === 'kib_b' && 'Pengelolaan Kartu Inventaris Barang (KIB B) peralatan dan mesin sekolah'}
+              {activeSubTab === 'bangunan' && 'Pengelolaan data fisik bangunan sekolah, luas tapak, dan keandalan bangunan'}
+              {activeSubTab === 'ruang' && 'Pengelolaan data prasarana ruangan, dimensi, luas, dan tingkat kerusakan'}
+            </p>
           </div>
         </div>
 
         {/* Tab Selector & Action Buttons */}
         <div className="flex flex-wrap items-center gap-2.5">
-          <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
+          <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 gap-0.5">
             <button
               onClick={() => setActiveSubTab('sarpras')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 activeSubTab === 'sarpras'
-                  ? 'bg-white text-emerald-700 shadow-xs'
+                  ? 'bg-emerald-600 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               <Building2 className="w-3.5 h-3.5" />
               <span>Sarpras</span>
-              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200/70 text-slate-700 font-mono">
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                activeSubTab === 'sarpras' ? 'bg-white/25 text-white' : 'bg-slate-200/70 text-slate-700'
+              }`}>
                 {sarpras.length}
               </span>
             </button>
@@ -226,6 +255,40 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
                 activeSubTab === 'kib_b' ? 'bg-white/25 text-white' : 'bg-slate-200/70 text-slate-700'
               }`}>
                 {kibB.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveSubTab('bangunan')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                activeSubTab === 'bangunan'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Building className="w-3.5 h-3.5" />
+              <span>Bangunan</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                activeSubTab === 'bangunan' ? 'bg-white/25 text-white' : 'bg-slate-200/70 text-slate-700'
+              }`}>
+                {bangunan.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveSubTab('ruang')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                activeSubTab === 'ruang'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <DoorOpen className="w-3.5 h-3.5" />
+              <span>Ruang</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                activeSubTab === 'ruang' ? 'bg-white/25 text-white' : 'bg-slate-200/70 text-slate-700'
+              }`}>
+                {ruang.length}
               </span>
             </button>
           </div>
@@ -252,7 +315,7 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
         </div>
       </div>
 
-      {activeSubTab === 'kib_b' ? (
+      {activeSubTab === 'kib_b' && (
         <KibBModule
           kibB={kibB}
           onAddKibB={onAddKibB}
@@ -262,7 +325,31 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
           onSync={onSync}
           isSyncing={isSyncing}
         />
-      ) : (
+      )}
+
+      {activeSubTab === 'bangunan' && (
+        <BangunanModule
+          bangunan={bangunan}
+          onAddBangunan={onAddBangunan}
+          onUpdateBangunan={onUpdateBangunan}
+          onDeleteBangunan={onDeleteBangunan}
+          onSync={onSync}
+          isSyncing={isSyncing}
+        />
+      )}
+
+      {activeSubTab === 'ruang' && (
+        <RuangModule
+          ruang={ruang}
+          onAddRuang={onAddRuang}
+          onUpdateRuang={onUpdateRuang}
+          onDeleteRuang={onDeleteRuang}
+          onSync={onSync}
+          isSyncing={isSyncing}
+        />
+      )}
+
+      {activeSubTab === 'sarpras' && (
         <>
           {/* Filter Bar */}
       <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm text-xs">
