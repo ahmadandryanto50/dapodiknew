@@ -1306,17 +1306,31 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
     };
   }
 
-  // 1. Try server-side proxy endpoint first
+  const isLocal = typeof window !== 'undefined' && (
+    window.location.hostname === 'localhost' || 
+    window.location.hostname === '127.0.0.1' || 
+    window.location.hostname.includes('run.app')
+  );
+  const SHARED_BASE = 'https://ais-pre-rl7bj4twi2wve75vqpw7yr-169174220206.asia-east1.run.app';
+
+  // 1. Try server-side proxy endpoint first (Fast & avoids mobile browser CORS issues)
   try {
-    const proxyRes = await fetch('/api/load-sheets', {
+    const proxyEndpoint = isLocal ? '/api/load-sheets' : `${SHARED_BASE}/api/load-sheets`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000); // 12 seconds max for mobile
+
+    const proxyRes = await fetch(proxyEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         webAppUrl: normalizedWebAppUrl,
         spreadsheetUrl: config.spreadsheetUrl || '',
         spreadsheetId: config.spreadsheetUrl || ''
-      })
+      }),
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
+
     if (proxyRes.ok) {
       const result = await proxyRes.json();
       if (result && result.status === 'success') {
@@ -1324,10 +1338,10 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
       }
     }
   } catch (proxyErr) {
-    // Proxy request error
+    // Proxy request error or abort
   }
 
-  // 2. Fallback to direct client-side fetch (supports redirect follow in modern browsers)
+  // 2. Fallback to direct client-side fetch with fast abort controller
   try {
     let getUrl = config.webAppUrl;
     if (config.spreadsheetUrl) {
@@ -1335,10 +1349,16 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
       getUrl = `${getUrl}${separator}spreadsheetUrl=${encodeURIComponent(config.spreadsheetUrl)}&spreadsheetId=${encodeURIComponent(config.spreadsheetUrl)}`;
     }
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 seconds max
+
     const directRes = await fetch(getUrl, {
       method: 'GET',
-      redirect: 'follow'
+      redirect: 'follow',
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
+
     if (directRes.ok) {
       const text = await directRes.text();
       const directData = JSON.parse(text);
@@ -1350,15 +1370,21 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
     // Direct fetch error
   }
 
-  // 3. Fallback to server cache (/api/app-data) so users on any device/browser never lose data
+  // 3. Fallback to server cache (/api/app-data) so users on mobile never see empty data or wait endlessly
   try {
-    const cacheRes = await fetch(`/api/app-data?t=${Date.now()}`);
+    const cacheEndpoint = isLocal ? `/api/app-data?t=${Date.now()}` : `${SHARED_BASE}/api/app-data?t=${Date.now()}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+    const cacheRes = await fetch(cacheEndpoint, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
     if (cacheRes.ok) {
       const cache = await cacheRes.json();
       if (cache && (cache.students?.length || cache.teachers?.length || cache.sarpras?.length || cache.schoolFiles?.length || cache.files?.length)) {
         return {
           success: true,
-          message: 'Data dimuat dari sinkronisasi server cache.',
+          message: 'Data diperbarui dari sinkronisasi server cache.',
           data: {
             siswa: cache.students || [],
             ptk: cache.teachers || [],
@@ -1385,7 +1411,7 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
 
   return {
     success: false,
-    message: 'Gagal terhubung ke Database Spreadsheet. Pastikan deploy Apps Script Anda sudah diatur ke "Anyone" (Siapa saja).'
+    message: 'Gagal terhubung ke Database Spreadsheet. Pastikan koneksi internet aktif.'
   };
 }
 

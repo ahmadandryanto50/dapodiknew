@@ -291,16 +291,14 @@ export default function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
   
   const [students, setStudents] = useState<Student[]>(() => {
-    // Purge obsolete offline cache from localStorage so all browsers synchronize immediately
-    const CLEAN_OFFLINE_VER = 'dapodik_offline_clean_v2026_09_19_335';
+    // Purge obsolete offline cache from localStorage so all browsers and mobile devices synchronize immediately
+    const CLEAN_OFFLINE_VER = 'dapodik_offline_clean_v2026_09_19_baseline_335';
     if (typeof window !== 'undefined' && localStorage.getItem(CLEAN_OFFLINE_VER) !== 'true') {
-      localStorage.removeItem('dapodik_students');
-      localStorage.removeItem('dapodik_teachers');
-      localStorage.removeItem('dapodik_sarpras');
-      localStorage.removeItem('dapodik_reports');
-      localStorage.removeItem('dapodik_kib_b');
-      localStorage.removeItem('dapodik_aplikasi_links');
-      localStorage.removeItem('dapodik_notifications');
+      localStorage.setItem('dapodik_students', JSON.stringify(initialStudents));
+      localStorage.setItem('dapodik_teachers', JSON.stringify(initialTeachers));
+      localStorage.setItem('dapodik_sarpras', JSON.stringify(initialSarpras));
+      localStorage.setItem('dapodik_kib_b', JSON.stringify(initialKibB));
+      localStorage.setItem('dapodik_reports', JSON.stringify(initialReports));
       localStorage.setItem(CLEAN_OFFLINE_VER, 'true');
     }
     const saved = localStorage.getItem('dapodik_students');

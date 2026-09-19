@@ -637,9 +637,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
       </div>
 
       {/* Top Header with Brand Logo and Moved Header Navigation Buttons */}
-      <header className="sticky top-0 z-40 bg-[#0c4a6e]/90 backdrop-blur-xl border-b border-white/20 px-4 sm:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4 shadow-lg text-white select-none">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-white p-1.5 shadow-xl shadow-sky-950/20 flex items-center justify-center overflow-hidden shrink-0 border border-white/40">
+      {/* Modern High-Impact Header Bar */}
+      <header className="sticky top-0 z-40 bg-[#0c4a6e]/95 backdrop-blur-xl border-b border-white/20 px-3 sm:px-8 py-2.5 sm:py-3.5 flex flex-wrap items-center justify-between gap-3 shadow-lg text-white select-none">
+        <div className="flex items-center gap-2.5 sm:gap-3">
+          <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-2xl bg-white p-1 sm:p-1.5 shadow-xl shadow-sky-950/20 flex items-center justify-center overflow-hidden shrink-0 border border-white/40">
             <SafeImage 
               src={displayConfig.logoCustomUrl || schoolProfile?.logoSekolah} 
               fallbackSrc="/logo_smpn11palu.jpg"
@@ -648,30 +649,30 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg font-black text-white tracking-wider drop-shadow-sm">
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+              <h1 className="text-base sm:text-lg font-black text-white tracking-wider drop-shadow-sm">
                 {displayConfig.appName ?? 'DAPODIK'}
               </h1>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-sky-400/20 text-cyan-200 border border-cyan-300/30 flex items-center gap-1">
-                <BarChart3 className="w-3 h-3 text-cyan-300" />
+              <span className="px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-extrabold bg-sky-400/20 text-cyan-200 border border-cyan-300/30 flex items-center gap-1">
+                <BarChart3 className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-cyan-300" />
                 Dashboard Publik
               </span>
             </div>
-            <p className="text-[11px] font-bold text-sky-200 tracking-wider uppercase opacity-95">
+            <p className="text-[10px] sm:text-[11px] font-bold text-sky-200 tracking-wider uppercase opacity-95 line-clamp-1">
               {schoolProfile?.namaSekolah || 'SMP NEGERI 11 PALU'}
             </p>
           </div>
         </div>
 
-        {/* Right Header Navigation Buttons as explicitly requested */}
-        <div className="flex items-center gap-2.5 sm:gap-3.5 flex-wrap">
+        {/* Right Header Navigation Buttons */}
+        <div className="flex items-center gap-1.5 sm:gap-3 flex-wrap">
           {/* Menu "Tarik Data" (Public Dashboard) */}
           <button
             type="button"
             id="header-btn-tarik-data-public"
             onClick={handleManualSync}
             disabled={isSyncingActive}
-            className={`px-4 sm:px-5 py-2.5 rounded-full font-black text-xs flex items-center gap-2 transition-all cursor-pointer border shadow-lg ${
+            className={`px-3 sm:px-5 py-2 sm:py-2.5 rounded-full font-black text-[11px] sm:text-xs flex items-center gap-1.5 sm:gap-2 transition-all cursor-pointer border shadow-lg ${
               isSyncingActive
                 ? 'bg-amber-400 text-slate-950 border-amber-300 animate-pulse cursor-wait'
                 : 'bg-gradient-to-r from-emerald-500/20 to-teal-500/20 hover:from-emerald-500/30 hover:to-teal-500/30 text-emerald-200 hover:text-white border-emerald-400/40 hover:border-emerald-300 shadow-emerald-950/20 active:scale-[0.97]'
@@ -680,12 +681,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           >
             {isSyncingActive ? (
               <>
-                <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
-                <span>Menarik Data...</span>
+                <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin text-slate-950" />
+                <span>Menarik...</span>
               </>
             ) : (
               <>
-                <CloudDownload className="w-4 h-4 text-emerald-300 stroke-[2.5]" />
+                <CloudDownload className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-300 stroke-[2.5]" />
                 <span>Tarik Data</span>
               </>
             )}
@@ -696,11 +697,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             type="button"
             id="header-btn-guest"
             onClick={handleGuestLogin}
-            className="px-4 sm:px-5 py-2.5 rounded-full bg-white/5 hover:bg-white/15 active:scale-[0.97] text-white font-extrabold text-xs flex items-center gap-2 transition-all cursor-pointer border border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.1)] hover:shadow-[0_4px_20px_rgba(34,211,238,0.15)] hover:border-cyan-400/40"
+            className="px-3 sm:px-5 py-2 sm:py-2.5 rounded-full bg-white/10 hover:bg-white/20 active:scale-[0.97] text-white font-extrabold text-[11px] sm:text-xs flex items-center gap-1.5 sm:gap-2 transition-all cursor-pointer border border-white/25 shadow-[0_4px_12px_rgba(0,0,0,0.1)] hover:shadow-[0_4px_20px_rgba(34,211,238,0.15)] hover:border-cyan-400/40"
             title="Upload Berkas tanpa login"
           >
-            <Upload className="w-4 h-4 text-cyan-400 stroke-[2.5]" />
-            <span className="inline">Upload Berkas</span>
+            <Upload className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400 stroke-[2.5]" />
+            <span>Upload Berkas</span>
           </button>
 
           {/* Menu "LOGIN KE DAPODIK" */}
@@ -708,11 +709,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             type="button"
             id="header-btn-login-modal"
             onClick={() => setShowLoginModal(true)}
-            className="px-5 sm:px-6 py-2.5 rounded-full bg-gradient-to-r from-[#00f2fe] to-[#4facfe] hover:from-[#00e1f0] hover:to-[#3b9eff] active:scale-[0.97] text-slate-950 font-black text-xs tracking-wider flex items-center gap-2.5 transition-all cursor-pointer shadow-[0_4px_15px_rgba(0,242,254,0.3)] hover:shadow-[0_4px_25px_rgba(0,242,254,0.45)] border border-white/50"
+            className="px-4 sm:px-6 py-2 sm:py-2.5 rounded-full bg-gradient-to-r from-[#00f2fe] to-[#4facfe] hover:from-[#00e1f0] hover:to-[#3b9eff] active:scale-[0.97] text-slate-950 font-black text-[11px] sm:text-xs tracking-wider flex items-center gap-1.5 sm:gap-2.5 transition-all cursor-pointer shadow-[0_4px_15px_rgba(0,242,254,0.3)] hover:shadow-[0_4px_25px_rgba(0,242,254,0.45)] border border-white/50"
             title="Buka Form Login Administrator / Operator / PTK / Siswa"
           >
-            <KeyRound className="w-4 h-4 text-slate-950 stroke-[2.5] -rotate-45" />
-            <span className="uppercase">LOGIN KE DAPODIK</span>
+            <KeyRound className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-950 stroke-[2.5] -rotate-45" />
+            <span className="uppercase">LOGIN</span>
           </button>
         </div>
       </header>
