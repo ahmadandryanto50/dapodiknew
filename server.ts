@@ -9,13 +9,29 @@ let UPLOADS_DIR = path.join(process.cwd(), "public", "uploads");
 
 const DEFAULT_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwOjTnhqqQFCvRGK_5NPVICqUbK-yHUTq1b0CwX3aXqcYjOITfoaogfBWDS3I1bdL6hZA/exec";
 
+function normalizeWebAppUrl(rawUrl?: string): string {
+  if (!rawUrl || typeof rawUrl !== "string") return "";
+  let url = rawUrl.trim();
+  if (!url) return "";
+  url = url.replace(/^[<"']+|[>"']+$/g, "").trim();
+  if (url.includes("script.google.com/macros/s/")) {
+    url = url.replace(/\/+$/, "");
+    if (url.endsWith("/edit")) {
+      url = url.replace(/\/edit$/, "/exec");
+    } else if (!url.endsWith("/exec") && !url.endsWith("/dev")) {
+      url = `${url}/exec`;
+    }
+  }
+  return url;
+}
+
 function getEffectiveWebAppUrl(incomingUrl?: string): string {
   if (incomingUrl && typeof incomingUrl === "string" && incomingUrl.trim().startsWith("http")) {
-    return incomingUrl.trim();
+    return normalizeWebAppUrl(incomingUrl.trim());
   }
   const config = safeReadJSON(CONFIG_FILE, null);
   if (config && config.webAppUrl && typeof config.webAppUrl === "string" && config.webAppUrl.trim().startsWith("http")) {
-    return config.webAppUrl.trim();
+    return normalizeWebAppUrl(config.webAppUrl.trim());
   }
   return DEFAULT_WEB_APP_URL;
 }
@@ -576,8 +592,17 @@ async function startServer() {
   // API Route: Save Shared Sync Config
   app.post("/api/sync-config", (req, res) => {
     try {
-      const config = req.body;
+      const config = req.body || {};
+      if (config.webAppUrl) {
+        config.webAppUrl = normalizeWebAppUrl(config.webAppUrl);
+      }
       safeWriteJSON(CONFIG_FILE, config);
+      try {
+        const rootConfigFile = path.join(process.cwd(), "sync_config.json");
+        if (CONFIG_FILE !== rootConfigFile) {
+          safeWriteJSON(rootConfigFile, config);
+        }
+      } catch (e) {}
       return res.json({ success: true, config });
     } catch (err) {
       console.error("Error writing sync_config.json:", err);

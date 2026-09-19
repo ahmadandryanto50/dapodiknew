@@ -517,7 +517,7 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
       } catch (e) {}
 
       // Get current active webAppUrl (Priority: localStorage > /api/sync-config)
-      let targetWebAppUrl = "https://script.google.com/macros/s/AKfycbwpbGWjF08VqIedbu5UJxQKvstzR6VDOujjbKZ7YeldA0o3XZZZPZNxL072KZYgE1e82g/exec";
+      let targetWebAppUrl = "https://script.google.com/macros/s/AKfycbwOjTnhqqQFCvRGK_5NPVICqUbK-yHUTq1b0CwX3aXqcYjOITfoaogfBWDS3I1bdL6hZA/exec";
       try {
         const localCfgRaw = localStorage.getItem('dapodik_sync_config');
         if (localCfgRaw) {
@@ -796,7 +796,7 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
     }
 
     // Load active webAppUrl dynamically from sync-config (Priority: localStorage > /api/sync-config)
-    let targetWebAppUrl = "https://script.google.com/macros/s/AKfycbwpbGWjF08VqIedbu5UJxQKvstzR6VDOujjbKZ7YeldA0o3XZZZPZNxL072KZYgE1e82g/exec";
+    let targetWebAppUrl = "https://script.google.com/macros/s/AKfycbwOjTnhqqQFCvRGK_5NPVICqUbK-yHUTq1b0CwX3aXqcYjOITfoaogfBWDS3I1bdL6hZA/exec";
     let targetSpreadsheetUrl = "";
 
     try {
@@ -816,7 +816,7 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
       const configRes = await fetch('/api/sync-config');
       if (configRes.ok) {
         const configData = await configRes.json();
-        if (configData && configData.webAppUrl && (!targetWebAppUrl || targetWebAppUrl.includes('AKfycbwpbGWjF08VqIedbu5UJxQKvstzR6VDOujjbKZ7YeldA0o3XZZZPZNxL072KZYgE1e82g'))) {
+        if (configData && configData.webAppUrl) {
           targetWebAppUrl = configData.webAppUrl;
         }
         if (configData && configData.spreadsheetUrl && !targetSpreadsheetUrl) {

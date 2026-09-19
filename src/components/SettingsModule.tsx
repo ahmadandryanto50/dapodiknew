@@ -57,7 +57,7 @@ import {
   Terminal
 } from 'lucide-react';
 import { SyncConfig, AppDisplayConfig, SchoolProfile, AdminUser, SchoolAccount } from '../types';
-import { APPS_SCRIPT_TEMPLATE } from '../services/googleSheetsService';
+import { APPS_SCRIPT_TEMPLATE, normalizeWebAppUrl } from '../services/googleSheetsService';
 import { MultiSchoolManager } from './MultiSchoolManager';
 
 interface SettingsModuleProps {
@@ -2511,16 +2511,32 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-slate-700 font-semibold mb-1">
-                      URL Google Apps Script Web App (API Endpoint)
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-slate-700 font-semibold text-xs">
+                        URL Google Apps Script Web App (API Endpoint)
+                      </label>
+                      <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md font-medium border border-emerald-200">
+                        ⚡ Tersimpan Permanen untuk Seluruh Perangkat (HP & Laptop)
+                      </span>
+                    </div>
                     <input
                       type="text"
                       value={localSyncConfig.webAppUrl || ''}
                       onChange={(e) => setLocalSyncConfig({ ...localSyncConfig, webAppUrl: e.target.value })}
+                      onBlur={() => {
+                        if (localSyncConfig.webAppUrl) {
+                          setLocalSyncConfig({
+                            ...localSyncConfig,
+                            webAppUrl: normalizeWebAppUrl(localSyncConfig.webAppUrl)
+                          });
+                        }
+                      }}
                       placeholder="https://script.google.com/macros/s/.../exec"
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-mono text-xs outline-none focus:border-sky-500 shadow-xs"
                     />
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      Cukup masukkan URL sekali di sini. Seluruh pengguna dan browser (HP, Laptop, Komputer Sekolah) akan otomatis terhubung secara permanen tanpa perlu memasukkannya ulang.
+                    </p>
                   </div>
 
                   <div className="flex items-center justify-between pt-2">
@@ -2549,8 +2565,13 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                       type="button"
                       onClick={() => {
                         if (onSaveSyncConfig) {
-                          onSaveSyncConfig(localSyncConfig);
-                          setSyncSavedMessage('✅ Pengaturan Database Spreadsheet Tersimpan!');
+                          const sanitized = {
+                            ...localSyncConfig,
+                            webAppUrl: normalizeWebAppUrl(localSyncConfig.webAppUrl)
+                          };
+                          setLocalSyncConfig(sanitized);
+                          onSaveSyncConfig(sanitized);
+                          setSyncSavedMessage('✅ Pengaturan Database Spreadsheet Tersimpan Permanen!');
                           setTimeout(() => setSyncSavedMessage(null), 3000);
                         }
                       }}

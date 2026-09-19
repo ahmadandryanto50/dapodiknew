@@ -850,7 +850,24 @@ function checkAndInitializeSheets(ss) {
 }
 `;
 
-async function callProxyOrDirectPost(webAppUrl: string, payload: any): Promise<{ success: boolean; message: string; data?: any }> {
+export function normalizeWebAppUrl(rawUrl?: string): string {
+  if (!rawUrl || typeof rawUrl !== 'string') return '';
+  let url = rawUrl.trim();
+  if (!url) return '';
+  url = url.replace(/^[<"']+|[>"']+$/g, '').trim();
+  if (url.includes('script.google.com/macros/s/')) {
+    url = url.replace(/\/+$/, '');
+    if (url.endsWith('/edit')) {
+      url = url.replace(/\/edit$/, '/exec');
+    } else if (!url.endsWith('/exec') && !url.endsWith('/dev')) {
+      url = `${url}/exec`;
+    }
+  }
+  return url;
+}
+
+async function callProxyOrDirectPost(rawWebAppUrl: string, payload: any): Promise<{ success: boolean; message: string; data?: any }> {
+  const webAppUrl = normalizeWebAppUrl(rawWebAppUrl);
   // 1. Try server-side proxy endpoint first (bypasses browser CORS & mobile browser restrictions)
   try {
     const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.includes('run.app');
@@ -1246,7 +1263,10 @@ export function getSavedSyncConfig(): SyncConfig {
     const saved = localStorage.getItem('dapodik_sync_config');
     if (saved) {
       const parsed = JSON.parse(saved);
-      if (parsed && parsed.webAppUrl) return parsed;
+      if (parsed && parsed.webAppUrl) {
+        parsed.webAppUrl = normalizeWebAppUrl(parsed.webAppUrl);
+        return parsed;
+      }
     }
   } catch (e) {}
   return {
@@ -1278,7 +1298,8 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
     berkas?: any[];
   };
 }> {
-  if (!config.webAppUrl) {
+  const normalizedWebAppUrl = normalizeWebAppUrl(config.webAppUrl);
+  if (!normalizedWebAppUrl) {
     return {
       success: false,
       message: 'URL Google Apps Script belum dikonfigurasi.'
@@ -1291,7 +1312,7 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
-        webAppUrl: config.webAppUrl,
+        webAppUrl: normalizedWebAppUrl,
         spreadsheetUrl: config.spreadsheetUrl || '',
         spreadsheetId: config.spreadsheetUrl || ''
       })

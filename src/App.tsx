@@ -45,7 +45,7 @@ import { NotificationDrawer } from './components/NotificationDrawer';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { SafeImage } from './components/SafeImage';
 import { formatDateIndonesian, cleanLeadingZerosCode } from './utils/dateUtils';
-import { loadFromGoogleSheets, syncToGoogleSheets, syncKibBToGoogleSheets } from './services/googleSheetsService';
+import { loadFromGoogleSheets, syncToGoogleSheets, syncKibBToGoogleSheets, normalizeWebAppUrl } from './services/googleSheetsService';
 
 const SHARED_CONTAINER_URL = "https://ais-pre-rl7bj4twi2wve75vqpw7yr-169174220206.asia-east1.run.app";
 import { 
@@ -593,13 +593,16 @@ export default function App() {
 
   // Save sync config to server so that it is shared across all browsers/devices
   const saveSyncConfigToServer = async (newConfig: SyncConfig) => {
-    if (!isInitialized) return;
+    const normalizedConfig: SyncConfig = {
+      ...newConfig,
+      webAppUrl: normalizeWebAppUrl(newConfig.webAppUrl)
+    };
     try {
       // 1. Save to local deployment API
       await fetch(getApiUrl('/api/sync-config'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newConfig)
+        body: JSON.stringify(normalizedConfig)
       });
     } catch (err) {
       console.warn('Failed to save sync config to local server:', err);
@@ -609,7 +612,7 @@ export default function App() {
       await fetch(`${SHARED_CONTAINER_URL}/api/sync-config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newConfig)
+        body: JSON.stringify(normalizedConfig)
       });
     } catch (err) {
       console.warn('Failed to save sync config to central shared server:', err);
@@ -1319,6 +1322,7 @@ export default function App() {
           }
 
           if (serverConfig && serverConfig.webAppUrl) {
+            serverConfig.webAppUrl = normalizeWebAppUrl(serverConfig.webAppUrl);
             setSyncConfig(serverConfig);
             localStorage.setItem('dapodik_sync_config', JSON.stringify(serverConfig));
           }
@@ -3053,14 +3057,18 @@ export default function App() {
               onSync={handleManualSync}
               onClearOfflineCache={handleClearOfflineCache}
               onSaveSyncConfig={async (newConfig) => {
-                setSyncConfig(newConfig);
-                localStorage.setItem('dapodik_sync_config', JSON.stringify(newConfig));
-                await saveSyncConfigToServer(newConfig);
-                showToast('Konfigurasi Google Spreadsheet berhasil disimpan. Memulai sinkronisasi awal...');
+                const normalizedConfig: SyncConfig = {
+                  ...newConfig,
+                  webAppUrl: normalizeWebAppUrl(newConfig.webAppUrl)
+                };
+                setSyncConfig(normalizedConfig);
+                localStorage.setItem('dapodik_sync_config', JSON.stringify(normalizedConfig));
+                await saveSyncConfigToServer(normalizedConfig);
+                showToast('✅ URL Database Google Spreadsheet berhasil disimpan permanen untuk seluruh perangkat (HP & Laptop)!');
                 // Segera tarik data dari spreadsheet baru untuk mempopulasi state lokal
                 setTimeout(() => {
                   handlePullFromSheets(false);
-                }, 1000);
+                }, 800);
               }}
             />
           </div>
