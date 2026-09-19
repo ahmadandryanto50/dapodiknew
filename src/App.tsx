@@ -1732,6 +1732,61 @@ export default function App() {
     return handlePullFromSheets(false);
   };
 
+  const handlePushToSheets = async () => {
+    setIsSyncing(true);
+    showToast('Mengirim seluruh data aplikasi ke database Google Spreadsheet...');
+    try {
+      const currentCfg = getEffectiveSyncConfig();
+      if (!currentCfg || !currentCfg.webAppUrl) {
+        showToast('URL Google Apps Script belum diisi di menu Pengaturan / Database Cloud.');
+        setIsSyncing(false);
+        return false;
+      }
+
+      const pengaturanArray = Object.entries(displayConfig || {}).map(([key, value]) => ({
+        key,
+        value: value !== undefined && value !== null ? String(value) : ''
+      }));
+      const profilSekolahArray = Object.entries(schoolProfile || {}).map(([key, value]) => ({
+        key,
+        value: value !== undefined && value !== null ? String(value) : ''
+      }));
+
+      const res = await syncToGoogleSheets(currentCfg, {
+        siswa: students,
+        ptk: teachers,
+        sarpras: sarpras,
+        kibB: kibB,
+        rapor: reports,
+        pengaturan: pengaturanArray,
+        profilSekolah: profilSekolahArray,
+        administrator: administrators,
+        notifikasi: notificationsRef.current,
+        aplikasi: aplikasiLinks,
+        schoolAccounts: schoolAccounts
+      });
+
+      if (res && res.success) {
+        const nowStr = new Date().toLocaleString('id-ID');
+        const updated = { ...currentCfg, lastSynced: nowStr };
+        setSyncConfig(updated);
+        localStorage.setItem(getStorageKey('dapodik_sync_config'), JSON.stringify(updated));
+        saveSyncConfigToServer(updated);
+        showToast('Sinkronisasi Berhasil: Seluruh data perubahan aplikasi berhasil dikirim ke Google Spreadsheet!');
+        try { (window as any).confetti?.({ particleCount: 50, spread: 60, origin: { y: 0.7 } }); } catch (e) {}
+        return true;
+      } else {
+        showToast(res?.message || 'Gagal mengirim data ke Google Spreadsheet.');
+        return false;
+      }
+    } catch (err: any) {
+      showToast(`Gagal sinkronisasi ke Spreadsheet: ${err?.message || 'Terjadi kesalahan'}`);
+      return false;
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const handleClearOfflineCache = () => {
     localStorage.removeItem('dapodik_students');
     localStorage.removeItem('dapodik_teachers');
@@ -2837,7 +2892,8 @@ export default function App() {
             sarpras={sarpras}
             reports={reports}
             isSyncing={isSyncing}
-            onQuickSync={handleManualSync}
+            onQuickSync={handlePushToSheets}
+            onPullData={() => handlePullFromSheets(false)}
             currentUser={currentUser}
             onLogout={handleLogout}
             hasTopBanner={isMonitoringOtherSchool}

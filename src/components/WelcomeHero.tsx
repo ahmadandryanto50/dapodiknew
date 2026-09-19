@@ -11,6 +11,7 @@ import {
   Bell, 
   Cog, 
   RefreshCw, 
+  CloudDownload,
   CheckCircle2, 
   Database, 
   ChevronRight,
@@ -57,6 +58,7 @@ interface WelcomeHeroProps {
   reports: StudentReport[];
   isSyncing: boolean;
   onQuickSync: () => void;
+  onPullData?: () => void;
   currentUser?: AdminUser | null;
   onLogout?: () => void;
   hasTopBanner?: boolean;
@@ -78,6 +80,7 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
   reports,
   isSyncing,
   onQuickSync,
+  onPullData,
   currentUser,
   onLogout,
   hasTopBanner = false
@@ -414,22 +417,25 @@ export const WelcomeHero: React.FC<WelcomeHeroProps> = ({
               {/* Quick Action Buttons */}
               <div className="flex flex-wrap items-center justify-center gap-3 pt-5">
                 <button
-                  id="hero-enter-siswa-btn"
-                  onClick={() => onNavigate('siswa')}
-                  className="px-5 py-2.5 rounded-xl bg-white text-slate-900 font-bold text-sm shadow-xl shadow-sky-950/20 hover:bg-cyan-50 hover:shadow-cyan-400/30 hover:scale-105 active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
+                  id="hero-pull-data-btn"
+                  onClick={onPullData}
+                  disabled={isSyncing}
+                  className="px-5 py-2.5 rounded-xl bg-white text-slate-900 font-bold text-sm shadow-xl shadow-sky-950/20 hover:bg-cyan-50 hover:shadow-cyan-400/30 hover:scale-105 active:scale-95 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-60"
+                  title="Tarik & ambil seluruh data dari database Google Spreadsheet ke aplikasi"
                 >
-                  <Users className="w-4 h-4 text-blue-600" />
-                  <span>Buka Data Siswa</span>
+                  <CloudDownload className={`w-4 h-4 text-blue-600 ${isSyncing ? 'animate-bounce' : ''}`} />
+                  <span>Tarik Data</span>
                 </button>
 
                 <button
                   id="hero-quick-sync-btn"
                   onClick={onQuickSync}
                   disabled={isSyncing}
-                  className="px-4 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white font-semibold text-sm backdrop-blur-md border border-white/30 hover:border-white/50 transition-all flex items-center gap-2 active:scale-95 cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white font-semibold text-sm backdrop-blur-md border border-white/30 hover:border-white/50 transition-all flex items-center gap-2 active:scale-95 cursor-pointer disabled:opacity-60"
+                  title="Kirim semua data hasil perubahan dari aplikasi ke database Google Spreadsheet"
                 >
                   <RefreshCw className={`w-4 h-4 text-cyan-300 ${isSyncing ? 'animate-spin' : ''}`} />
-                  <span>{isSyncing ? 'Sinkronkan Data' : 'Sinkronkan Data'}</span>
+                  <span>{isSyncing ? 'Mengirim Data...' : 'Sinkronkan Data'}</span>
                 </button>
               </div>
 
