@@ -544,15 +544,8 @@ export const KibBModule: React.FC<KibBModuleProps> = ({
               Inventaris Barang Milik Sekolah
             </span>
             <span className="text-xs text-slate-500">Formulir KIB B (Peralatan dan Mesin)</span>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              Sinkron 2-Arah (Google Sheets)
-            </span>
           </div>
           <h2 className="text-xl font-bold text-slate-900 mt-1">Kartu Inventaris Barang (KIB) B</h2>
-          <p className="text-xs sm:text-sm text-slate-500">
-            Pencatatan aset peralatan, mesin, perangkat kantor, proyektor, dan kendaraan. Terhubung dua arah dengan Google Spreadsheet (Sheet: KIB B).
-          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">

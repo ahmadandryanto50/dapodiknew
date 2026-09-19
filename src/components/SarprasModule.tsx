@@ -186,12 +186,11 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
                 {activeSubTab === 'sarpras' ? `${sarpras.length} Aset & Ruangan` : `${kibB.length} Barang KIB B`}
               </span>
             </div>
-            <p className="text-xs text-slate-500">
-              {activeSubTab === 'sarpras'
-                ? 'Monitoring kondisi fisik ruangan, laboratorium, buku perpustakaan, dan inventaris sekolah'
-                : 'Inventarisasi peralatan dan mesin sekolah terhubung langsung ke spreadsheet dan database Cloud'
-              }
-            </p>
+            {activeSubTab === 'sarpras' && (
+              <p className="text-xs text-slate-500">
+                Monitoring kondisi fisik ruangan, laboratorium, buku perpustakaan, dan inventaris sekolah
+              </p>
+            )}
           </div>
         </div>
 
