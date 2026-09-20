@@ -16,7 +16,9 @@ import {
   ChevronDown,
   Info,
   Ruler,
-  Calendar
+  Calendar,
+  CloudUpload,
+  RefreshCw
 } from 'lucide-react';
 import { BangunanItem } from '../types';
 import { exportToCSV, exportToExcel } from '../services/googleSheetsService';
@@ -214,6 +216,18 @@ export const BangunanModule: React.FC<BangunanModuleProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          {onSync && (
+            <button
+              onClick={() => onSync()}
+              disabled={isSyncing}
+              className="px-3 py-2 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-700 text-xs font-semibold border border-teal-200 transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              title="Simpan & Sync seluruh data Bangunan ke Google Spreadsheet"
+            >
+              <CloudUpload className={`w-3.5 h-3.5 text-teal-600 ${isSyncing ? 'animate-bounce' : ''}`} />
+              <span>{isSyncing ? 'Menyimpan...' : 'Simpan ke Spreadsheet'}</span>
+            </button>
+          )}
+
           <button
             onClick={() => exportToExcel(bangunan, 'Data_Bangunan_Sekolah')}
             className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold border border-slate-200/80 transition-all flex items-center gap-1.5 cursor-pointer"

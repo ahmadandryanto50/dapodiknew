@@ -1838,12 +1838,12 @@ export default function App() {
   };
 
   const handleManualSync = async () => {
-    return handlePullFromSheets(false);
+    return handlePushToSheets();
   };
 
   const handlePushToSheets = async () => {
     setIsSyncing(true);
-    showToast('Mengirim seluruh data aplikasi ke database Google Spreadsheet...');
+    showToast('Mengirim seluruh data aplikasi (termasuk Bangunan & Ruang) ke Google Spreadsheet...');
     try {
       const currentCfg = getEffectiveSyncConfig();
       if (!currentCfg || !currentCfg.webAppUrl) {
@@ -1866,6 +1866,8 @@ export default function App() {
         ptk: teachers,
         sarpras: sarpras,
         kibB: kibB,
+        bangunan: bangunanRef.current || bangunan,
+        ruang: ruangRef.current || ruang,
         rapor: reports,
         pengaturan: pengaturanArray,
         profilSekolah: profilSekolahArray,
