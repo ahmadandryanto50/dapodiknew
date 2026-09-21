@@ -2897,6 +2897,58 @@ export default function App() {
     }
   };
 
+  const handleSyncBangunanOnly = async () => {
+    const currentCfg = getEffectiveSyncConfig();
+    if (!currentCfg || !currentCfg.webAppUrl) {
+      showToast('URL Google Apps Script belum diatur di menu Pengaturan.');
+      return;
+    }
+    const currentList = bangunanRef.current || bangunan;
+    setIsSyncing(true);
+    showToast(`Menyimpan ${currentList.length} data Bangunan ke Google Spreadsheet...`);
+    try {
+      const res = await syncBangunanToGoogleSheets(currentCfg, currentList);
+      if (res && res.success) {
+        showToast(`✅ Berhasil: Seluruh ${currentList.length} data Bangunan disimpan ke Google Spreadsheet!`);
+        try { (window as any).confetti?.({ particleCount: 35, spread: 50 }); } catch (e) {}
+      } else if (res && (res as any).isOldScriptVersion) {
+        showToast(`⚠️ Data aman di Database Aplikasi! Untuk masuk ke Google Spreadsheet, silakan perbarui Apps Script ke v3.6 di menu Pengaturan.`);
+      } else {
+        showToast(`⚠️ Belum tersimpan ke Spreadsheet: ${res?.message || 'Cek konfigurasi Web App'}`);
+      }
+    } catch (err: any) {
+      showToast(`❌ Gagal sinkronisasi Bangunan: ${err?.message || 'Cek koneksi'}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleSyncRuangOnly = async () => {
+    const currentCfg = getEffectiveSyncConfig();
+    if (!currentCfg || !currentCfg.webAppUrl) {
+      showToast('URL Google Apps Script belum diatur di menu Pengaturan.');
+      return;
+    }
+    const currentList = ruangRef.current || ruang;
+    setIsSyncing(true);
+    showToast(`Menyimpan ${currentList.length} data Ruang ke Google Spreadsheet...`);
+    try {
+      const res = await syncRuangToGoogleSheets(currentCfg, currentList);
+      if (res && res.success) {
+        showToast(`✅ Berhasil: Seluruh ${currentList.length} data Ruang disimpan ke Google Spreadsheet!`);
+        try { (window as any).confetti?.({ particleCount: 35, spread: 50 }); } catch (e) {}
+      } else if (res && (res as any).isOldScriptVersion) {
+        showToast(`⚠️ Data aman di Database Aplikasi! Untuk masuk ke Google Spreadsheet, silakan perbarui Apps Script ke v3.6 di menu Pengaturan.`);
+      } else {
+        showToast(`⚠️ Belum tersimpan ke Spreadsheet: ${res?.message || 'Cek konfigurasi Web App'}`);
+      }
+    } catch (err: any) {
+      showToast(`❌ Gagal sinkronisasi Ruang: ${err?.message || 'Cek koneksi'}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   // Reports Handlers
   const handleAddReport = (r: StudentReport) => {
     lastLocalMutationRef.current = Date.now();
@@ -3391,6 +3443,8 @@ export default function App() {
               onDeleteRuang={handleDeleteRuang}
               onBackToHome={() => setActiveTab('home')}
               onSync={handleManualSync}
+              onSyncBangunan={handleSyncBangunanOnly}
+              onSyncRuang={handleSyncRuangOnly}
               isSyncing={isSyncing}
             />
           </div>

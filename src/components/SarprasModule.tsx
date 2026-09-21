@@ -45,6 +45,8 @@ interface SarprasModuleProps {
   onUpdateRuang?: (item: RuangItem) => void;
   onDeleteRuang?: (id: string) => void;
   onSync?: () => Promise<void> | void;
+  onSyncBangunan?: () => Promise<void> | void;
+  onSyncRuang?: () => Promise<void> | void;
   isSyncing?: boolean;
 }
 
@@ -68,6 +70,8 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
   onUpdateRuang = () => {},
   onDeleteRuang = () => {},
   onSync,
+  onSyncBangunan,
+  onSyncRuang,
   isSyncing = false
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'sarpras' | 'kib_b' | 'bangunan' | 'ruang'>('sarpras');
@@ -333,7 +337,7 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
           onAddBangunan={onAddBangunan}
           onUpdateBangunan={onUpdateBangunan}
           onDeleteBangunan={onDeleteBangunan}
-          onSync={onSync}
+          onSync={onSyncBangunan || onSync}
           isSyncing={isSyncing}
         />
       )}
@@ -344,7 +348,7 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
           onAddRuang={onAddRuang}
           onUpdateRuang={onUpdateRuang}
           onDeleteRuang={onDeleteRuang}
-          onSync={onSync}
+          onSync={onSyncRuang || onSync}
           isSyncing={isSyncing}
         />
       )}
