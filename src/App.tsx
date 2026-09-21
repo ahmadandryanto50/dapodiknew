@@ -478,14 +478,20 @@ export default function App() {
     const OLD_APP_SCRIPT_URL_1 = 'https://script.google.com/macros/s/AKfycbwHOEkfJ7iJVAlTKUVboM7ZHd13dX9Z6adJBH6N2UwA-LbDmTrJvxPHuBB8T4kePUmJAQ/exec';
     const OLD_APP_SCRIPT_URL_2 = 'https://script.google.com/macros/s/AKfycbwCjNbFmpToPA9JATA4FlFJPESoWbqS9JzIhbF2TS7FNsTlK2ZIUMtfsPBE5ln3Q7eO/exec';
     const OLD_APP_SCRIPT_URL_3 = 'https://script.google.com/macros/s/AKfycbx82FotXhPvN0i9hOo_S-bctwcT5JCB6JrvUu5CHtIMEepaJj1EIl5Bf7mxPoW8JuPguA/exec';
-    const ACTIVE_APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwOjTnhqqQFCvRGK_5NPVICqUbK-yHUTq1b0CwX3aXqcYjOITfoaogfBWDS3I1bdL6hZA/exec';
+    const OLD_APP_SCRIPT_URL_4 = 'https://script.google.com/macros/s/AKfycbwOjTnhqqQFCvRGK_5NPVICqUbK-yHUTq1b0CwX3aXqcYjOITfoaogfBWDS3I1bdL6hZA/exec';
+    const ACTIVE_APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzUjSFWKd2esZ0qgApuYzT1P4oJQklgiS3rvELTY1z0nxzXrwth5v_Xb5uAeEUmTzm8/exec';
 
     const saved = localStorage.getItem('dapodik_sync_config');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (parsed && parsed.webAppUrl) {
-          if (parsed.webAppUrl === OLD_APP_SCRIPT_URL_1 || parsed.webAppUrl === OLD_APP_SCRIPT_URL_2 || parsed.webAppUrl === OLD_APP_SCRIPT_URL_3) {
+          if (
+            parsed.webAppUrl === OLD_APP_SCRIPT_URL_1 ||
+            parsed.webAppUrl === OLD_APP_SCRIPT_URL_2 ||
+            parsed.webAppUrl === OLD_APP_SCRIPT_URL_3 ||
+            parsed.webAppUrl === OLD_APP_SCRIPT_URL_4
+          ) {
             parsed.webAppUrl = ACTIVE_APP_SCRIPT_URL;
             localStorage.setItem('dapodik_sync_config', JSON.stringify(parsed));
           }
@@ -2905,6 +2911,9 @@ export default function App() {
     }
     const currentList = bangunanRef.current || bangunan;
     setIsSyncing(true);
+    // Watchdog to guarantee UI button never stays stuck on 'Menyimpan...'
+    const watchdog = setTimeout(() => setIsSyncing(false), 10000);
+
     showToast(`Menyimpan ${currentList.length} data Bangunan ke Google Spreadsheet...`);
     try {
       const res = await syncBangunanToGoogleSheets(currentCfg, currentList);
@@ -2919,6 +2928,7 @@ export default function App() {
     } catch (err: any) {
       showToast(`❌ Gagal sinkronisasi Bangunan: ${err?.message || 'Cek koneksi'}`);
     } finally {
+      clearTimeout(watchdog);
       setIsSyncing(false);
     }
   };
@@ -2931,6 +2941,9 @@ export default function App() {
     }
     const currentList = ruangRef.current || ruang;
     setIsSyncing(true);
+    // Watchdog to guarantee UI button never stays stuck on 'Menyimpan...'
+    const watchdog = setTimeout(() => setIsSyncing(false), 10000);
+
     showToast(`Menyimpan ${currentList.length} data Ruang ke Google Spreadsheet...`);
     try {
       const res = await syncRuangToGoogleSheets(currentCfg, currentList);
@@ -2945,6 +2958,7 @@ export default function App() {
     } catch (err: any) {
       showToast(`❌ Gagal sinkronisasi Ruang: ${err?.message || 'Cek koneksi'}`);
     } finally {
+      clearTimeout(watchdog);
       setIsSyncing(false);
     }
   };

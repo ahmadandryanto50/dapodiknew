@@ -10,7 +10,7 @@ let CONFIG_FILE = path.join(process.cwd(), "sync_config.json");
 let DATA_FILE = path.join(process.cwd(), "app_data.json");
 let UPLOADS_DIR = path.join(process.cwd(), "public", "uploads");
 
-const DEFAULT_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwOjTnhqqQFCvRGK_5NPVICqUbK-yHUTq1b0CwX3aXqcYjOITfoaogfBWDS3I1bdL6hZA/exec";
+const DEFAULT_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzUjSFWKd2esZ0qgApuYzT1P4oJQklgiS3rvELTY1z0nxzXrwth5v_Xb5uAeEUmTzm8/exec";
 
 try {
   const isReadOnly = Boolean(process.env.VERCEL) || !fs.existsSync(process.cwd());
@@ -114,7 +114,7 @@ app.get("/api/sync-config", (req, res) => {
   }
   return res.json({
     spreadsheetUrl: "1XmLmshCOhSktRfzW8uG_8RqxlxVCQt5eUVekEFLwj_M",
-    webAppUrl: "https://script.google.com/macros/s/AKfycbyhC26e6a4a0ORdBvnMCz7c1pDR0rQsGkcO_LfVKhxAZGYtBMGle4qbjZoNx6D_uT79/exec",
+    webAppUrl: DEFAULT_WEB_APP_URL,
     sheetId: "",
     autoSync: true,
     lastSynced: null,
@@ -346,8 +346,9 @@ app.post("/api/sync-sheets", async (req, res) => {
     let { webAppUrl, payload } = req.body || {};
     webAppUrl = getEffectiveWebAppUrl(webAppUrl);
     
+    // Serverless-optimized timeout (8.5s) to guarantee response before Vercel 10s cutoff
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    const timeoutId = setTimeout(() => controller.abort(), 8500);
     const response = await fetch(webAppUrl, {
       method: "POST",
       headers: { "Content-Type": "text/plain" },
@@ -365,6 +366,36 @@ app.post("/api/sync-sheets", async (req, res) => {
       isJson = true;
     } catch (e) { 
       data = { text }; 
+    }
+
+    // Persist latest Bangunan & Ruang to DATA_FILE so serverless cache is always up-to-date
+    try {
+      const parsedPayload = typeof payload === 'string' ? JSON.parse(payload) : payload;
+      const toSave = safeReadJSON(DATA_FILE, {});
+      let modified = false;
+      if (parsedPayload && typeof parsedPayload === 'object') {
+        if (parsedPayload.type === 'SYNC_BANGUNAN' && Array.isArray(parsedPayload.payload || parsedPayload.bangunan)) {
+          toSave.bangunan = parsedPayload.payload || parsedPayload.bangunan;
+          modified = true;
+        } else if (parsedPayload.type === 'SYNC_RUANG' && Array.isArray(parsedPayload.payload || parsedPayload.ruang)) {
+          toSave.ruang = parsedPayload.payload || parsedPayload.ruang;
+          modified = true;
+        } else if (parsedPayload.type === 'SYNC_ALL') {
+          if (Array.isArray(parsedPayload.bangunan) && parsedPayload.bangunan.length > 0) {
+            toSave.bangunan = parsedPayload.bangunan;
+            modified = true;
+          }
+          if (Array.isArray(parsedPayload.ruang) && parsedPayload.ruang.length > 0) {
+            toSave.ruang = parsedPayload.ruang;
+            modified = true;
+          }
+        }
+      }
+      if (modified) {
+        safeWriteJSON(DATA_FILE, toSave);
+      }
+    } catch (cacheErr) {
+      console.warn("Failed to update cache on sync:", cacheErr);
     }
 
     if (!isJson || (typeof text === 'string' && (text.includes('<!DOCTYPE') || text.includes('<html>') || text.includes('Google Accounts')))) {
@@ -402,10 +433,10 @@ app.post("/api/load-sheets", async (req, res) => {
       getUrl = `${getUrl}${separator}spreadsheetUrl=${encodeURIComponent(resolvedSpreadsheetUrl)}`;
     }
 
-    // 1. Try GET first with 20s timeout
+    // 1. Try GET first with 7s timeout for Vercel
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000);
+      const timeoutId = setTimeout(() => controller.abort(), 7000);
       const response = await fetch(getUrl, {
         method: "GET",
         redirect: "follow",
@@ -420,7 +451,7 @@ app.post("/api/load-sheets", async (req, res) => {
     if (!data || data.status !== 'success') {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 20000);
+        const timeoutId = setTimeout(() => controller.abort(), 7000);
         const postRes = await fetch(webAppUrl, {
           method: "POST",
           headers: { "Content-Type": "text/plain" },
@@ -455,6 +486,8 @@ app.post("/api/load-sheets", async (req, res) => {
           siswa: cachedData.students || [],
           ptk: cachedData.teachers || [],
           sarpras: cachedData.sarpras || [],
+          bangunan: cachedData.bangunan || [],
+          ruang: cachedData.ruang || [],
           kibB: cleanKibB(cachedData.kibB),
           rapor: cachedData.reports || [],
           administrator: cachedData.administrators || [],
@@ -484,6 +517,8 @@ app.post("/api/load-sheets", async (req, res) => {
         siswa: cached.students || [],
         ptk: cached.teachers || [],
         sarpras: cached.sarpras || [],
+        bangunan: cached.bangunan || [],
+        ruang: cached.ruang || [],
         kibB: cleanKibB(cached.kibB),
         rapor: cached.reports || [],
         administrator: cached.administrators || [],
@@ -740,6 +775,14 @@ app.post("/api/app-data", (req, res) => {
     const finalData = {
       ...currentData,
       ...incoming,
+      bangunan: incoming.bangunan !== undefined
+        ? (Array.isArray(incoming.bangunan) ? incoming.bangunan : [])
+        : (Array.isArray(currentData.bangunan) ? currentData.bangunan : []),
+      ruang: incoming.ruang !== undefined
+        ? (Array.isArray(incoming.ruang) ? incoming.ruang : [])
+        : (Array.isArray(currentData.ruang) ? currentData.ruang : []),
+      kibB: cleanKibB(incoming.kibB !== undefined ? incoming.kibB : (currentData.kibB || [])),
+      schoolAccounts: incoming.schoolAccounts !== undefined ? incoming.schoolAccounts : (currentData.schoolAccounts || []),
       deletedNotifIds: mergedDeleted,
       deletedPermintaanAksesIds: mergedDeletedReqs,
       deletedFileIds: mergedDeletedFiles,

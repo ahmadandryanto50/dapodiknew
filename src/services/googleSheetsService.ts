@@ -1048,11 +1048,17 @@ async function callProxyOrDirectPost(rawWebAppUrl: string, payload: any): Promis
     const isWeb = typeof window !== 'undefined' && window.location.protocol.startsWith('http');
     const proxyUrl = isWeb ? '/api/sync-sheets' : 'https://ais-pre-rl7bj4twi2wve75vqpw7yr-169174220206.asia-east1.run.app/api/sync-sheets';
 
+    const proxyCtrl = new AbortController();
+    const proxyTimer = setTimeout(() => proxyCtrl.abort(), 8500);
+
     const proxyRes = await fetch(proxyUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ webAppUrl, payload })
+      body: JSON.stringify({ webAppUrl, payload }),
+      signal: proxyCtrl.signal
     });
+    clearTimeout(proxyTimer);
+
     if (proxyRes.ok) {
       const json = await proxyRes.json();
       if (json && json.success) {
@@ -1061,47 +1067,37 @@ async function callProxyOrDirectPost(rawWebAppUrl: string, payload: any): Promis
           message: 'Data berhasil dikirim & disinkronkan ke Database Spreadsheet!',
           data: json.data
         };
+      } else if (json && json.message && (json.message.includes('HTML/Login') || json.message.includes('Google Accounts'))) {
+        return {
+          success: false,
+          message: json.message,
+          data: json.data
+        };
       } else {
-        console.warn('Proxy returned error, falling back to direct browser post:', json?.message);
+        console.warn('Proxy returned non-success, falling back to direct browser post:', json?.message);
       }
     } else {
       console.warn('Proxy status not OK, falling back to direct browser post:', proxyRes.status, proxyRes.statusText);
     }
   } catch (proxyErr) {
-    console.warn('Proxy connection failed, falling back to direct browser post:', proxyErr);
+    console.warn('Proxy connection failed or timed out, falling back to direct browser post:', proxyErr);
   }
 
-  // 2. Direct browser fetch with mode: 'no-cors'
+  // 2. Direct browser fetch with mode: 'no-cors' fallback
   try {
+    const directCtrl = new AbortController();
+    const directTimer = setTimeout(() => directCtrl.abort(), 8500);
+
     const response = await fetch(webAppUrl, {
       method: 'POST',
       mode: 'no-cors',
       headers: {
         'Content-Type': 'text/plain'
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      signal: directCtrl.signal
     });
-
-    if (response.ok) {
-      try {
-        const resJson = await response.json();
-        if (resJson && resJson.status === 'success') {
-          return {
-            success: true,
-            message: resJson.message || 'Data berhasil dikirim & disinkronkan ke Database!',
-            data: resJson
-          };
-        } else if (resJson && resJson.status === 'error') {
-          return {
-            success: false,
-            message: 'Respons Database Error: ' + (resJson.message || 'Gagal memproses data.'),
-            data: resJson
-          };
-        }
-      } catch (parseError) {
-        // Fallback if JSON parsing failed but request was OK
-      }
-    }
+    clearTimeout(directTimer);
 
     return {
       success: true,
@@ -1109,15 +1105,11 @@ async function callProxyOrDirectPost(rawWebAppUrl: string, payload: any): Promis
     };
   } catch (error: any) {
     console.error('Sync error:', error);
-    if (error instanceof TypeError) {
-      return {
-        success: true,
-        message: 'Data berhasil dikirim & disinkronkan ke Database!'
-      };
-    }
     return {
       success: false,
-      message: error?.message || 'Gagal menyinkronkan data ke Database.'
+      message: error?.name === 'AbortError'
+        ? 'Koneksi ke Web App Spreadsheet kehabisan waktu (Timeout). Pastikan URL Web App valid dan dapat diakses publik.'
+        : (error?.message || 'Gagal menyinkronkan data ke Database.')
     };
   }
 }
@@ -1641,19 +1633,8 @@ export async function syncBangunanToGoogleSheets(
     timestamp: new Date().toLocaleString('id-ID')
   };
 
-  // Kirim dengan tipe SYNC_BANGUNAN agar kompatibel dengan skrip versi lama dan baru
+  // Kirim dengan tipe SYNC_BANGUNAN langsung ke sheet Data_Bangunan
   const res = await callProxyOrDirectPost(config.webAppUrl, payload);
-
-  // Failsafe: Juga kirim SYNC_ALL dengan properti bangunan jika skrip telah diperbarui ke v3.6
-  try {
-    const fallbackAllPayload = {
-      type: 'SYNC_ALL',
-      spreadsheetUrl: config.spreadsheetUrl || '',
-      bangunan: mappedItems,
-      timestamp: new Date().toLocaleString('id-ID')
-    };
-    await callProxyOrDirectPost(config.webAppUrl, fallbackAllPayload);
-  } catch (e) {}
 
   const rawMsg = String((res.data && res.data.message) || res.message || '');
   const version = String((res.data && res.data.version) || '');
@@ -1723,19 +1704,8 @@ export async function syncRuangToGoogleSheets(
     timestamp: new Date().toLocaleString('id-ID')
   };
 
-  // Kirim dengan tipe SYNC_RUANG agar kompatibel dengan skrip versi lama dan baru
+  // Kirim dengan tipe SYNC_RUANG langsung ke sheet Data_Ruang
   const res = await callProxyOrDirectPost(config.webAppUrl, payload);
-
-  // Failsafe: Juga kirim SYNC_ALL dengan properti ruang jika skrip telah diperbarui ke v3.6
-  try {
-    const fallbackAllPayload = {
-      type: 'SYNC_ALL',
-      spreadsheetUrl: config.spreadsheetUrl || '',
-      ruang: mappedItems,
-      timestamp: new Date().toLocaleString('id-ID')
-    };
-    await callProxyOrDirectPost(config.webAppUrl, fallbackAllPayload);
-  } catch (e) {}
 
   const rawMsg = String((res.data && res.data.message) || res.message || '');
   const version = String((res.data && res.data.version) || '');
@@ -1754,7 +1724,7 @@ export async function syncRuangToGoogleSheets(
 }
 
 export function getSavedSyncConfig(): SyncConfig {
-  const ACTIVE_APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwOjTnhqqQFCvRGK_5NPVICqUbK-yHUTq1b0CwX3aXqcYjOITfoaogfBWDS3I1bdL6hZA/exec';
+  const ACTIVE_APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzUjSFWKd2esZ0qgApuYzT1P4oJQklgiS3rvELTY1z0nxzXrwth5v_Xb5uAeEUmTzm8/exec';
   try {
     const saved = localStorage.getItem('dapodik_sync_config');
     if (saved) {
