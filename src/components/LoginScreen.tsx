@@ -220,10 +220,28 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
 
   const isSyncingActive = isSyncing || internalSyncing;
 
+  // Auto refresh public dashboard data in the background on initial mount so visitors & parents always see the freshest data
+  useEffect(() => {
+    let isMounted = true;
+    const timer = setTimeout(async () => {
+      if (!isMounted || !onPullData) return;
+      try {
+        await onPullData();
+      } catch (err) {
+        console.warn('Auto background sync on public dashboard:', err);
+      }
+    }, 1200);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, []);
+
   const handleManualSync = async () => {
     if (!onPullData || isSyncingActive) return;
     setInternalSyncing(true);
-    setSyncStatusMsg('Sedang Menarik Data...');
+    setSyncStatusMsg('Menghubungkan ke Cloud Spreadsheet...');
     try {
       const ok = await onPullData();
       if (ok !== false) {

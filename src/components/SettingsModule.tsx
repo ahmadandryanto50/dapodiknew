@@ -2659,11 +2659,11 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                     <h3 className="text-slate-900 font-bold text-sm flex items-center gap-2">
                       <span>Kode Google Apps Script (Code.gs) Terbaru</span>
                       <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                        v3.5 (Terbaru - Auto-Sync KIB B, Safe Color Headers & Drive Sync)
+                        v3.6 (Terbaru - Auto-Sync Data_Bangunan, Data_Ruang, KIB B & Drive Sync)
                       </span>
                     </h3>
                     <p className="text-xs text-slate-500">
-                      Salin kode berikut dan tempelkan ke editor Apps Script Google Spreadsheet Anda untuk mendapatkan fitur sinkronisasi inventarisasi KIB B & Berkas Digital 100% lancar.
+                      Salin kode berikut dan tempelkan ke editor Apps Script Google Spreadsheet Anda untuk mengaktifkan sinkronisasi otomatis lembar kerja <strong>Data_Bangunan</strong>, <strong>Data_Ruang</strong>, KIB B, dan Berkas Digital ke Google Spreadsheet Anda.
                     </p>
                   </div>
                 </div>
@@ -2678,8 +2678,19 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                   }`}
                 >
                   {copiedScript ? <Check className="w-4 h-4 text-white" /> : <Copy className="w-4 h-4" />}
-                  <span>{copiedScript ? '✅ Kode GS Berhasil Disalin!' : 'Salin Kode Apps Script (Code.gs)'}</span>
+                  <span>{copiedScript ? '✅ Kode GS v3.6 Berhasil Disalin!' : 'Salin Kode Apps Script v3.6 (Code.gs)'}</span>
                 </button>
+              </div>
+
+              {/* Special Note for Bangunan & Ruang Sync */}
+              <div className="p-3.5 rounded-xl bg-sky-50 border border-sky-200 flex items-start gap-2.5 text-xs text-sky-900">
+                <Sparkles className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <div className="font-bold">✨ Pembaruan v3.6 (Data Bangunan & Ruang Otomatis Tersimpan di Spreadsheet):</div>
+                  <p className="text-[11px] text-sky-800 leading-relaxed">
+                    Jika sebelumnya Anda menyimpan data Bangunan atau Ruang namun belum muncul di Spreadsheet, cukup perbarui kode Apps Script di editor Google Sheets Anda dengan kode v3.6 ini lalu lakukan <strong>Deploy New version</strong>. Setelah itu, lembar kerja <strong>Data_Bangunan</strong> dan <strong>Data_Ruang</strong> akan dibuat dan terisi secara otomatis tanpa menghapus data lain!
+                  </p>
+                </div>
               </div>
 
               {/* Step by step guide */}
@@ -2707,11 +2718,11 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                   </li>
                   <li className="p-2.5 bg-white border border-slate-200 rounded-lg flex items-start gap-2">
                     <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[11px] flex items-center justify-center shrink-0">5</span>
-                    <span>Klik <strong>Terapkan (Deploy)</strong> &gt; <strong>Terapkan sebagai Aplikasi Web (New deployment)</strong>. Set <em>Who has access</em> ke <strong>Anyone (Siapa saja)</strong>.</span>
+                    <span>Klik <strong>Terapkan (Deploy)</strong> &gt; <strong>Kelola Penerapan (Manage deployments)</strong> &gt; Edit &gt; Pilih <strong>Versi Baru (New version)</strong> &gt; <strong>Terapkan</strong>.</span>
                   </li>
                   <li className="p-2.5 bg-white border border-slate-200 rounded-lg flex items-start gap-2">
                     <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[11px] flex items-center justify-center shrink-0">6</span>
-                    <span>Salin <strong>URL Aplikasi Web (Web App URL)</strong> dan tempelkan ke kolom input URL di atas!</span>
+                    <span>Buka menu <strong>Sarana & Prasarana</strong> di aplikasi ini, simpan Bangunan / Ruang atau klik <strong>Sinkronkan Sekarang</strong>. Data langsung masuk ke sheet!</span>
                   </li>
                 </ol>
               </div>
@@ -2725,7 +2736,7 @@ export const SettingsModule: React.FC<SettingsModuleProps> = ({
                       <div className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
                       <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
                     </div>
-                    <span className="font-mono text-[11px] text-slate-300 ml-2">Code.gs (Dapodik Google Apps Script Endpoint v3.5 - Terbaru)</span>
+                    <span className="font-mono text-[11px] text-slate-300 ml-2">Code.gs (Dapodik Google Apps Script Endpoint v3.6 - Terbaru)</span>
                   </div>
                   <button
                     type="button"

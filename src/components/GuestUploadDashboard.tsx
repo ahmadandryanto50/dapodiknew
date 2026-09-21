@@ -350,9 +350,12 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
     }
   }, [sharedCategoryName]);
 
-  // Fetch upload history on mount
+  // Fetch upload history on mount & auto-sync latest data
   useEffect(() => {
     fetchHistory();
+    if (onPullData) {
+      onPullData().catch(() => {});
+    }
   }, []);
 
   const formatIndonesianDate = (dateStr: string) => {

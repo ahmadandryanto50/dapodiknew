@@ -126,6 +126,17 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  // Enable CORS headers for all origins to prevent "Failed to fetch" due to iframe sandboxes, cross-origin developer/shared containers, or custom domains
+  app.use((req, res, next) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, PATCH, DELETE");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+    if (req.method === "OPTIONS") {
+      return res.sendStatus(200);
+    }
+    next();
+  });
+
   // Support JSON & URL-encoded bodies up to 50MB (for file uploads and base64 strings from mobile/browsers)
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -455,6 +466,33 @@ async function startServer() {
         return res.json({ success: false, message: data.message || "Gagal dari Google Apps Script", data });
       }
 
+      // Persist latest Bangunan & Ruang to DATA_FILE so server-side cache is always up-to-date
+      try {
+        const toSave = safeReadJSON(DATA_FILE, {});
+        let modified = false;
+        if (parsedPayload && typeof parsedPayload === 'object') {
+          if (parsedPayload.type === 'SYNC_BANGUNAN' && Array.isArray(parsedPayload.payload || parsedPayload.bangunan)) {
+            toSave.bangunan = parsedPayload.payload || parsedPayload.bangunan;
+            modified = true;
+          } else if (parsedPayload.type === 'SYNC_RUANG' && Array.isArray(parsedPayload.payload || parsedPayload.ruang)) {
+            toSave.ruang = parsedPayload.payload || parsedPayload.ruang;
+            modified = true;
+          } else if (parsedPayload.type === 'SYNC_ALL') {
+            if (Array.isArray(parsedPayload.bangunan) && parsedPayload.bangunan.length > 0) {
+              toSave.bangunan = parsedPayload.bangunan;
+              modified = true;
+            }
+            if (Array.isArray(parsedPayload.ruang) && parsedPayload.ruang.length > 0) {
+              toSave.ruang = parsedPayload.ruang;
+              modified = true;
+            }
+          }
+        }
+        if (modified) {
+          safeWriteJSON(DATA_FILE, toSave);
+        }
+      } catch (saveErr) {}
+
       return res.json({ success: true, data });
     } catch (err: any) {
       console.warn("Proxying to Google Sheets warning in /api/sync-sheets:", err?.message || err);
@@ -532,6 +570,36 @@ async function startServer() {
         if (deletedFileIds.length > 0 && Array.isArray(data.berkas)) {
           data.berkas = data.berkas.filter((b: any) => b && b.id && !deletedSet.has(String(b.id)));
         }
+
+        // Immediately persist the fresh Google Sheets data into DATA_FILE so any visitor or device has the latest data
+        try {
+          const toSave = safeReadJSON(DATA_FILE, {});
+          if (Array.isArray(data.siswa) && data.siswa.length > 0) toSave.students = data.siswa;
+          if (Array.isArray(data.ptk) && data.ptk.length > 0) toSave.teachers = data.ptk;
+          if (Array.isArray(data.sarpras)) toSave.sarpras = data.sarpras;
+          if (Array.isArray(data.bangunan) && data.bangunan.length > 0) toSave.bangunan = data.bangunan;
+          if (Array.isArray(data.ruang) && data.ruang.length > 0) toSave.ruang = data.ruang;
+          if (Array.isArray(data.kibB)) toSave.kibB = cleanKibB(data.kibB);
+          if (Array.isArray(data.rapor)) toSave.reports = data.rapor;
+          if (Array.isArray(data.administrator) && data.administrator.length > 0) toSave.administrators = data.administrator;
+          if (Array.isArray(data.aplikasi) && data.aplikasi.length > 0) toSave.aplikasiLinks = data.aplikasi;
+          if (Array.isArray(data.notifikasi)) toSave.notifications = data.notifikasi;
+          if (Array.isArray(data.schoolAccounts) && data.schoolAccounts.length > 0) toSave.schoolAccounts = data.schoolAccounts;
+          if (Array.isArray(data.berkas)) {
+            const existingFiles: any[] = Array.isArray(toSave.schoolFiles) ? toSave.schoolFiles : [];
+            const existingMap = new Map(existingFiles.map((f: any) => [String(f.id), f]));
+            for (const b of data.berkas) {
+              if (b && b.id && !deletedSet.has(String(b.id))) {
+                existingMap.set(String(b.id), { ...existingMap.get(String(b.id)), ...b });
+              }
+            }
+            toSave.schoolFiles = Array.from(existingMap.values());
+          }
+          safeWriteJSON(DATA_FILE, toSave);
+        } catch (saveErr) {
+          console.error("Error updating DATA_FILE in /api/load-sheets:", saveErr);
+        }
+
         return res.json(data);
       } else {
         // Fallback to locally cached app_data.json so multi-device/browser sync never fails
@@ -615,7 +683,7 @@ async function startServer() {
   });
 
   // API Route: Get Shared App Data Cache
-  app.get("/api/app-data", async (req, res) => {
+  app.get("/api/app-data", (req, res) => {
     try {
       const data = safeReadJSON(DATA_FILE, {});
       if (Array.isArray(data.kibB)) {
@@ -626,116 +694,13 @@ async function startServer() {
       const deletedFileIds: string[] = Array.isArray(data.deletedFileIds) ? data.deletedFileIds : [];
       const deletedSet = new Set(deletedFileIds.map(id => String(id)));
       
-      // Also try to load fresh data from Google Sheets to merge/sync!
-      const webAppUrl = getEffectiveWebAppUrl();
-      let spreadsheetFiles: any[] = [];
-      
-      if (webAppUrl) {
-        try {
-          const configObj = safeReadJSON(CONFIG_FILE, null);
-          let spreadsheetUrl = configObj?.spreadsheetUrl || "";
-          if (spreadsheetUrl && !spreadsheetUrl.startsWith("http")) {
-            spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetUrl}/edit`;
-          }
-
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout for Google Apps Script cold-starts
-          const sheetsRes = await fetch(webAppUrl, {
-            method: "POST",
-            headers: { "Content-Type": "text/plain" },
-            body: JSON.stringify({ type: "LOAD_ALL", spreadsheetUrl }),
-            redirect: "follow",
-            signal: controller.signal
-          });
-          clearTimeout(timeoutId);
-          if (sheetsRes.ok) {
-            const sheetsData = await sheetsRes.json();
-            if (sheetsData && sheetsData.status === "success") {
-              const rawBerkas = sheetsData.berkas || sheetsData["Data_Berkas"] || sheetsData["Data Berkas"] || sheetsData.schoolFiles || sheetsData.files;
-              if (Array.isArray(rawBerkas)) {
-                spreadsheetFiles = rawBerkas;
-              }
-              if (Array.isArray(sheetsData.schoolAccounts) && sheetsData.schoolAccounts.length > 0) {
-                data.schoolAccounts = sheetsData.schoolAccounts;
-              }
-              if (Array.isArray(sheetsData.siswa) && sheetsData.siswa.length > 0) {
-                data.students = sheetsData.siswa;
-              }
-              if (Array.isArray(sheetsData.ptk) && sheetsData.ptk.length > 0) {
-                data.teachers = sheetsData.ptk;
-              }
-              if (Array.isArray(sheetsData.sarpras)) {
-                data.sarpras = sheetsData.sarpras;
-              }
-              if (Array.isArray(sheetsData.bangunan) && sheetsData.bangunan.length > 0) {
-                data.bangunan = sheetsData.bangunan;
-              }
-              if (Array.isArray(sheetsData.ruang) && sheetsData.ruang.length > 0) {
-                data.ruang = sheetsData.ruang;
-              }
-              if (Array.isArray(sheetsData.kibB)) {
-                data.kibB = cleanKibB(sheetsData.kibB);
-              }
-              if (Array.isArray(sheetsData.rapor)) {
-                data.reports = sheetsData.rapor;
-              }
-              if (Array.isArray(sheetsData.administrator) && sheetsData.administrator.length > 0) {
-                data.administrators = sheetsData.administrator;
-              }
-            }
-          }
-        } catch (e: any) {
-          console.warn("Could not load fresh files from Google Sheets in /api/app-data, using local cache:", e?.message || e);
+      if (deletedFileIds.length > 0) {
+        if (Array.isArray(data.schoolFiles)) {
+          data.schoolFiles = data.schoolFiles.filter((f: any) => f && f.id && !deletedSet.has(String(f.id)));
         }
-      }
-
-      // Merge both
-      const localFiles = Array.isArray(data.schoolFiles) ? data.schoolFiles : [];
-      
-      // Merge by id, preferring localFiles if they are newer or have custom properties, but using spreadsheetFiles
-      const fileMap = new Map<string, any>();
-      
-      // First, insert spreadsheet files
-      for (let idx = 0; idx < spreadsheetFiles.length; idx++) {
-        const f = spreadsheetFiles[idx];
-        if (f && (f.id || f["Nama Berkas"] || f.name || f["Link Drive"] || f.driveFileUrl)) {
-          const fileId = String(f.id || f.fileId || `BRK-S-${idx}`);
-          fileMap.set(fileId, {
-            id: fileId,
-            name: f["Nama Berkas"] || f.name || f.Name || "Berkas Dokumen",
-            category: f["Kategori"] || f.category || f.Category || "Umum",
-            fileSize: Number(f["Ukuran File"] || f.fileSize || f.FileSize || f.size || 0),
-            fileType: f.fileType || f.FileType || "application/octet-stream",
-            fileExtension: f.fileExtension || f.FileExtension || "",
-            uploadedAt: f["Tanggal"] || f.uploadedAt || f.UploadedAt || "",
-            uploadedBy: f["Nama Pengirim/Orang Tua"] || f.uploadedBy || f.UploadedBy || "Tamu / Orang Tua",
-            uploadedByRole: f.uploadedByRole || f.UploadedByRole || "Tamu / Umum",
-            driveFileUrl: f["Link Drive"] || f.driveFileUrl || f.DriveFileUrl || f.url || "",
-            driveFolderId: f.driveFolderId || f.DriveFolderId || "",
-            privacy: f.privacy || f.Privacy || "Public",
-            description: f.description || f.Description || ""
-          });
+        if (Array.isArray(data.files)) {
+          data.files = data.files.filter((f: any) => f && f.id && !deletedSet.has(String(f.id)));
         }
-      }
-      
-      // Then overwrite with local files
-      for (const f of localFiles) {
-        if (f && f.id) {
-          fileMap.set(String(f.id), f);
-        }
-      }
-      
-      // Filter out deleted files
-      let mergedFiles = Array.from(fileMap.values());
-      if (deletedSet.size > 0) {
-        mergedFiles = mergedFiles.filter(f => f && f.id && !deletedSet.has(String(f.id)));
-      }
-      
-      data.schoolFiles = mergedFiles;
-      safeWriteJSON(DATA_FILE, data);
-      
-      if (deletedFileIds.length > 0 && Array.isArray(data.files)) {
-        data.files = data.files.filter((f: any) => f && f.id && !deletedSet.has(String(f.id)));
       }
       
       return res.json(data);
@@ -984,12 +949,12 @@ async function startServer() {
       const finalData = {
         ...currentData,
         ...incoming,
-        bangunan: Array.isArray(incoming.bangunan) && incoming.bangunan.length > 0 
-          ? incoming.bangunan 
-          : (Array.isArray(currentData.bangunan) && currentData.bangunan.length > 0 ? currentData.bangunan : []),
-        ruang: Array.isArray(incoming.ruang) && incoming.ruang.length > 0 
-          ? incoming.ruang 
-          : (Array.isArray(currentData.ruang) && currentData.ruang.length > 0 ? currentData.ruang : []),
+        bangunan: incoming.bangunan !== undefined
+          ? (Array.isArray(incoming.bangunan) ? incoming.bangunan : [])
+          : (Array.isArray(currentData.bangunan) ? currentData.bangunan : []),
+        ruang: incoming.ruang !== undefined
+          ? (Array.isArray(incoming.ruang) ? incoming.ruang : [])
+          : (Array.isArray(currentData.ruang) ? currentData.ruang : []),
         kibB: cleanKibB(incoming.kibB !== undefined ? incoming.kibB : (currentData.kibB || [])),
         schoolAccounts: incoming.schoolAccounts !== undefined ? incoming.schoolAccounts : (currentData.schoolAccounts || []),
         deletedNotifIds: mergedDeleted,

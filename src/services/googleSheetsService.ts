@@ -4,7 +4,7 @@ import { Student, TeacherStaff, SarprasItem, KibBItem, BangunanItem, RuangItem, 
 export const APPS_SCRIPT_TEMPLATE = `/**
  * =========================================================================
  * GOOGLE APPS SCRIPT UNTUK DAPODIK TERINTEGRASI 2026
- * Versi Script: v3.5 (Safe Color Headers, Drive Sync & KIB B Auto-Sync)
+ * Versi Script: v3.6 (Data_Bangunan & Data_Ruang Auto-Sync, Safe Color Headers, Drive Sync & KIB B Auto-Sync)
  * =========================================================================
  * 
  * FUNGSI UTAMA OTORISASI GOOGLE DRIVE (Jalankan ini jika butuh izin ulang):
@@ -85,8 +85,8 @@ const HEADERS_MAP = {
   'Data_Alumni': ['id', 'nisn', 'nik', 'nama', 'jenisKelamin', 'tempatLahir', 'tanggalLahir', 'rombel', 'tahunLulus', 'noSeriIjazah', 'namaIbu', 'namaAyah', 'alamat', 'hp', 'status', 'alasanKeluar', 'agama', 'nis', 'skhun', 'sekolahAsal'],
   'Data_PTK': ['id', 'nuptk', 'nip', 'nama', 'jenisKelamin', 'statusKepegawaian', 'jenisPtk', 'mapel', 'pendidikanTerakhir', 'noHp', 'email', 'statusSertifikasi', 'tempatLahir', 'tanggalLahir', 'agama', 'alamatJalan', 'rt', 'rw', 'namaDusun', 'desaKelurahan', 'kecamatan', 'kodePos', 'tugasTambahan', 'skCpns', 'tanggalCpns', 'skPengangkatan', 'tmtPengangkatan', 'pangkatGolongan', 'nik', 'noKk'],
   'Data_Sarpras': ['id', 'kodeBarang', 'namaBarang', 'kategori', 'kondisi', 'jumlah', 'satuan', 'letakRuang', 'tahunPengadaan', 'layakPakai'],
-  'Data_Bangunan': ['id', 'namaBangunan', 'tahunPembangunan', 'luasTapak', 'jumlahLantai', 'jumlahRuang', 'kondisi', 'bobotKerusakan', 'keterangan'],
-  'Data_Ruang': ['id', 'jenisPrasarana', 'namaBangunan', 'namaRuang', 'lantai', 'panjang', 'lebar', 'bobotKerusakan', 'klasifikasiKerusakan', 'keterangan'],
+  'Data_Bangunan': ['id', 'no', 'namaBangunan', 'kodeBangunan', 'tahunPembangunan', 'luasTapak', 'jumlahLantai', 'jumlahRuang', 'kondisi', 'bobotKerusakan', 'keterangan'],
+  'Data_Ruang': ['id', 'no', 'jenisPrasarana', 'namaBangunan', 'namaRuang', 'kodeRuang', 'lantai', 'panjang', 'lebar', 'luas', 'bobotKerusakan', 'klasifikasiKerusakan', 'kondisi', 'keterangan'],
   'KIB B': ['id', 'No', 'NAMA / JENIS BARANG', 'MEREK / MODEL', 'NO SERI PABRIK', 'BAHAN', 'TAHUN PEMBUATAN / PEMBELIAN', 'KODE BARANG', 'JUMLAH BARANG / REGISTER', 'HARGA BELI', 'BAIK', 'KURANG BAIK', 'RUSAK BERAT', 'KETERANGAN MUTASI', 'Kondisi', 'Ukuran / CC', 'No Rangka', 'No Mesin', 'No Polisi', 'No Bpkb', 'Asal Usul', 'Keterangan'],
   'Data_KIB_B': ['id', 'No', 'NAMA / JENIS BARANG', 'MEREK / MODEL', 'NO SERI PABRIK', 'BAHAN', 'TAHUN PEMBUATAN / PEMBELIAN', 'KODE BARANG', 'JUMLAH BARANG / REGISTER', 'HARGA BELI', 'BAIK', 'KURANG BAIK', 'RUSAK BERAT', 'KETERANGAN MUTASI', 'Kondisi', 'Ukuran / CC', 'No Rangka', 'No Mesin', 'No Polisi', 'No Bpkb', 'Asal Usul', 'Keterangan'],
   'Data_Rapor': ['id', 'studentId', 'nisn', 'studentName', 'rombel', 'semester', 'tahunAjaran', 'scores', 'kehadiran', 'catatanWaliKelas', 'statusKenaikan'],
@@ -237,7 +237,7 @@ function doGet(e) {
     berkas: getSheetData(ss, 'Data_Berkas'),
     schoolAccounts: getSheetData(ss, 'Data_Multi_Sekolah'),
     status: 'success',
-    version: '2026.3.5',
+    version: '2026.3.6',
     timestamp: new Date().toLocaleString('id-ID')
   };
   
@@ -362,16 +362,20 @@ function doPost(e) {
     } else if (data.type === 'SYNC_SARPRAS') {
       saveSheetData(ss, 'Data_Sarpras', data.payload, HEADERS_MAP['Data_Sarpras']);
     } else if (data.type === 'SYNC_BANGUNAN') {
-      saveSheetData(ss, 'Data_Bangunan', data.payload, HEADERS_MAP['Data_Bangunan']);
+      var itemsToSave = data.payload || data.bangunan || [];
+      saveSheetData(ss, 'Data_Bangunan', itemsToSave, HEADERS_MAP['Data_Bangunan']);
       return ContentService.createTextOutput(JSON.stringify({
         status: 'success',
-        message: 'Data Bangunan berhasil disimpan ke Google Spreadsheet pada sheet "Data_Bangunan"!'
+        version: '2026.3.6',
+        message: 'Data Bangunan (' + itemsToSave.length + ' item) berhasil disimpan ke Google Spreadsheet pada sheet "Data_Bangunan"!'
       })).setMimeType(ContentService.MimeType.JSON);
     } else if (data.type === 'SYNC_RUANG') {
-      saveSheetData(ss, 'Data_Ruang', data.payload, HEADERS_MAP['Data_Ruang']);
+      var itemsToSave = data.payload || data.ruang || [];
+      saveSheetData(ss, 'Data_Ruang', itemsToSave, HEADERS_MAP['Data_Ruang']);
       return ContentService.createTextOutput(JSON.stringify({
         status: 'success',
-        message: 'Data Ruang berhasil disimpan ke Google Spreadsheet pada sheet "Data_Ruang"!'
+        version: '2026.3.6',
+        message: 'Data Ruang (' + itemsToSave.length + ' item) berhasil disimpan ke Google Spreadsheet pada sheet "Data_Ruang"!'
       })).setMimeType(ContentService.MimeType.JSON);
     } else if (data.type === 'SYNC_KIB_B') {
       var targetKibSheet = ss.getSheetByName('KIB B') || ss.getSheetByName('Data_KIB_B');
@@ -591,6 +595,15 @@ function getSheetData(ss, sheetName) {
 function saveSheetData(ss, sheetName, items, fallbackHeaders) {
   let sheet = ss.getSheetByName(sheetName);
   if (!sheet) {
+    if (sheetName === 'Data_Bangunan') {
+      sheet = ss.getSheetByName('Bangunan') || ss.getSheetByName('Data Bangunan') || ss.getSheetByName('Data_Bangunan_Sekolah');
+    } else if (sheetName === 'Data_Ruang') {
+      sheet = ss.getSheetByName('Ruang') || ss.getSheetByName('Data Ruang') || ss.getSheetByName('Data_Ruang_Sekolah');
+    } else if (sheetName === 'KIB B' || sheetName === 'Data_KIB_B') {
+      sheet = ss.getSheetByName('KIB B') || ss.getSheetByName('Data_KIB_B') || ss.getSheetByName('KIB_B');
+    }
+  }
+  if (!sheet) {
     sheet = ss.insertSheet(sheetName);
   }
   
@@ -630,6 +643,20 @@ function saveSheetData(ss, sheetName, items, fallbackHeaders) {
         else if (key === 'Tanggal') val = items[i]['uploadedAt'] || items[i]['UploadedAt'];
         else if (key === 'Link Drive') val = items[i]['driveFileUrl'] || items[i]['DriveFileUrl'] || items[i]['url'];
         else if (key === 'Ukuran File') val = items[i]['fileSize'] || items[i]['FileSize'] || items[i]['size'];
+        // Bangunan field aliases
+        else if (key === 'namaBangunan' || key === 'Nama Bangunan') val = items[i]['namaBangunan'] || items[i]['Nama Bangunan'] || items[i]['nama'];
+        else if (key === 'tahunPembangunan' || key === 'Tahun Pembangunan') val = items[i]['tahunPembangunan'] || items[i]['Tahun Pembangunan'] || items[i]['tahun'];
+        else if (key === 'luasTapak' || key === 'Luas Tapak') val = items[i]['luasTapak'] || items[i]['Luas Tapak'];
+        else if (key === 'jumlahLantai' || key === 'Jumlah Lantai') val = items[i]['jumlahLantai'] || items[i]['Jumlah Lantai'];
+        else if (key === 'jumlahRuang' || key === 'Jumlah Ruang') val = items[i]['jumlahRuang'] || items[i]['Jumlah Ruang'];
+        else if (key === 'bobotKerusakan' || key === 'Bobot Kerusakan') val = items[i]['bobotKerusakan'] || items[i]['Bobot Kerusakan'];
+        // Ruang field aliases
+        else if (key === 'jenisPrasarana' || key === 'Jenis Prasarana') val = items[i]['jenisPrasarana'] || items[i]['Jenis Prasarana'];
+        else if (key === 'namaRuang' || key === 'Nama Ruang') val = items[i]['namaRuang'] || items[i]['Nama Ruang'];
+        else if (key === 'lantai' || key === 'Lantai') val = items[i]['lantai'] || items[i]['Lantai'];
+        else if (key === 'panjang' || key === 'Panjang') val = items[i]['panjang'] || items[i]['Panjang'];
+        else if (key === 'lebar' || key === 'Lebar') val = items[i]['lebar'] || items[i]['Lebar'];
+        else if (key === 'klasifikasiKerusakan' || key === 'Klasifikasi Kerusakan') val = items[i]['klasifikasiKerusakan'] || items[i]['Klasifikasi Kerusakan'];
         // KIB B field aliases matching official template and document image
         else if (key === 'No' || key === 'No.' || key === 'no' || key === 'NO') val = items[i]['no'] !== undefined ? items[i]['no'] : (i + 1);
         else if (key === 'NAMA / JENIS BARANG' || key === 'Nama Barang' || key === 'namaBarang' || key === 'Jenis Barang / Nama Barang' || key === 'Jenis Barang') val = items[i]['namaBarang'] || items[i]['Nama Barang'] || items[i]['NAMA / JENIS BARANG'];
@@ -753,12 +780,10 @@ function checkAndInitializeSheets(ss) {
       HEADERS_MAP['Data_Sarpras']
     ],
     'Data_Bangunan': [
-      HEADERS_MAP['Data_Bangunan'],
-      ['bgn-001', 'Gedung E', '2020', '24.0', '1', '5', 'Tidak ada kerusakan', '0.0', 'Gedung Kelas & Administrasi']
+      HEADERS_MAP['Data_Bangunan']
     ],
     'Data_Ruang': [
-      HEADERS_MAP['Data_Ruang'],
-      ['rng-001', 'Bilik Perempuan', 'Gedung P', 'WC Perempuan', '1', '4.0', '8.0', '0.0', 'Tidak Ada', 'Fasilitas Sanitasi Siswa']
+      HEADERS_MAP['Data_Ruang']
     ],
     'KIB B': [
       HEADERS_MAP['KIB B'],
@@ -909,12 +934,119 @@ export function normalizeWebAppUrl(rawUrl?: string): string {
   return url;
 }
 
+/**
+ * Diagnostic function to intercept and inspect the payload structure for Bangunan and Ruang data before it is sent.
+ */
+export function diagnoseSarprasPayload(payload: any): void {
+  if (!payload || typeof payload !== 'object') return;
+
+  const expectedBangunan = ['id', 'namaBangunan', 'kodeBangunan', 'tahunPembangunan', 'luasTapak', 'jumlahLantai', 'jumlahRuang', 'kondisi', 'bobotKerusakan', 'keterangan'];
+  const expectedRuang = ['id', 'jenisPrasarana', 'namaBangunan', 'namaRuang', 'kodeRuang', 'lantai', 'panjang', 'lebar', 'luas', 'bobotKerusakan', 'klasifikasiKerusakan', 'kondisi', 'keterangan'];
+
+  // Check if it's a SYNC_ALL / UPDATE_ALL payload
+  let bangunanItems = payload.bangunan;
+  let ruangItems = payload.ruang;
+
+  // Check if it's a direct SYNC_BANGUNAN / SYNC_RUANG payload
+  if (payload.type === 'SYNC_BANGUNAN') {
+    bangunanItems = payload.payload;
+  } else if (payload.type === 'SYNC_RUANG') {
+    ruangItems = payload.payload;
+  }
+
+  if (bangunanItems && Array.isArray(bangunanItems)) {
+    console.group('%c🔍 [DIAGNOSTIC] Mengirim Data Bangunan ke Google Sheets', 'color: #0284c7; font-weight: bold; font-size: 13px;');
+    console.log(`Jumlah Item Bangunan: ${bangunanItems.length}`);
+    if (bangunanItems.length > 0) {
+      const sample = bangunanItems[0];
+      const sampleKeys = Object.keys(sample);
+      console.log('Kunci Transmisi:', sampleKeys);
+      console.log('Kunci yang Diharapkan Google Sheets:', expectedBangunan);
+      
+      const missing = expectedBangunan.filter(k => !sampleKeys.includes(k));
+      const extra = sampleKeys.filter(k => !expectedBangunan.includes(k));
+      
+      if (missing.length > 0) {
+        console.warn('⚠️ Kunci yang diharapkan namun tidak ada di payload:', missing);
+      } else {
+        console.log('✅ Semua kunci yang diharapkan lengkap dan cocok!');
+      }
+      if (extra.length > 0) {
+        console.log('ℹ️ Kunci tambahan di payload (opsional/alias):', extra);
+      }
+      
+      console.log('Sampel Data Transmisi (Item 1):', sample);
+    } else {
+      console.log('Array bangunan kosong.');
+    }
+    console.groupEnd();
+  }
+
+  if (ruangItems && Array.isArray(ruangItems)) {
+    console.group('%c🔍 [DIAGNOSTIC] Mengirim Data Ruang ke Google Sheets', 'color: #0d9488; font-weight: bold; font-size: 13px;');
+    console.log(`Jumlah Item Ruang: ${ruangItems.length}`);
+    if (ruangItems.length > 0) {
+      const sample = ruangItems[0];
+      const sampleKeys = Object.keys(sample);
+      console.log('Kunci Transmisi:', sampleKeys);
+      console.log('Kunci yang Diharapkan Google Sheets:', expectedRuang);
+      
+      const missing = expectedRuang.filter(k => !sampleKeys.includes(k));
+      const extra = sampleKeys.filter(k => !expectedRuang.includes(k));
+      
+      if (missing.length > 0) {
+        console.warn('⚠️ Kunci yang diharapkan namun tidak ada di payload:', missing);
+      } else {
+        console.log('✅ Semua kunci yang diharapkan lengkap dan cocok!');
+      }
+      if (extra.length > 0) {
+        console.log('ℹ️ Kunci tambahan di payload (opsional/alias):', extra);
+      }
+      
+      console.log('Sampel Data Transmisi (Item 1):', sample);
+    } else {
+      console.log('Array ruang kosong.');
+    }
+    console.groupEnd();
+  }
+}
+
+export function getFullSpreadsheetUrl(urlOrId: string): string {
+  if (!urlOrId) return '';
+  const trimmed = urlOrId.trim();
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return trimmed;
+  }
+  return `https://docs.google.com/spreadsheets/d/${trimmed}/edit`;
+}
+
 async function callProxyOrDirectPost(rawWebAppUrl: string, payload: any): Promise<{ success: boolean; message: string; data?: any }> {
   const webAppUrl = normalizeWebAppUrl(rawWebAppUrl);
+  
+  // Normalize spreadsheetUrl and spreadsheetId inside payload
+  if (payload && typeof payload === 'object') {
+    if (payload.spreadsheetUrl) {
+      payload.spreadsheetUrl = getFullSpreadsheetUrl(payload.spreadsheetUrl);
+    }
+    if (payload.spreadsheetId) {
+      payload.spreadsheetId = getFullSpreadsheetUrl(payload.spreadsheetId);
+    }
+    if (payload.spreadsheet_url) {
+      payload.spreadsheet_url = getFullSpreadsheetUrl(payload.spreadsheet_url);
+    }
+  }
+
+  // Intercept and run diagnostic logs
+  try {
+    diagnoseSarprasPayload(payload);
+  } catch (diagErr) {
+    console.error('Failed to run diagnostics on payload:', diagErr);
+  }
+
   // 1. Try server-side proxy endpoint first (bypasses browser CORS & mobile browser restrictions)
   try {
-    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.includes('run.app');
-    const proxyUrl = isLocal ? '/api/sync-sheets' : 'https://ais-pre-rl7bj4twi2wve75vqpw7yr-169174220206.asia-east1.run.app/api/sync-sheets';
+    const isWeb = typeof window !== 'undefined' && window.location.protocol.startsWith('http');
+    const proxyUrl = isWeb ? '/api/sync-sheets' : 'https://ais-pre-rl7bj4twi2wve75vqpw7yr-169174220206.asia-east1.run.app/api/sync-sheets';
 
     const proxyRes = await fetch(proxyUrl, {
       method: 'POST',
@@ -1105,6 +1237,7 @@ function parseSheetsResult(result: any) {
             }
             return '';
           };
+          if (!getVal('namaBangunan', 'Nama Bangunan', 'Nama', 'nama_bangunan') && !getVal('kodeBangunan', 'Kode Bangunan', 'Kode')) return null;
           return {
             id: getVal('id', 'ID', 'Id') || `bgn-${Date.now()}-${idx}`,
             no: parseInt(getVal('no', 'No', 'NO') || String(idx + 1), 10),
@@ -1118,7 +1251,7 @@ function parseSheetsResult(result: any) {
             bobotKerusakan: getVal('bobotKerusakan', 'Bobot Kerusakan', 'Bobot Kerusakan (%)', 'bobot_kerusakan') || '0.0',
             keterangan: getVal('keterangan', 'Keterangan', 'Ket')
           };
-        }).filter((b: any) => b && (b.namaBangunan || b.id));
+        }).filter(Boolean);
       })(),
       ruang: (function() {
         const raw = Array.isArray(result.ruang) ? result.ruang : (Array.isArray(result.Data_Ruang) ? result.Data_Ruang : []);
@@ -1132,6 +1265,7 @@ function parseSheetsResult(result: any) {
             }
             return '';
           };
+          if (!getVal('namaRuang', 'Nama Ruang', 'Ruang', 'nama_ruang') && !getVal('jenisPrasarana', 'Jenis Prasarana', 'Jenis', 'jenis_prasarana')) return null;
           return {
             id: getVal('id', 'ID', 'Id') || `rng-${Date.now()}-${idx}`,
             no: parseInt(getVal('no', 'No', 'NO') || String(idx + 1), 10),
@@ -1148,7 +1282,7 @@ function parseSheetsResult(result: any) {
             kondisi: getVal('kondisi', 'Kondisi') || 'Baik',
             keterangan: getVal('keterangan', 'Keterangan', 'Ket')
           };
-        }).filter((r: any) => r && (r.namaRuang || r.jenisPrasarana || r.namaBangunan || r.id));
+        }).filter(Boolean);
       })(),
       rapor: Array.isArray(result.rapor) ? result.rapor : [],
       pengaturan: Array.isArray(result.pengaturan) ? result.pengaturan : [],
@@ -1324,8 +1458,54 @@ export async function syncToGoogleSheets(
         'Harga': item.harga || '',
         'Keterangan': item.keterangan || item.keteranganMutasi || ''
       })),
-      bangunan: data.bangunan || [],
-      ruang: data.ruang || [],
+      bangunan: (data.bangunan || []).map((item: any) => ({
+        id: item.id,
+        namaBangunan: item.namaBangunan,
+        'Nama Bangunan': item.namaBangunan,
+        kodeBangunan: item.kodeBangunan || '',
+        'Kode Bangunan': item.kodeBangunan || '',
+        tahunPembangunan: item.tahunPembangunan,
+        'Tahun Pembangunan': item.tahunPembangunan,
+        luasTapak: item.luasTapak,
+        'Luas Tapak': item.luasTapak,
+        jumlahLantai: item.jumlahLantai || '1',
+        'Jumlah Lantai': item.jumlahLantai || '1',
+        jumlahRuang: item.jumlahRuang || '1',
+        'Jumlah Ruang': item.jumlahRuang || '1',
+        kondisi: item.kondisi || 'Tidak ada kerusakan',
+        'Kondisi': item.kondisi || 'Tidak ada kerusakan',
+        bobotKerusakan: item.bobotKerusakan || '0.0',
+        'Bobot Kerusakan': item.bobotKerusakan || '0.0',
+        keterangan: item.keterangan || '',
+        'Keterangan': item.keterangan || ''
+      })),
+      ruang: (data.ruang || []).map((item: any) => ({
+        id: item.id,
+        jenisPrasarana: item.jenisPrasarana,
+        'Jenis Prasarana': item.jenisPrasarana,
+        namaBangunan: item.namaBangunan,
+        'Nama Bangunan': item.namaBangunan,
+        namaRuang: item.namaRuang,
+        'Nama Ruang': item.namaRuang,
+        kodeRuang: item.kodeRuang || '',
+        'Kode Ruang': item.kodeRuang || '',
+        lantai: item.lantai || '1',
+        'Lantai': item.lantai || '1',
+        panjang: item.panjang || '',
+        'Panjang': item.panjang || '',
+        lebar: item.lebar || '',
+        'Lebar': item.lebar || '',
+        luas: item.luas || '',
+        'Luas': item.luas || '',
+        bobotKerusakan: item.bobotKerusakan || '0.0',
+        'Bobot Kerusakan': item.bobotKerusakan || '0.0',
+        klasifikasiKerusakan: item.klasifikasiKerusakan || 'Tidak Ada',
+        'Klasifikasi Kerusakan': item.klasifikasiKerusakan || 'Tidak Ada',
+        kondisi: item.kondisi || 'Baik',
+        'Kondisi': item.kondisi || 'Baik',
+        keterangan: item.keterangan || '',
+        'Keterangan': item.keterangan || ''
+      })),
       rapor: data.rapor || [],
       pengaturan: data.pengaturan || [],
       administrator: data.administrator || [],
@@ -1338,7 +1518,17 @@ export async function syncToGoogleSheets(
       timestamp: new Date().toLocaleString('id-ID')
     };
 
-    return await callProxyOrDirectPost(config.webAppUrl, payload);
+    const result = await callProxyOrDirectPost(config.webAppUrl, payload);
+    if (result.success) {
+      // Failsafe untuk versi skrip lama: kirim juga secara mandiri data Bangunan & Ruang
+      if (data.bangunan && data.bangunan.length > 0) {
+        try { await syncBangunanToGoogleSheets(config, data.bangunan); } catch (e) {}
+      }
+      if (data.ruang && data.ruang.length > 0) {
+        try { await syncRuangToGoogleSheets(config, data.ruang); } catch (e) {}
+      }
+    }
+    return result;
   } catch (error: any) {
     console.error('Sync error:', error);
     return {
@@ -1411,20 +1601,74 @@ export async function syncKibBToGoogleSheets(
 export async function syncBangunanToGoogleSheets(
   config: SyncConfig,
   items: BangunanItem[]
-): Promise<{ success: boolean; message: string; data?: any }> {
+): Promise<{ success: boolean; message: string; isOldScriptVersion?: boolean; data?: any }> {
   if (!config.webAppUrl) {
     return {
       success: false,
       message: 'URL Google Apps Script belum diisi di Pengaturan.'
     };
   }
+
+  const mappedItems = (items || []).map((item, idx) => ({
+    id: item.id || `bgn-${Date.now()}-${idx}`,
+    no: item.no !== undefined && item.no !== null ? item.no : (idx + 1),
+    'No': item.no !== undefined && item.no !== null ? item.no : (idx + 1),
+    namaBangunan: item.namaBangunan,
+    'Nama Bangunan': item.namaBangunan,
+    kodeBangunan: item.kodeBangunan || '',
+    'Kode Bangunan': item.kodeBangunan || '',
+    tahunPembangunan: item.tahunPembangunan || '',
+    'Tahun Pembangunan': item.tahunPembangunan || '',
+    luasTapak: item.luasTapak || '',
+    'Luas Tapak': item.luasTapak || '',
+    jumlahLantai: item.jumlahLantai || '1',
+    'Jumlah Lantai': item.jumlahLantai || '1',
+    jumlahRuang: item.jumlahRuang || '1',
+    'Jumlah Ruang': item.jumlahRuang || '1',
+    kondisi: item.kondisi || 'Tidak ada kerusakan',
+    'Kondisi': item.kondisi || 'Tidak ada kerusakan',
+    bobotKerusakan: item.bobotKerusakan || '0.0',
+    'Bobot Kerusakan': item.bobotKerusakan || '0.0',
+    keterangan: item.keterangan || '',
+    'Keterangan': item.keterangan || ''
+  }));
+
   const payload = {
     type: 'SYNC_BANGUNAN',
     spreadsheetUrl: config.spreadsheetUrl || '',
-    payload: items,
+    payload: mappedItems,
+    bangunan: mappedItems,
     timestamp: new Date().toLocaleString('id-ID')
   };
-  return await callProxyOrDirectPost(config.webAppUrl, payload);
+
+  // Kirim dengan tipe SYNC_BANGUNAN agar kompatibel dengan skrip versi lama dan baru
+  const res = await callProxyOrDirectPost(config.webAppUrl, payload);
+
+  // Failsafe: Juga kirim SYNC_ALL dengan properti bangunan jika skrip telah diperbarui ke v3.6
+  try {
+    const fallbackAllPayload = {
+      type: 'SYNC_ALL',
+      spreadsheetUrl: config.spreadsheetUrl || '',
+      bangunan: mappedItems,
+      timestamp: new Date().toLocaleString('id-ID')
+    };
+    await callProxyOrDirectPost(config.webAppUrl, fallbackAllPayload);
+  } catch (e) {}
+
+  const rawMsg = String((res.data && res.data.message) || res.message || '');
+  const version = String((res.data && res.data.version) || '');
+  const isOldVersion = version === '2026.3.3' || (rawMsg.includes('Siswa, Alumni, PTK, Sarpras') && !rawMsg.toLowerCase().includes('bangunan'));
+
+  if (isOldVersion) {
+    return {
+      success: false,
+      isOldScriptVersion: true,
+      message: 'Google Apps Script yang terpasang di Spreadsheet Anda masih versi v2026.3.3 (belum memiliki lembar Data_Bangunan). Silakan salin kode Apps Script v3.6 di menu Pengaturan dan terapkan Versi Baru (Deploy New Version) di editor Apps Script Anda.',
+      data: res.data
+    };
+  }
+
+  return res;
 }
 
 /**
@@ -1433,20 +1677,80 @@ export async function syncBangunanToGoogleSheets(
 export async function syncRuangToGoogleSheets(
   config: SyncConfig,
   items: RuangItem[]
-): Promise<{ success: boolean; message: string; data?: any }> {
+): Promise<{ success: boolean; message: string; isOldScriptVersion?: boolean; data?: any }> {
   if (!config.webAppUrl) {
     return {
       success: false,
       message: 'URL Google Apps Script belum diisi di Pengaturan.'
     };
   }
+
+  const mappedItems = (items || []).map((item, idx) => ({
+    id: item.id || `rng-${Date.now()}-${idx}`,
+    no: item.no !== undefined && item.no !== null ? item.no : (idx + 1),
+    'No': item.no !== undefined && item.no !== null ? item.no : (idx + 1),
+    jenisPrasarana: item.jenisPrasarana,
+    'Jenis Prasarana': item.jenisPrasarana,
+    namaBangunan: item.namaBangunan,
+    'Nama Bangunan': item.namaBangunan,
+    namaRuang: item.namaRuang,
+    'Nama Ruang': item.namaRuang,
+    kodeRuang: item.kodeRuang || '',
+    'Kode Ruang': item.kodeRuang || '',
+    lantai: item.lantai || '1',
+    'Lantai': item.lantai || '1',
+    panjang: item.panjang || '',
+    'Panjang': item.panjang || '',
+    lebar: item.lebar || '',
+    'Lebar': item.lebar || '',
+    luas: item.luas || '',
+    'Luas': item.luas || '',
+    bobotKerusakan: item.bobotKerusakan || '0.0',
+    'Bobot Kerusakan': item.bobotKerusakan || '0.0',
+    klasifikasiKerusakan: item.klasifikasiKerusakan || 'Tidak Ada',
+    'Klasifikasi Kerusakan': item.klasifikasiKerusakan || 'Tidak Ada',
+    kondisi: item.kondisi || 'Baik',
+    'Kondisi': item.kondisi || 'Baik',
+    keterangan: item.keterangan || '',
+    'Keterangan': item.keterangan || ''
+  }));
+
   const payload = {
     type: 'SYNC_RUANG',
     spreadsheetUrl: config.spreadsheetUrl || '',
-    payload: items,
+    payload: mappedItems,
+    ruang: mappedItems,
     timestamp: new Date().toLocaleString('id-ID')
   };
-  return await callProxyOrDirectPost(config.webAppUrl, payload);
+
+  // Kirim dengan tipe SYNC_RUANG agar kompatibel dengan skrip versi lama dan baru
+  const res = await callProxyOrDirectPost(config.webAppUrl, payload);
+
+  // Failsafe: Juga kirim SYNC_ALL dengan properti ruang jika skrip telah diperbarui ke v3.6
+  try {
+    const fallbackAllPayload = {
+      type: 'SYNC_ALL',
+      spreadsheetUrl: config.spreadsheetUrl || '',
+      ruang: mappedItems,
+      timestamp: new Date().toLocaleString('id-ID')
+    };
+    await callProxyOrDirectPost(config.webAppUrl, fallbackAllPayload);
+  } catch (e) {}
+
+  const rawMsg = String((res.data && res.data.message) || res.message || '');
+  const version = String((res.data && res.data.version) || '');
+  const isOldVersion = version === '2026.3.3' || (rawMsg.includes('Siswa, Alumni, PTK, Sarpras') && !rawMsg.toLowerCase().includes('ruang'));
+
+  if (isOldVersion) {
+    return {
+      success: false,
+      isOldScriptVersion: true,
+      message: 'Google Apps Script yang terpasang di Spreadsheet Anda masih versi v2026.3.3 (belum memiliki lembar Data_Ruang). Silakan salin kode Apps Script v3.6 di menu Pengaturan dan terapkan Versi Baru (Deploy New Version) di editor Apps Script Anda.',
+      data: res.data
+    };
+  }
+
+  return res;
 }
 
 export function getSavedSyncConfig(): SyncConfig {
@@ -1500,26 +1804,22 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
     };
   }
 
-  const isLocal = typeof window !== 'undefined' && (
-    window.location.hostname === 'localhost' || 
-    window.location.hostname === '127.0.0.1' || 
-    window.location.hostname.includes('run.app')
-  );
-  const SHARED_BASE = 'https://ais-pre-rl7bj4twi2wve75vqpw7yr-169174220206.asia-east1.run.app';
+  const isWeb = typeof window !== 'undefined' && window.location.protocol.startsWith('http');
+  const baseOrigin = typeof window !== 'undefined' ? window.location.origin : '';
 
   // 1. Try server-side proxy endpoint first (Fast & avoids mobile browser CORS issues)
   try {
-    const proxyEndpoint = isLocal ? '/api/load-sheets' : `${SHARED_BASE}/api/load-sheets`;
+    const proxyEndpoint = isWeb ? `/api/load-sheets?t=${Date.now()}` : `${baseOrigin}/api/load-sheets?t=${Date.now()}`;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000); // 12 seconds max for mobile
+    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s for Google Apps Script data retrieval
 
     const proxyRes = await fetch(proxyEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         webAppUrl: normalizedWebAppUrl,
-        spreadsheetUrl: config.spreadsheetUrl || '',
-        spreadsheetId: config.spreadsheetUrl || ''
+        spreadsheetUrl: getFullSpreadsheetUrl(config.spreadsheetUrl || ''),
+        spreadsheetId: getFullSpreadsheetUrl(config.spreadsheetUrl || '')
       }),
       signal: controller.signal
     });
@@ -1539,12 +1839,13 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
   try {
     let getUrl = config.webAppUrl;
     if (config.spreadsheetUrl) {
+      const fullUrl = getFullSpreadsheetUrl(config.spreadsheetUrl);
       const separator = getUrl.includes('?') ? '&' : '?';
-      getUrl = `${getUrl}${separator}spreadsheetUrl=${encodeURIComponent(config.spreadsheetUrl)}&spreadsheetId=${encodeURIComponent(config.spreadsheetUrl)}`;
+      getUrl = `${getUrl}${separator}spreadsheetUrl=${encodeURIComponent(fullUrl)}&spreadsheetId=${encodeURIComponent(fullUrl)}&t=${Date.now()}`;
     }
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 seconds max
+    const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 seconds fallback
 
     const directRes = await fetch(getUrl, {
       method: 'GET',
@@ -1566,9 +1867,9 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
 
   // 3. Fallback to server cache (/api/app-data) so users on mobile never see empty data or wait endlessly
   try {
-    const cacheEndpoint = isLocal ? `/api/app-data?t=${Date.now()}` : `${SHARED_BASE}/api/app-data?t=${Date.now()}`;
+    const cacheEndpoint = isWeb ? `/api/app-data?t=${Date.now()}` : `${baseOrigin}/api/app-data?t=${Date.now()}`;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
 
     const cacheRes = await fetch(cacheEndpoint, { signal: controller.signal });
     clearTimeout(timeoutId);

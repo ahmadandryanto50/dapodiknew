@@ -586,8 +586,13 @@ export default function App() {
   };
 
   const getApiUrl = (path: string) => {
-    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.includes('run.app');
-    return isLocal ? path : `${SHARED_CONTAINER_URL}${path}`;
+    // If running in a standard web browser environment (HTTP/HTTPS), always use relative paths
+    // so it automatically resolves to the correct server (Dev or Production/Shared container) without CORS issues
+    if (window.location.protocol.startsWith('http')) {
+      return path;
+    }
+    // Only use the hardcoded fallback if opened as a local static file (e.g. file://)
+    return `${SHARED_CONTAINER_URL}${path}`;
   };
 
   // Save application data cache to server so that it is shared across all browsers/devices
@@ -1111,7 +1116,37 @@ export default function App() {
           isSyncingFromServerRef.current = true;
 
           if (Array.isArray(siswa)) {
-            const clean = sanitizeStudentDates(siswa);
+            // Merge with local students to prevent losing "Mutasi" (Siswa Keluar) and "Alumni" data when the spreadsheet doesn't return them
+            const localStudentsStr = localStorage.getItem(getStorageKey('dapodik_students'));
+            let localStudents: Student[] = [];
+            if (localStudentsStr) {
+              try {
+                localStudents = JSON.parse(localStudentsStr);
+              } catch (e) {
+                console.error("Failed to parse local students for merging:", e);
+              }
+            }
+            
+            // Build a map of loaded students by ID
+            const loadedMap = new Map(siswa.map(s => [s.id, s]));
+            const mergedStudents = [...siswa];
+            
+            // For any student in the local state but not in the loaded state, check if we need to preserve them
+            for (const localStudent of localStudents) {
+              if (localStudent && localStudent.id && !loadedMap.has(localStudent.id)) {
+                // Ignore initial mock students so they don't pollute real Google Spreadsheet data
+                if (localStudent.id.startsWith('std-imp-1789398207702-')) {
+                  continue;
+                }
+                // If they are Mutasi/Lulus, keep them!
+                const isNonActive = localStudent.status && localStudent.status !== 'Aktif';
+                if (isNonActive) {
+                  mergedStudents.push(localStudent);
+                }
+              }
+            }
+            
+            const clean = sanitizeStudentDates(mergedStudents);
             setStudents(clean);
             localStorage.setItem(getStorageKey('dapodik_students'), JSON.stringify(clean));
           }
@@ -1133,12 +1168,13 @@ export default function App() {
             kibBRef.current = clean;
             localStorage.setItem(getStorageKey('dapodik_kib_b'), JSON.stringify(clean));
           }
-          if (Array.isArray(pulledBangunan) && pulledBangunan.length > 0) {
+          // Cegah penimpalan data lokal dengan array kosong dari Spreadsheet yang belum tersinkronisasi
+          if (Array.isArray(pulledBangunan) && (pulledBangunan.length > 0 || bangunanRef.current.length === 0)) {
             setBangunan(pulledBangunan);
             bangunanRef.current = pulledBangunan;
             localStorage.setItem(getStorageKey('dapodik_bangunan'), JSON.stringify(pulledBangunan));
           }
-          if (Array.isArray(pulledRuang) && pulledRuang.length > 0) {
+          if (Array.isArray(pulledRuang) && (pulledRuang.length > 0 || ruangRef.current.length === 0)) {
             setRuang(pulledRuang);
             ruangRef.current = pulledRuang;
             localStorage.setItem(getStorageKey('dapodik_ruang'), JSON.stringify(pulledRuang));
@@ -2592,151 +2628,273 @@ export default function App() {
   };
 
   // Bangunan Handlers
-  const handleAddBangunan = (item: BangunanItem) => {
+  const handleAddBangunan = async (item: BangunanItem) => {
     lastLocalMutationRef.current = Date.now();
     const updated = [item, ...bangunan];
     setBangunan(updated);
     bangunanRef.current = updated;
     localStorage.setItem(getStorageKey('dapodik_bangunan'), JSON.stringify(updated));
-    showToast(`Bangunan "${item.namaBangunan}" berhasil ditambahkan...`);
+    showToast(`Bangunan "${item.namaBangunan}" disimpan lokal...`);
     
-    const currentCfg = getEffectiveSyncConfig();
-    if (currentCfg && currentCfg.webAppUrl) {
-      syncBangunanToGoogleSheets(currentCfg, updated);
-    }
+    // Simpan ke Cache Server & Notifikasi tanpa memicu full syncToGoogleSheets (cegah tabrakan)
     triggerAutoSync(
       students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators,
-      true, notificationsRef.current,
+      false, notificationsRef.current,
       {
         title: 'Tambah Bangunan',
-        message: `Bangunan "${item.namaBangunan}" berhasil disimpan ke database.`,
+        message: `Bangunan "${item.namaBangunan}" berhasil disimpan lokal.`,
         type: 'success'
       },
-      aplikasiLinks, schoolAccounts, kibB, false, updated, ruang
+      aplikasiLinks, schoolAccounts, kibB,
+      true, // skipSheetsSync = true
+      updated,
+      ruang
     );
+
+    const currentCfg = getEffectiveSyncConfig();
+    if (currentCfg && currentCfg.webAppUrl) {
+      setIsSyncing(true);
+      showToast(`Menyinkronkan Bangunan "${item.namaBangunan}" ke Google Spreadsheet...`);
+      try {
+        const res = await syncBangunanToGoogleSheets(currentCfg, updated);
+        if (res && res.success) {
+          showToast(`✅ Berhasil: Bangunan "${item.namaBangunan}" disimpan ke Google Spreadsheet!`);
+          try { (window as any).confetti?.({ particleCount: 30, spread: 40 }); } catch (e) {}
+        } else if (res && (res as any).isOldScriptVersion) {
+          showToast(`⚠️ Tersimpan di Database Aplikasi! Untuk masuk ke Google Spreadsheet, silakan salin kode Apps Script v3.6 di menu Pengaturan dan Deploy New Version.`);
+        } else {
+          showToast(`⚠️ Simpan lokal berhasil, tapi belum ke Spreadsheet: ${res.message || 'Cek konfigurasi Web App'}`);
+        }
+      } catch (err: any) {
+        showToast(`❌ Gagal sinkronisasi ke Spreadsheet: ${err.message || 'Cek URL Web App di Pengaturan'}`);
+      } finally {
+        setIsSyncing(false);
+      }
+    } else {
+      showToast(`ℹ️ Bangunan "${item.namaBangunan}" disimpan secara lokal.`);
+    }
   };
 
-  const handleUpdateBangunan = (item: BangunanItem) => {
+  const handleUpdateBangunan = async (item: BangunanItem) => {
     lastLocalMutationRef.current = Date.now();
     const updated = bangunan.map(b => b.id === item.id ? item : b);
     setBangunan(updated);
     bangunanRef.current = updated;
     localStorage.setItem(getStorageKey('dapodik_bangunan'), JSON.stringify(updated));
-    showToast(`Data Bangunan "${item.namaBangunan}" diperbarui...`);
+    showToast(`Data Bangunan "${item.namaBangunan}" diperbarui lokal...`);
+
+    triggerAutoSync(
+      students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators,
+      false, notificationsRef.current,
+      {
+        title: 'Update Bangunan',
+        message: `Data Bangunan "${item.namaBangunan}" diperbarui lokal.`,
+        type: 'info'
+      },
+      aplikasiLinks, schoolAccounts, kibB,
+      true, // skipSheetsSync = true
+      updated,
+      ruang
+    );
 
     const currentCfg = getEffectiveSyncConfig();
     if (currentCfg && currentCfg.webAppUrl) {
-      syncBangunanToGoogleSheets(currentCfg, updated);
+      setIsSyncing(true);
+      showToast(`Menyinkronkan pembaruan Bangunan "${item.namaBangunan}" ke Google Spreadsheet...`);
+      try {
+        const res = await syncBangunanToGoogleSheets(currentCfg, updated);
+        if (res && res.success) {
+          showToast(`✅ Berhasil: Pembaruan Bangunan "${item.namaBangunan}" disimpan ke Google Spreadsheet!`);
+        } else if (res && (res as any).isOldScriptVersion) {
+          showToast(`⚠️ Diperbarui di Database Aplikasi! Untuk masuk ke Spreadsheet, perbarui kode Apps Script ke v3.6 di menu Pengaturan.`);
+        } else {
+          showToast(`⚠️ Diperbarui lokal, tapi gagal sinkron ke Spreadsheet: ${res.message || 'Cek konfigurasi Web App'}`);
+        }
+      } catch (err: any) {
+        showToast(`❌ Gagal sinkronisasi ke Spreadsheet: ${err.message || 'Cek URL Web App'}`);
+      } finally {
+        setIsSyncing(false);
+      }
     }
-    triggerAutoSync(
-      students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators,
-      true, notificationsRef.current,
-      {
-        title: 'Update Bangunan',
-        message: `Data Bangunan "${item.namaBangunan}" diperbarui.`,
-        type: 'info'
-      },
-      aplikasiLinks, schoolAccounts, kibB, false, updated, ruang
-    );
   };
 
-  const handleDeleteBangunan = (id: string) => {
+  const handleDeleteBangunan = async (id: string) => {
     lastLocalMutationRef.current = Date.now();
     const target = bangunan.find(b => b.id === id);
     const updated = bangunan.filter(b => b.id !== id);
     setBangunan(updated);
     bangunanRef.current = updated;
     localStorage.setItem(getStorageKey('dapodik_bangunan'), JSON.stringify(updated));
-    showToast('Data Bangunan berhasil dihapus...');
+    showToast('Data Bangunan dihapus lokal...');
 
-    const currentCfg = getEffectiveSyncConfig();
-    if (currentCfg && currentCfg.webAppUrl) {
-      syncBangunanToGoogleSheets(currentCfg, updated);
-    }
     triggerAutoSync(
       students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators,
-      true, notificationsRef.current,
+      false, notificationsRef.current,
       {
         title: 'Hapus Bangunan',
         message: `Bangunan "${target?.namaBangunan || id}" dihapus.`,
         type: 'warning'
       },
-      aplikasiLinks, schoolAccounts, kibB, false, updated, ruang
+      aplikasiLinks, schoolAccounts, kibB,
+      true, // skipSheetsSync = true
+      updated,
+      ruang
     );
+
+    const currentCfg = getEffectiveSyncConfig();
+    if (currentCfg && currentCfg.webAppUrl) {
+      setIsSyncing(true);
+      showToast('Menyinkronkan penghapusan Bangunan ke Google Spreadsheet...');
+      try {
+        const res = await syncBangunanToGoogleSheets(currentCfg, updated);
+        if (res && res.success) {
+          showToast('✅ Berhasil: Penghapusan Bangunan disimpan ke Google Spreadsheet!');
+        } else if (res && (res as any).isOldScriptVersion) {
+          showToast(`⚠️ Dihapus di Database Aplikasi! Untuk sinkronisasi ke Spreadsheet, perbarui kode Apps Script ke v3.6 di menu Pengaturan.`);
+        } else {
+          showToast(`⚠️ Dihapus lokal, tapi gagal sinkron ke Spreadsheet: ${res.message || 'Cek konfigurasi Web App'}`);
+        }
+      } catch (err: any) {
+        showToast(`❌ Gagal sinkronisasi ke Spreadsheet: ${err.message || 'Cek URL Web App'}`);
+      } finally {
+        setIsSyncing(false);
+      }
+    }
   };
 
   // Ruang Handlers
-  const handleAddRuang = (item: RuangItem) => {
+  const handleAddRuang = async (item: RuangItem) => {
     lastLocalMutationRef.current = Date.now();
     const updated = [item, ...ruang];
     setRuang(updated);
     ruangRef.current = updated;
     localStorage.setItem(getStorageKey('dapodik_ruang'), JSON.stringify(updated));
-    showToast(`Ruang "${item.namaRuang}" berhasil ditambahkan...`);
+    showToast(`Ruang "${item.namaRuang}" disimpan lokal...`);
+
+    // Simpan ke Cache Server & Notifikasi tanpa memicu full syncToGoogleSheets (cegah tabrakan)
+    triggerAutoSync(
+      students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators,
+      false, notificationsRef.current,
+      {
+        title: 'Tambah Ruang',
+        message: `Ruang "${item.namaRuang}" berhasil disimpan lokal.`,
+        type: 'success'
+      },
+      aplikasiLinks, schoolAccounts, kibB,
+      true, // skipSheetsSync = true
+      bangunan,
+      updated
+    );
 
     const currentCfg = getEffectiveSyncConfig();
     if (currentCfg && currentCfg.webAppUrl) {
-      syncRuangToGoogleSheets(currentCfg, updated);
+      setIsSyncing(true);
+      showToast(`Menyinkronkan Ruang "${item.namaRuang}" ke Google Spreadsheet...`);
+      try {
+        const res = await syncRuangToGoogleSheets(currentCfg, updated);
+        if (res && res.success) {
+          showToast(`✅ Berhasil: Ruang "${item.namaRuang}" disimpan ke Google Spreadsheet!`);
+          try { (window as any).confetti?.({ particleCount: 30, spread: 40 }); } catch (e) {}
+        } else if (res && (res as any).isOldScriptVersion) {
+          showToast(`⚠️ Tersimpan di Database Aplikasi! Untuk masuk ke Google Spreadsheet, silakan salin kode Apps Script v3.6 di menu Pengaturan dan Deploy New Version.`);
+        } else {
+          showToast(`⚠️ Simpan lokal berhasil, tapi belum ke Spreadsheet: ${res.message || 'Cek konfigurasi Web App'}`);
+        }
+      } catch (err: any) {
+        showToast(`❌ Gagal sinkronisasi ke Spreadsheet: ${err.message || 'Cek URL Web App di Pengaturan'}`);
+      } finally {
+        setIsSyncing(false);
+      }
+    } else {
+      showToast(`ℹ️ Ruang "${item.namaRuang}" disimpan secara lokal.`);
     }
-    triggerAutoSync(
-      students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators,
-      true, notificationsRef.current,
-      {
-        title: 'Tambah Ruang',
-        message: `Ruang "${item.namaRuang}" berhasil disimpan ke database.`,
-        type: 'success'
-      },
-      aplikasiLinks, schoolAccounts, kibB, false, bangunan, updated
-    );
   };
 
-  const handleUpdateRuang = (item: RuangItem) => {
+  const handleUpdateRuang = async (item: RuangItem) => {
     lastLocalMutationRef.current = Date.now();
     const updated = ruang.map(r => r.id === item.id ? item : r);
     setRuang(updated);
     ruangRef.current = updated;
     localStorage.setItem(getStorageKey('dapodik_ruang'), JSON.stringify(updated));
-    showToast(`Data Ruang "${item.namaRuang}" diperbarui...`);
+    showToast(`Data Ruang "${item.namaRuang}" diperbarui lokal...`);
+
+    triggerAutoSync(
+      students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators,
+      false, notificationsRef.current,
+      {
+        title: 'Update Ruang',
+        message: `Data Ruang "${item.namaRuang}" diperbarui lokal.`,
+        type: 'info'
+      },
+      aplikasiLinks, schoolAccounts, kibB,
+      true, // skipSheetsSync = true
+      bangunan,
+      updated
+    );
 
     const currentCfg = getEffectiveSyncConfig();
     if (currentCfg && currentCfg.webAppUrl) {
-      syncRuangToGoogleSheets(currentCfg, updated);
+      setIsSyncing(true);
+      showToast(`Menyinkronkan pembaruan Ruang "${item.namaRuang}" ke Google Spreadsheet...`);
+      try {
+        const res = await syncRuangToGoogleSheets(currentCfg, updated);
+        if (res && res.success) {
+          showToast(`✅ Berhasil: Pembaruan Ruang "${item.namaRuang}" disimpan ke Google Spreadsheet!`);
+        } else if (res && (res as any).isOldScriptVersion) {
+          showToast(`⚠️ Diperbarui di Database Aplikasi! Untuk masuk ke Spreadsheet, perbarui kode Apps Script ke v3.6 di menu Pengaturan.`);
+        } else {
+          showToast(`⚠️ Diperbarui lokal, tapi gagal sinkron ke Spreadsheet: ${res.message || 'Cek konfigurasi Web App'}`);
+        }
+      } catch (err: any) {
+        showToast(`❌ Gagal sinkronisasi ke Spreadsheet: ${err.message || 'Cek URL Web App'}`);
+      } finally {
+        setIsSyncing(false);
+      }
     }
-    triggerAutoSync(
-      students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators,
-      true, notificationsRef.current,
-      {
-        title: 'Update Ruang',
-        message: `Data Ruang "${item.namaRuang}" diperbarui.`,
-        type: 'info'
-      },
-      aplikasiLinks, schoolAccounts, kibB, false, bangunan, updated
-    );
   };
 
-  const handleDeleteRuang = (id: string) => {
+  const handleDeleteRuang = async (id: string) => {
     lastLocalMutationRef.current = Date.now();
     const target = ruang.find(r => r.id === id);
     const updated = ruang.filter(r => r.id !== id);
     setRuang(updated);
     ruangRef.current = updated;
     localStorage.setItem(getStorageKey('dapodik_ruang'), JSON.stringify(updated));
-    showToast('Data Ruang berhasil dihapus...');
+    showToast('Data Ruang dihapus lokal...');
 
-    const currentCfg = getEffectiveSyncConfig();
-    if (currentCfg && currentCfg.webAppUrl) {
-      syncRuangToGoogleSheets(currentCfg, updated);
-    }
     triggerAutoSync(
       students, teachers, sarpras, reports, displayConfig, schoolProfile, administrators,
-      true, notificationsRef.current,
+      false, notificationsRef.current,
       {
         title: 'Hapus Ruang',
         message: `Ruang "${target?.namaRuang || id}" dihapus.`,
         type: 'warning'
       },
-      aplikasiLinks, schoolAccounts, kibB, false, bangunan, updated
+      aplikasiLinks, schoolAccounts, kibB,
+      true, // skipSheetsSync = true
+      bangunan,
+      updated
     );
+
+    const currentCfg = getEffectiveSyncConfig();
+    if (currentCfg && currentCfg.webAppUrl) {
+      setIsSyncing(true);
+      showToast('Menyinkronkan penghapusan Ruang ke Google Spreadsheet...');
+      try {
+        const res = await syncRuangToGoogleSheets(currentCfg, updated);
+        if (res && res.success) {
+          showToast('✅ Berhasil: Penghapusan Ruang disimpan ke Google Spreadsheet!');
+        } else if (res && (res as any).isOldScriptVersion) {
+          showToast(`⚠️ Dihapus di Database Aplikasi! Untuk sinkronisasi ke Spreadsheet, perbarui kode Apps Script ke v3.6 di menu Pengaturan.`);
+        } else {
+          showToast(`⚠️ Dihapus lokal, tapi gagal sinkron ke Spreadsheet: ${res.message || 'Cek konfigurasi Web App'}`);
+        }
+      } catch (err: any) {
+        showToast(`❌ Gagal sinkronisasi ke Spreadsheet: ${err.message || 'Cek URL Web App'}`);
+      } finally {
+        setIsSyncing(false);
+      }
+    }
   };
 
   // Reports Handlers
