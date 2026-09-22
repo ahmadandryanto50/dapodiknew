@@ -1562,7 +1562,11 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
                   </div>
                   <div>
                     <span className="text-slate-500 block text-[10px]">Titik Koordinat (Lintang, Bujur)</span>
-                    <span className="font-semibold text-slate-900 font-mono">{selectedStudentForDetail.lintang || '-'}, {selectedStudentForDetail.bujur || '-'}</span>
+                    <span className="font-semibold text-slate-900 font-mono">
+                      {selectedStudentForDetail.lintang || selectedStudentForDetail.bujur
+                        ? `${selectedStudentForDetail.lintang || '-'}, ${selectedStudentForDetail.bujur || '-'}`
+                        : '-'}
+                    </span>
                   </div>
                   <div>
                     <span className="text-slate-500 block text-[10px]">Jarak Rumah Ke Sekolah</span>
@@ -1672,7 +1676,9 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
                   </div>
                   <div>
                     <span className="text-slate-500 block text-[10px]">Anak ke / Jumlah Saudara</span>
-                    <span className="font-semibold text-slate-900">Anak ke-{selectedStudentForDetail.anakKeBerapa || '1'} dari {selectedStudentForDetail.jmlSaudaraKandung || '1'} bersaudara</span>
+                    <span className="font-semibold text-slate-900">
+                      Anak ke-{selectedStudentForDetail.anakKeBerapa || '-'} dari {selectedStudentForDetail.jmlSaudaraKandung || '0'} bersaudara
+                    </span>
                   </div>
                   <div>
                     <span className="text-slate-500 block text-[10px]">Sekolah Asal</span>
@@ -1960,6 +1966,37 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
                           placeholder="Kode Pos"
                         />
                       </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-700 font-medium mb-1">Titik Koordinat (Lintang & Bujur)</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="text"
+                          value={formData.lintang || ''}
+                          onChange={(e) => setFormData({ ...formData, lintang: e.target.value })}
+                          className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:bg-white focus:border-sky-500 focus:outline-none font-mono"
+                          placeholder="Lintang (-0.802319)"
+                        />
+                        <input
+                          type="text"
+                          value={formData.bujur || ''}
+                          onChange={(e) => setFormData({ ...formData, bujur: e.target.value })}
+                          className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:bg-white focus:border-sky-500 focus:outline-none font-mono"
+                          placeholder="Bujur (120.175924)"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-700 font-medium mb-1">No Kartu Keluarga (KK)</label>
+                      <input
+                        type="text"
+                        value={formData.noKk || ''}
+                        onChange={(e) => setFormData({ ...formData, noKk: e.target.value })}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:bg-white focus:border-sky-500 focus:outline-none font-mono"
+                        placeholder="720801xxxxxxxxxx"
+                      />
                     </div>
                   </div>
                 </div>

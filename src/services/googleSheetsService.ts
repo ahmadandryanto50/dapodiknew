@@ -1253,6 +1253,18 @@ export function normalizeStudentObject(raw: any, defaultStatus: 'Aktif' | 'Mutas
   const alasanKeluar = getVal('alasanKeluar', 'Alasan Keluar', 'Alasan Keluar / Mutasi', 'Alasan Mutasi', 'alasan_keluar', 'Keterangan Mutasi', 'alasanKeluarMutasi');
   const tahunLulus = getVal('tahunLulus', 'Tahun Lulus', 'tahun_lulus', 'Tahun Kelulusan');
 
+  // Parse coordinates with support for individual Lintang/Bujur or combined Titik Koordinat strings
+  let lintang = getVal('lintang', 'Lintang', 'Titik Lintang', 'Koordinat Lintang', 'Latitude', 'Lat');
+  let bujur = getVal('bujur', 'Bujur', 'Titik Bujur', 'Koordinat Bujur', 'Longitude', 'Long', 'Lng');
+  if (!lintang || !bujur) {
+    const rawCoord = getVal('titikKoordinat', 'Titik Koordinat', 'Koordinat', 'Titik Koordinat (Lintang, Bujur)', 'Koordinat (Lintang, Bujur)', 'Lintang, Bujur');
+    if (rawCoord && rawCoord.includes(',')) {
+      const parts = rawCoord.split(',');
+      if (!lintang && parts[0]) lintang = parts[0].trim();
+      if (!bujur && parts[1]) bujur = parts[1].trim();
+    }
+  }
+
   return {
     id,
     nama,
@@ -1278,9 +1290,9 @@ export function normalizeStudentObject(raw: any, defaultStatus: 'Aktif' | 'Mutas
     telepon: getVal('telepon', 'Telepon', 'No Telepon', 'Telepon Rumah'),
     hp: getVal('hp', 'HP', 'No HP', 'Nomor HP', 'Handphone'),
     email: getVal('email', 'Email', 'E-Mail', 'Surel'),
-    skhun: getVal('skhun', 'SKHUN', 'No SKHUN'),
-    penerimaKps: getVal('penerimaKps', 'Penerima KPS', 'Penerima KPS/PKH'),
-    noKps: getVal('noKps', 'No. KPS', 'No KPS', 'Nomor KPS'),
+    skhun: getVal('skhun', 'SKHUN', 'No SKHUN', 'No. SKHUN', 'Nomor SKHUN'),
+    penerimaKps: getVal('penerimaKps', 'Penerima KPS', 'Penerima KPS/PKH', 'KPS'),
+    noKps: getVal('noKps', 'No. KPS', 'No KPS', 'Nomor KPS', 'Nomor KPS/PKH'),
     namaAyah: getVal('namaAyah', 'Nama Ayah', 'Nama Ayah Kandung'),
     tahunLahirAyah: getVal('tahunLahirAyah', 'Tahun Lahir Ayah'),
     jenjangPendidikanAyah: getVal('jenjangPendidikanAyah', 'Jenjang Pendidikan Ayah', 'Pendidikan Ayah'),
@@ -1299,29 +1311,29 @@ export function normalizeStudentObject(raw: any, defaultStatus: 'Aktif' | 'Mutas
     penghasilanWali: getVal('penghasilanWali', 'Penghasilan Wali'),
     nikWali: getVal('nikWali', 'NIK Wali', 'NIK wali'),
     rombelSaatIni: getVal('rombelSaatIni', 'Rombel Saat Ini') || rombel,
-    noPesertaUn: getVal('noPesertaUn', 'No Peserta Ujian Nasional', 'No Peserta UN', 'Nomor Peserta UN'),
-    noSeriIjazah: getVal('noSeriIjazah', 'No Seri Ijazah', 'No. Seri Ijazah', 'Nomor Ijazah'),
-    penerimaKip: getVal('penerimaKip', 'Penerima KIP'),
-    nomorKip: getVal('nomorKip', 'Nomor KIP', 'No KIP'),
-    namaDiKip: getVal('namaDiKip', 'Nama di KIP', 'Nama Di KIP'),
-    nomorKks: getVal('nomorKks', 'Nomor KKS', 'No KKS'),
-    noRegistrasiAktaLahir: getVal('noRegistrasiAktaLahir', 'No Registrasi Akta Lahir', 'No Akta Lahir'),
-    bank: getVal('bank', 'Bank', 'Nama Bank'),
-    nomorRekeningBank: getVal('nomorRekeningBank', 'Nomor Rekening Bank', 'No Rekening'),
-    rekeningAtasNama: getVal('rekeningAtasNama', 'Rekening Atas Nama', 'Nama Rekening'),
-    layakPip: getVal('layakPip', 'Layak PIP (usulan dari sekolah)', 'Layak PIP'),
-    alasanLayakPip: getVal('alasanLayakPip', 'Alasan Layak PIP'),
-    kebutuhanKhusus: getVal('kebutuhanKhusus', 'Kebutuhan Khusus'),
-    sekolahAsal: getVal('sekolahAsal', 'Sekolah Asal', 'Asal Sekolah'),
-    anakKeBerapa: getVal('anakKeBerapa', 'Anak ke-berapa', 'Anak Ke-berapa', 'Anak Keberapa'),
-    lintang: getVal('lintang', 'Lintang'),
-    bujur: getVal('bujur', 'Bujur'),
-    noKk: getVal('noKk', 'No KK', 'Nomor KK', 'No. KK'),
-    beratBadan: getVal('beratBadan', 'Berat Badan', 'BB'),
-    tinggiBadan: getVal('tinggiBadan', 'Tinggi Badan', 'TB'),
-    lingkarKepala: getVal('lingkarKepala', 'Lingkar Kepala'),
-    jmlSaudaraKandung: getVal('jmlSaudaraKandung', 'Jml. Saudara Kandung', 'Jumlah Saudara Kandung'),
-    jarakRumahKeSekolah: getVal('jarakRumahKeSekolah', 'Jarak Rumah Ke Sekolah (KM)', 'Jarak Rumah ke Sekolah'),
+    noPesertaUn: getVal('noPesertaUn', 'No Peserta Ujian Nasional', 'No Peserta UN', 'Nomor Peserta UN', 'No. Peserta UN', 'Nomor Peserta Ujian Nasional'),
+    noSeriIjazah: getVal('noSeriIjazah', 'No Seri Ijazah', 'No. Seri Ijazah', 'Nomor Ijazah', 'No Ijazah', 'Nomor Seri Ijazah'),
+    penerimaKip: getVal('penerimaKip', 'Penerima KIP', 'KIP', 'Penerima KIP (Ya/Tidak)'),
+    nomorKip: getVal('nomorKip', 'Nomor KIP', 'No KIP', 'No. KIP', 'Nomor Kartu Indonesia Pintar'),
+    namaDiKip: getVal('namaDiKip', 'Nama di KIP', 'Nama Di KIP', 'Nama Tertera di KIP', 'Nama Pada KIP', 'Nama Siswa di KIP'),
+    nomorKks: getVal('nomorKks', 'Nomor KKS', 'No KKS', 'No. KKS'),
+    noRegistrasiAktaLahir: getVal('noRegistrasiAktaLahir', 'No Registrasi Akta Lahir', 'No. Registrasi Akta Lahir', 'No Registrasi Akta Kelahiran', 'No Akta Lahir', 'Nomor Akta Lahir'),
+    bank: getVal('bank', 'Bank', 'Nama Bank', 'Bank Penyalur'),
+    nomorRekeningBank: getVal('nomorRekeningBank', 'Nomor Rekening Bank', 'No Rekening Bank', 'No Rekening', 'Nomor Rekening', 'No. Rekening'),
+    rekeningAtasNama: getVal('rekeningAtasNama', 'Rekening Atas Nama', 'Nama Rekening', 'Atas Nama Rekening', 'Nama Pemilik Rekening'),
+    layakPip: getVal('layakPip', 'Layak PIP (usulan dari sekolah)', 'Layak PIP (Usulan Sekolah)', 'Layak PIP', 'Usulan PIP', 'Status PIP'),
+    alasanLayakPip: getVal('alasanLayakPip', 'Alasan Layak PIP', 'Alasan PIP', 'Alasan Menerima PIP'),
+    kebutuhanKhusus: getVal('kebutuhanKhusus', 'Kebutuhan Khusus', 'Berkebutuhan Khusus'),
+    sekolahAsal: getVal('sekolahAsal', 'Sekolah Asal', 'Asal Sekolah', 'Nama Sekolah Asal', 'Nama Asal Sekolah', 'Asal SD', 'SD Asal', 'Asal SMP', 'SMP Asal', 'Sekolah Sebelumnya'),
+    anakKeBerapa: getVal('anakKeBerapa', 'Anak ke-berapa', 'Anak Ke-berapa', 'Anak Keberapa', 'Anak Ke', 'Anak ke', 'Anak ke-', 'Anak Ke-', 'Anak Ke (dari)'),
+    lintang,
+    bujur,
+    noKk: getVal('noKk', 'No KK', 'Nomor KK', 'No. KK', 'No Kartu Keluarga', 'Nomor Kartu Keluarga', 'No. Kartu Keluarga', 'No KK (Kartu Keluarga)', 'Kartu Keluarga'),
+    beratBadan: getVal('beratBadan', 'Berat Badan', 'Berat Badan (kg)', 'BB', 'BB (kg)'),
+    tinggiBadan: getVal('tinggiBadan', 'Tinggi Badan', 'Tinggi Badan (cm)', 'TB', 'TB (cm)'),
+    lingkarKepala: getVal('lingkarKepala', 'Lingkar Kepala', 'Lingkar Kepala (cm)', 'LK', 'LK (cm)'),
+    jmlSaudaraKandung: getVal('jmlSaudaraKandung', 'Jml. Saudara Kandung', 'Jml Saudara Kandung', 'Jumlah Saudara Kandung', 'Jumlah Saudara', 'Jml Saudara', 'Jml. Saudara', 'Saudara Kandung', 'Total Saudara'),
+    jarakRumahKeSekolah: getVal('jarakRumahKeSekolah', 'Jarak Rumah Ke Sekolah (KM)', 'Jarak Rumah ke Sekolah', 'Jarak ke Sekolah', 'Jarak', 'Jarak (KM)'),
     alasanKeluar,
     tahunLulus
   };
