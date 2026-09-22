@@ -79,10 +79,22 @@ function setupDapodikFolders() {
 }
 
 // Header Baku Setiap Sheet Database
+const FULL_STUDENT_HEADERS = [
+  'id', 'nisn', 'nik', 'nama', 'jenisKelamin', 'tempatLahir', 'tanggalLahir', 'rombel', 'namaIbu', 'alamat', 
+  'status', 'agama', 'nis', 'rt', 'rw', 'dusun', 'kelurahan', 'kecamatan', 'kodePos', 'jenisTinggal', 
+  'alatTransportasi', 'telepon', 'hp', 'email', 'skhun', 'penerimaKps', 'noKps', 'namaAyah', 'tahunLahirAyah', 
+  'jenjangPendidikanAyah', 'pekerjaanAyah', 'penghasilanAyah', 'nikAyah', 'tahunLahirIbu', 'jenjangPendidikanIbu', 
+  'pekerjaanIbu', 'penghasilanIbu', 'nikIbu', 'namaWali', 'tahunLahirWali', 'jenjangPendidikanWali', 
+  'pekerjaanWali', 'penghasilanWali', 'nikWali', 'rombelSaatIni', 'noPesertaUn', 'noSeriIjazah', 'penerimaKip', 
+  'nomorKip', 'namaDiKip', 'nomorKks', 'noRegistrasiAktaLahir', 'bank', 'nomorRekeningBank', 'rekeningAtasNama', 
+  'layakPip', 'alasanLayakPip', 'kebutuhanKhusus', 'sekolahAsal', 'anakKeBerapa', 'lintang', 'bujur', 'noKk', 
+  'beratBadan', 'tinggiBadan', 'lingkarKepala', 'jmlSaudaraKandung', 'jarakRumahKeSekolah', 'alasanKeluar', 'tahunLulus'
+];
+
 const HEADERS_MAP = {
-  'Data_Siswa': ['id', 'nisn', 'nik', 'nama', 'jenisKelamin', 'tempatLahir', 'tanggalLahir', 'rombel', 'namaIbu', 'alamat', 'status', 'agama', 'nis', 'rt', 'rw', 'dusun', 'kelurahan', 'kecamatan', 'kodePos', 'jenisTinggal', 'alatTransportasi', 'telepon', 'hp', 'email', 'skhun', 'penerimaKps', 'noKps', 'namaAyah', 'nikAyah', 'pekerjaanAyah', 'namaIbu', 'nikIbu', 'pekerjaanIbu', 'rombelSaatIni', 'layakPip', 'alasanLayakPip', 'noKk', 'beratBadan', 'tinggiBadan', 'lingkarKepala', 'jmlSaudaraKandung', 'jarakRumahKeSekolah', 'alasanKeluar', 'tahunLulus', 'noSeriIjazah'],
-  'Data_Siswa_Keluar': ['id', 'nisn', 'nik', 'nama', 'jenisKelamin', 'tempatLahir', 'tanggalLahir', 'rombel', 'namaIbu', 'alamat', 'status', 'alasanKeluar', 'agama', 'nis', 'hp', 'email', 'namaAyah', 'nikAyah'],
-  'Data_Alumni': ['id', 'nisn', 'nik', 'nama', 'jenisKelamin', 'tempatLahir', 'tanggalLahir', 'rombel', 'tahunLulus', 'noSeriIjazah', 'namaIbu', 'namaAyah', 'alamat', 'hp', 'status', 'alasanKeluar', 'agama', 'nis', 'skhun', 'sekolahAsal'],
+  'Data_Siswa': FULL_STUDENT_HEADERS,
+  'Data_Siswa_Keluar': FULL_STUDENT_HEADERS,
+  'Data_Alumni': FULL_STUDENT_HEADERS,
   'Data_PTK': ['id', 'nuptk', 'nip', 'nama', 'jenisKelamin', 'statusKepegawaian', 'jenisPtk', 'mapel', 'pendidikanTerakhir', 'noHp', 'email', 'statusSertifikasi', 'tempatLahir', 'tanggalLahir', 'agama', 'alamatJalan', 'rt', 'rw', 'namaDusun', 'desaKelurahan', 'kecamatan', 'kodePos', 'tugasTambahan', 'skCpns', 'tanggalCpns', 'skPengangkatan', 'tmtPengangkatan', 'pangkatGolongan', 'nik', 'noKk'],
   'Data_Sarpras': ['id', 'kodeBarang', 'namaBarang', 'kategori', 'kondisi', 'jumlah', 'satuan', 'letakRuang', 'tahunPengadaan', 'layakPakai'],
   'Data_Bangunan': ['id', 'no', 'namaBangunan', 'kodeBangunan', 'tahunPembangunan', 'luasTapak', 'jumlahLantai', 'jumlahRuang', 'kondisi', 'bobotKerusakan', 'keterangan'],
@@ -643,6 +655,76 @@ function saveSheetData(ss, sheetName, items, fallbackHeaders) {
         else if (key === 'Tanggal') val = items[i]['uploadedAt'] || items[i]['UploadedAt'];
         else if (key === 'Link Drive') val = items[i]['driveFileUrl'] || items[i]['DriveFileUrl'] || items[i]['url'];
         else if (key === 'Ukuran File') val = items[i]['fileSize'] || items[i]['FileSize'] || items[i]['size'];
+        // Student field aliases (ensures 100% full 74-column data integrity across Data_Siswa, Data_Siswa_Keluar, and Data_Alumni)
+        else if (key === 'Nama' || key === 'Nama Siswa' || key === 'Nama Lengkap' || key === 'nama') val = items[i]['nama'] || items[i]['Nama'] || items[i]['Nama Siswa'] || items[i]['Nama Lengkap'];
+        else if (key === 'NISN' || key === 'Nisn' || key === 'nisn') val = items[i]['nisn'] || items[i]['NISN'] || items[i]['Nisn'];
+        else if (key === 'NIK' || key === 'Nik' || key === 'nik') val = items[i]['nik'] || items[i]['NIK'] || items[i]['Nik'];
+        else if (key === 'Jenis Kelamin' || key === 'JK' || key === 'J/P' || key === 'L/P' || key === 'jenisKelamin') val = items[i]['jenisKelamin'] || items[i]['Jenis Kelamin'] || items[i]['JK'] || items[i]['J/P'] || items[i]['L/P'];
+        else if (key === 'Tempat Lahir' || key === 'tempatLahir') val = items[i]['tempatLahir'] || items[i]['Tempat Lahir'];
+        else if (key === 'Tanggal Lahir' || key === 'Tgl Lahir' || key === 'tanggalLahir') val = items[i]['tanggalLahir'] || items[i]['Tanggal Lahir'] || items[i]['Tgl Lahir'];
+        else if (key === 'Rombel' || key === 'Kelas' || key === 'Rombel Saat Ini' || key === 'rombel') val = items[i]['rombel'] || items[i]['Kelas'] || items[i]['Rombel'] || items[i]['rombelSaatIni'];
+        else if (key === 'Nama Ibu' || key === 'Nama Ibu Kandung' || key === 'namaIbu') val = items[i]['namaIbu'] || items[i]['Nama Ibu'] || items[i]['Nama Ibu Kandung'];
+        else if (key === 'Alamat' || key === 'Alamat Jalan' || key === 'alamat') val = items[i]['alamat'] || items[i]['Alamat'] || items[i]['Alamat Jalan'];
+        else if (key === 'Status' || key === 'Status Siswa' || key === 'status') val = items[i]['status'] || items[i]['Status'] || items[i]['Status Siswa'];
+        else if (key === 'Agama' || key === 'agama') val = items[i]['agama'] || items[i]['Agama'];
+        else if (key === 'NIS' || key === 'Nis' || key === 'nis') val = items[i]['nis'] || items[i]['NIS'] || items[i]['Nis'];
+        else if (key === 'RT' || key === 'rt') val = items[i]['rt'] || items[i]['RT'];
+        else if (key === 'RW' || key === 'rw') val = items[i]['rw'] || items[i]['RW'];
+        else if (key === 'Dusun' || key === 'Nama Dusun' || key === 'dusun') val = items[i]['dusun'] || items[i]['Dusun'] || items[i]['Nama Dusun'];
+        else if (key === 'Kelurahan' || key === 'Desa' || key === 'Desa/Kelurahan' || key === 'kelurahan') val = items[i]['kelurahan'] || items[i]['Kelurahan'] || items[i]['Desa/Kelurahan'];
+        else if (key === 'Kecamatan' || key === 'kecamatan') val = items[i]['kecamatan'] || items[i]['Kecamatan'];
+        else if (key === 'Kode Pos' || key === 'kodePos') val = items[i]['kodePos'] || items[i]['Kode Pos'];
+        else if (key === 'Jenis Tinggal' || key === 'jenisTinggal') val = items[i]['jenisTinggal'] || items[i]['Jenis Tinggal'];
+        else if (key === 'Alat Transportasi' || key === 'alatTransportasi') val = items[i]['alatTransportasi'] || items[i]['Alat Transportasi'];
+        else if (key === 'Telepon' || key === 'telepon') val = items[i]['telepon'] || items[i]['Telepon'];
+        else if (key === 'HP' || key === 'No HP' || key === 'Nomor HP' || key === 'hp') val = items[i]['hp'] || items[i]['HP'] || items[i]['No HP'] || items[i]['Nomor HP'];
+        else if (key === 'Email' || key === 'E-Mail' || key === 'email') val = items[i]['email'] || items[i]['Email'] || items[i]['E-Mail'];
+        else if (key === 'SKHUN' || key === 'skhun') val = items[i]['skhun'] || items[i]['SKHUN'];
+        else if (key === 'Penerima KPS' || key === 'penerimaKps') val = items[i]['penerimaKps'] || items[i]['Penerima KPS'];
+        else if (key === 'No. KPS' || key === 'No KPS' || key === 'noKps') val = items[i]['noKps'] || items[i]['No. KPS'] || items[i]['No KPS'];
+        else if (key === 'Nama Ayah' || key === 'Nama Ayah Kandung' || key === 'namaAyah') val = items[i]['namaAyah'] || items[i]['Nama Ayah'];
+        else if (key === 'Tahun Lahir Ayah' || key === 'tahunLahirAyah') val = items[i]['tahunLahirAyah'] || items[i]['Tahun Lahir Ayah'];
+        else if (key === 'Jenjang Pendidikan Ayah' || key === 'Pendidikan Ayah' || key === 'jenjangPendidikanAyah') val = items[i]['jenjangPendidikanAyah'] || items[i]['Jenjang Pendidikan Ayah'] || items[i]['Pendidikan Ayah'];
+        else if (key === 'Pekerjaan Ayah' || key === 'pekerjaanAyah') val = items[i]['pekerjaanAyah'] || items[i]['Pekerjaan Ayah'];
+        else if (key === 'Penghasilan Ayah' || key === 'penghasilanAyah') val = items[i]['penghasilanAyah'] || items[i]['Penghasilan Ayah'];
+        else if (key === 'NIK Ayah' || key === 'NIK ayah' || key === 'nikAyah') val = items[i]['nikAyah'] || items[i]['NIK Ayah'] || items[i]['NIK ayah'];
+        else if (key === 'Tahun Lahir Ibu' || key === 'tahunLahirIbu') val = items[i]['tahunLahirIbu'] || items[i]['Tahun Lahir Ibu'];
+        else if (key === 'Jenjang Pendidikan Ibu' || key === 'Pendidikan Ibu' || key === 'jenjangPendidikanIbu') val = items[i]['jenjangPendidikanIbu'] || items[i]['Jenjang Pendidikan Ibu'] || items[i]['Pendidikan Ibu'];
+        else if (key === 'Pekerjaan Ibu' || key === 'pekerjaanIbu') val = items[i]['pekerjaanIbu'] || items[i]['Pekerjaan Ibu'];
+        else if (key === 'Penghasilan Ibu' || key === 'penghasilanIbu') val = items[i]['penghasilanIbu'] || items[i]['Penghasilan Ibu'];
+        else if (key === 'NIK Ibu' || key === 'NIK ibu' || key === 'nikIbu') val = items[i]['nikIbu'] || items[i]['NIK Ibu'] || items[i]['NIK ibu'];
+        else if (key === 'Nama Wali' || key === 'namaWali') val = items[i]['namaWali'] || items[i]['Nama Wali'];
+        else if (key === 'Tahun Lahir Wali' || key === 'tahunLahirWali') val = items[i]['tahunLahirWali'] || items[i]['Tahun Lahir Wali'];
+        else if (key === 'Jenjang Pendidikan Wali' || key === 'Pendidikan Wali' || key === 'jenjangPendidikanWali') val = items[i]['jenjangPendidikanWali'] || items[i]['Jenjang Pendidikan Wali'] || items[i]['Pendidikan Wali'];
+        else if (key === 'Pekerjaan Wali' || key === 'pekerjaanWali') val = items[i]['pekerjaanWali'] || items[i]['Pekerjaan Wali'];
+        else if (key === 'Penghasilan Wali' || key === 'penghasilanWali') val = items[i]['penghasilanWali'] || items[i]['Penghasilan Wali'];
+        else if (key === 'NIK Wali' || key === 'NIK wali' || key === 'nikWali') val = items[i]['nikWali'] || items[i]['NIK Wali'] || items[i]['NIK wali'];
+        else if (key === 'Rombel Saat Ini' || key === 'rombelSaatIni') val = items[i]['rombelSaatIni'] || items[i]['Rombel Saat Ini'] || items[i]['rombel'];
+        else if (key === 'No Peserta Ujian Nasional' || key === 'No Peserta UN' || key === 'noPesertaUn') val = items[i]['noPesertaUn'] || items[i]['No Peserta Ujian Nasional'] || items[i]['No Peserta UN'];
+        else if (key === 'No Seri Ijazah' || key === 'No. Seri Ijazah' || key === 'Nomor Ijazah' || key === 'noSeriIjazah') val = items[i]['noSeriIjazah'] || items[i]['No Seri Ijazah'] || items[i]['No. Seri Ijazah'];
+        else if (key === 'Penerima KIP' || key === 'penerimaKip') val = items[i]['penerimaKip'] || items[i]['Penerima KIP'];
+        else if (key === 'Nomor KIP' || key === 'No KIP' || key === 'nomorKip') val = items[i]['nomorKip'] || items[i]['Nomor KIP'] || items[i]['No KIP'];
+        else if (key === 'Nama di KIP' || key === 'namaDiKip') val = items[i]['namaDiKip'] || items[i]['Nama di KIP'];
+        else if (key === 'Nomor KKS' || key === 'No KKS' || key === 'nomorKks') val = items[i]['nomorKks'] || items[i]['Nomor KKS'] || items[i]['No KKS'];
+        else if (key === 'No Registrasi Akta Lahir' || key === 'No Akta Lahir' || key === 'noRegistrasiAktaLahir') val = items[i]['noRegistrasiAktaLahir'] || items[i]['No Registrasi Akta Lahir'] || items[i]['No Akta Lahir'];
+        else if (key === 'Bank' || key === 'bank') val = items[i]['bank'] || items[i]['Bank'];
+        else if (key === 'Nomor Rekening Bank' || key === 'No Rekening' || key === 'nomorRekeningBank') val = items[i]['nomorRekeningBank'] || items[i]['Nomor Rekening Bank'] || items[i]['No Rekening'];
+        else if (key === 'Rekening Atas Nama' || key === 'rekeningAtasNama') val = items[i]['rekeningAtasNama'] || items[i]['Rekening Atas Nama'];
+        else if (key === 'Layak PIP (usulan dari sekolah)' || key === 'Layak PIP' || key === 'layakPip') val = items[i]['layakPip'] || items[i]['Layak PIP (usulan dari sekolah)'] || items[i]['Layak PIP'];
+        else if (key === 'Alasan Layak PIP' || key === 'alasanLayakPip') val = items[i]['alasanLayakPip'] || items[i]['Alasan Layak PIP'];
+        else if (key === 'Kebutuhan Khusus' || key === 'kebutuhanKhusus') val = items[i]['kebutuhanKhusus'] || items[i]['Kebutuhan Khusus'];
+        else if (key === 'Sekolah Asal' || key === 'Asal Sekolah' || key === 'sekolahAsal') val = items[i]['sekolahAsal'] || items[i]['Sekolah Asal'] || items[i]['Asal Sekolah'];
+        else if (key === 'Anak ke-berapa' || key === 'anakKeBerapa') val = items[i]['anakKeBerapa'] || items[i]['Anak ke-berapa'];
+        else if (key === 'Lintang' || key === 'lintang') val = items[i]['lintang'] || items[i]['Lintang'];
+        else if (key === 'Bujur' || key === 'bujur') val = items[i]['bujur'] || items[i]['Bujur'];
+        else if (key === 'No KK' || key === 'Nomor KK' || key === 'noKk') val = items[i]['noKk'] || items[i]['No KK'] || items[i]['Nomor KK'];
+        else if (key === 'Berat Badan' || key === 'BB' || key === 'beratBadan') val = items[i]['beratBadan'] || items[i]['Berat Badan'];
+        else if (key === 'Tinggi Badan' || key === 'TB' || key === 'tinggiBadan') val = items[i]['tinggiBadan'] || items[i]['Tinggi Badan'];
+        else if (key === 'Lingkar Kepala' || key === 'lingkarKepala') val = items[i]['lingkarKepala'] || items[i]['Lingkar Kepala'];
+        else if (key === 'Jml. Saudara Kandung' || key === 'Jumlah Saudara Kandung' || key === 'jmlSaudaraKandung') val = items[i]['jmlSaudaraKandung'] || items[i]['Jml. Saudara Kandung'] || items[i]['Jumlah Saudara Kandung'];
+        else if (key === 'Jarak Rumah Ke Sekolah (KM)' || key === 'Jarak Rumah ke Sekolah' || key === 'jarakRumahKeSekolah') val = items[i]['jarakRumahKeSekolah'] || items[i]['Jarak Rumah Ke Sekolah (KM)'] || items[i]['Jarak Rumah ke Sekolah'];
+        else if (key === 'Alasan Keluar' || key === 'Alasan Keluar / Mutasi' || key === 'Alasan Mutasi' || key === 'alasanKeluar') val = items[i]['alasanKeluar'] || items[i]['Alasan Keluar'] || items[i]['Alasan Keluar / Mutasi'] || items[i]['Alasan Mutasi'];
+        else if (key === 'Tahun Lulus' || key === 'tahunLulus') val = items[i]['tahunLulus'] || items[i]['Tahun Lulus'];
         // Bangunan field aliases
         else if (key === 'namaBangunan' || key === 'Nama Bangunan') val = items[i]['namaBangunan'] || items[i]['Nama Bangunan'] || items[i]['nama'];
         else if (key === 'tahunPembangunan' || key === 'Tahun Pembangunan') val = items[i]['tahunPembangunan'] || items[i]['Tahun Pembangunan'] || items[i]['tahun'];
@@ -764,8 +846,7 @@ function checkAndInitializeSheets(ss) {
   // Safe sheet creator to ensure sheets exist on doGet / doPost
   const defaultSheets = {
     'Data_Alumni': [
-      HEADERS_MAP['Data_Alumni'],
-      ['alm-001', '0071239811', '3201123456780099', 'Rian Hidayat, S.T.', 'L', 'Jakarta', '2006-03-12', 'IX. Moh Hatta', '2023/2024', 'DN-02/D-SMP/24/008129', 'Siti Maryam', 'H. Agus Pratama', 'Jl. Merdeka Barat No. 12', '081234567800', 'Lulus', 'Lulus', 'Islam', '21001', 'SKHUN-2024-001', 'SMP Negeri Unggulan 1']
+      HEADERS_MAP['Data_Alumni']
     ],
     'Data_Siswa': [
       HEADERS_MAP['Data_Siswa']
@@ -1114,15 +1195,151 @@ async function callProxyOrDirectPost(rawWebAppUrl: string, payload: any): Promis
   }
 }
 
+export function normalizeStudentObject(raw: any, defaultStatus: 'Aktif' | 'Mutasi' | 'Lulus' | 'Keluar' = 'Aktif'): Student {
+  if (!raw || typeof raw !== 'object') {
+    return {
+      id: `std-${Date.now()}`,
+      nisn: '',
+      nik: '',
+      nama: '',
+      jenisKelamin: 'L',
+      tempatLahir: '',
+      tanggalLahir: '',
+      rombel: 'Kelas 7A',
+      namaIbu: '',
+      alamat: '',
+      status: defaultStatus,
+      agama: 'Islam'
+    };
+  }
+
+  const getVal = (...keys: string[]): string => {
+    for (const k of keys) {
+      if (raw[k] !== undefined && raw[k] !== null && String(raw[k]).trim() !== '') {
+        return String(raw[k]).trim();
+      }
+      const cleanTarget = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+      for (const objKey of Object.keys(raw)) {
+        if (objKey.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanTarget) {
+          if (raw[objKey] !== undefined && raw[objKey] !== null && String(raw[objKey]).trim() !== '') {
+            return String(raw[objKey]).trim();
+          }
+        }
+      }
+    }
+    return '';
+  };
+
+  const id = getVal('id', 'ID', 'Id') || `std-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+  const nama = getVal('nama', 'Nama', 'Nama Siswa', 'Nama Lengkap', 'Nama Peserta Didik');
+  const nisn = getVal('nisn', 'NISN', 'Nisn');
+  const nik = getVal('nik', 'NIK', 'Nik', 'No KTP');
+  const genderRaw = getVal('jenisKelamin', 'Jenis Kelamin', 'JK', 'J/P', 'L/P', 'jk', 'gender');
+  const jenisKelamin: 'L' | 'P' = (genderRaw.toUpperCase().startsWith('P') || genderRaw.toLowerCase().includes('perempuan')) ? 'P' : 'L';
+  const tempatLahir = getVal('tempatLahir', 'Tempat Lahir', 'tempat_lahir');
+  const tanggalLahir = getVal('tanggalLahir', 'Tanggal Lahir', 'tanggal_lahir', 'Tgl Lahir');
+  const rombel = getVal('rombel', 'Kelas', 'Rombel', 'Rombel Saat Ini', 'rombelSaatIni') || 'Kelas 7A';
+  const namaIbu = getVal('namaIbu', 'Nama Ibu', 'Nama Ibu Kandung', 'nama_ibu');
+  const alamat = getVal('alamat', 'Alamat', 'Alamat Jalan', 'Alamat Rumah', 'alamat_jalan');
+  
+  const statusRaw = getVal('status', 'Status', 'Status Siswa');
+  let status: 'Aktif' | 'Lulus' | 'Mutasi' | 'Keluar' = defaultStatus;
+  const statusLower = statusRaw.toLowerCase();
+  if (statusLower === 'aktif') status = 'Aktif';
+  else if (statusLower === 'lulus' || statusLower === 'alumni') status = 'Lulus';
+  else if (['mutasi', 'putus sekolah', 'wafat/meninggal', 'dikeluarkan', 'mengundurkan diri', 'keluar'].includes(statusLower)) status = 'Mutasi';
+  else if (defaultStatus) status = defaultStatus;
+
+  const alasanKeluar = getVal('alasanKeluar', 'Alasan Keluar', 'Alasan Keluar / Mutasi', 'Alasan Mutasi', 'alasan_keluar', 'Keterangan Mutasi', 'alasanKeluarMutasi');
+  const tahunLulus = getVal('tahunLulus', 'Tahun Lulus', 'tahun_lulus', 'Tahun Kelulusan');
+
+  return {
+    id,
+    nama,
+    nisn,
+    nik,
+    jenisKelamin,
+    tempatLahir,
+    tanggalLahir,
+    rombel,
+    namaIbu,
+    alamat,
+    status,
+    agama: getVal('agama', 'Agama') || 'Islam',
+    nis: getVal('nis', 'NIS', 'Nis', 'NIPD', 'Nomor Induk'),
+    rt: getVal('rt', 'RT'),
+    rw: getVal('rw', 'RW'),
+    dusun: getVal('dusun', 'Dusun', 'Nama Dusun'),
+    kelurahan: getVal('kelurahan', 'Kelurahan', 'Desa/Kelurahan', 'Desa'),
+    kecamatan: getVal('kecamatan', 'Kecamatan'),
+    kodePos: getVal('kodePos', 'Kode Pos', 'kode_pos'),
+    jenisTinggal: getVal('jenisTinggal', 'Jenis Tinggal'),
+    alatTransportasi: getVal('alatTransportasi', 'Alat Transportasi', 'Transportasi'),
+    telepon: getVal('telepon', 'Telepon', 'No Telepon', 'Telepon Rumah'),
+    hp: getVal('hp', 'HP', 'No HP', 'Nomor HP', 'Handphone'),
+    email: getVal('email', 'Email', 'E-Mail', 'Surel'),
+    skhun: getVal('skhun', 'SKHUN', 'No SKHUN'),
+    penerimaKps: getVal('penerimaKps', 'Penerima KPS', 'Penerima KPS/PKH'),
+    noKps: getVal('noKps', 'No. KPS', 'No KPS', 'Nomor KPS'),
+    namaAyah: getVal('namaAyah', 'Nama Ayah', 'Nama Ayah Kandung'),
+    tahunLahirAyah: getVal('tahunLahirAyah', 'Tahun Lahir Ayah'),
+    jenjangPendidikanAyah: getVal('jenjangPendidikanAyah', 'Jenjang Pendidikan Ayah', 'Pendidikan Ayah'),
+    pekerjaanAyah: getVal('pekerjaanAyah', 'Pekerjaan Ayah'),
+    penghasilanAyah: getVal('penghasilanAyah', 'Penghasilan Ayah'),
+    nikAyah: getVal('nikAyah', 'NIK Ayah', 'NIK ayah'),
+    tahunLahirIbu: getVal('tahunLahirIbu', 'Tahun Lahir Ibu'),
+    jenjangPendidikanIbu: getVal('jenjangPendidikanIbu', 'Jenjang Pendidikan Ibu', 'Pendidikan Ibu'),
+    pekerjaanIbu: getVal('pekerjaanIbu', 'Pekerjaan Ibu'),
+    penghasilanIbu: getVal('penghasilanIbu', 'Penghasilan Ibu'),
+    nikIbu: getVal('nikIbu', 'NIK Ibu', 'NIK ibu'),
+    namaWali: getVal('namaWali', 'Nama Wali'),
+    tahunLahirWali: getVal('tahunLahirWali', 'Tahun Lahir Wali'),
+    jenjangPendidikanWali: getVal('jenjangPendidikanWali', 'Jenjang Pendidikan Wali', 'Pendidikan Wali'),
+    pekerjaanWali: getVal('pekerjaanWali', 'Pekerjaan Wali'),
+    penghasilanWali: getVal('penghasilanWali', 'Penghasilan Wali'),
+    nikWali: getVal('nikWali', 'NIK Wali', 'NIK wali'),
+    rombelSaatIni: getVal('rombelSaatIni', 'Rombel Saat Ini') || rombel,
+    noPesertaUn: getVal('noPesertaUn', 'No Peserta Ujian Nasional', 'No Peserta UN', 'Nomor Peserta UN'),
+    noSeriIjazah: getVal('noSeriIjazah', 'No Seri Ijazah', 'No. Seri Ijazah', 'Nomor Ijazah'),
+    penerimaKip: getVal('penerimaKip', 'Penerima KIP'),
+    nomorKip: getVal('nomorKip', 'Nomor KIP', 'No KIP'),
+    namaDiKip: getVal('namaDiKip', 'Nama di KIP', 'Nama Di KIP'),
+    nomorKks: getVal('nomorKks', 'Nomor KKS', 'No KKS'),
+    noRegistrasiAktaLahir: getVal('noRegistrasiAktaLahir', 'No Registrasi Akta Lahir', 'No Akta Lahir'),
+    bank: getVal('bank', 'Bank', 'Nama Bank'),
+    nomorRekeningBank: getVal('nomorRekeningBank', 'Nomor Rekening Bank', 'No Rekening'),
+    rekeningAtasNama: getVal('rekeningAtasNama', 'Rekening Atas Nama', 'Nama Rekening'),
+    layakPip: getVal('layakPip', 'Layak PIP (usulan dari sekolah)', 'Layak PIP'),
+    alasanLayakPip: getVal('alasanLayakPip', 'Alasan Layak PIP'),
+    kebutuhanKhusus: getVal('kebutuhanKhusus', 'Kebutuhan Khusus'),
+    sekolahAsal: getVal('sekolahAsal', 'Sekolah Asal', 'Asal Sekolah'),
+    anakKeBerapa: getVal('anakKeBerapa', 'Anak ke-berapa', 'Anak Ke-berapa', 'Anak Keberapa'),
+    lintang: getVal('lintang', 'Lintang'),
+    bujur: getVal('bujur', 'Bujur'),
+    noKk: getVal('noKk', 'No KK', 'Nomor KK', 'No. KK'),
+    beratBadan: getVal('beratBadan', 'Berat Badan', 'BB'),
+    tinggiBadan: getVal('tinggiBadan', 'Tinggi Badan', 'TB'),
+    lingkarKepala: getVal('lingkarKepala', 'Lingkar Kepala'),
+    jmlSaudaraKandung: getVal('jmlSaudaraKandung', 'Jml. Saudara Kandung', 'Jumlah Saudara Kandung'),
+    jarakRumahKeSekolah: getVal('jarakRumahKeSekolah', 'Jarak Rumah Ke Sekolah (KM)', 'Jarak Rumah ke Sekolah'),
+    alasanKeluar,
+    tahunLulus
+  };
+}
+
 function parseSheetsResult(result: any) {
   const rawSiswa = Array.isArray(result.siswa) ? result.siswa : [];
   const rawSiswaKeluar = Array.isArray(result.siswaKeluar) ? result.siswaKeluar : [];
   const rawAlumni = Array.isArray(result.alumni) ? result.alumni : [];
 
+  const parsedAktif = rawSiswa.map((s: any) => normalizeStudentObject(s, 'Aktif'));
+  const parsedKeluar = rawSiswaKeluar.map((sk: any) => normalizeStudentObject(sk, 'Mutasi'));
+  const parsedAlumni = rawAlumni.map((al: any) => normalizeStudentObject(al, 'Lulus'));
+
   const combinedStudents = [
-    ...rawSiswa.map((s: any) => ({ ...s, status: s.status || 'Aktif' })),
-    ...rawSiswaKeluar.map((sk: any) => ({ ...sk, status: sk.status || 'Mutasi' })).filter((sk: any) => !rawSiswa.some((s: any) => s.id === sk.id)),
-    ...rawAlumni.map((al: any) => ({ ...al, status: al.status || 'Lulus' })).filter((al: any) => !rawSiswa.some((s: any) => s.id === al.id) && !rawSiswaKeluar.some((sk: any) => sk.id === al.id))
+    ...parsedAktif,
+    ...parsedKeluar.filter((sk: any) => !parsedAktif.some((s: any) => (s.id && s.id === sk.id) || (s.nisn && sk.nisn && s.nisn === sk.nisn))),
+    ...parsedAlumni.filter((al: any) => !parsedAktif.some((s: any) => (s.id && s.id === al.id) || (s.nisn && al.nisn && s.nisn === al.nisn)) && !parsedKeluar.some((sk: any) => (sk.id && sk.id === al.id) || (sk.nisn && al.nisn && sk.nisn === al.nisn)))
   ];
 
   return {

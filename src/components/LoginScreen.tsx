@@ -692,22 +692,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             disabled={isSyncingActive}
             className={`px-3 sm:px-5 py-2 sm:py-2.5 rounded-full font-black text-[11px] sm:text-xs flex items-center gap-1.5 sm:gap-2 transition-all cursor-pointer border shadow-lg ${
               isSyncingActive
-                ? 'bg-amber-400 text-slate-950 border-amber-300 animate-pulse cursor-wait'
+                ? 'bg-gradient-to-r from-emerald-500/25 to-teal-500/25 text-emerald-200 border-emerald-400/80 animate-pulse cursor-wait shadow-emerald-500/20'
                 : 'bg-gradient-to-r from-emerald-500/20 to-teal-500/20 hover:from-emerald-500/30 hover:to-teal-500/30 text-emerald-200 hover:text-white border-emerald-400/40 hover:border-emerald-300 shadow-emerald-950/20 active:scale-[0.97]'
             }`}
-            title="Tarik & sinkronkan data terbaru ke perangkat ini"
+            title={isSyncingActive ? 'Sedang menarik data terbaru...' : 'Tarik & sinkronkan data terbaru ke perangkat ini'}
           >
-            {isSyncingActive ? (
-              <>
-                <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin text-slate-950" />
-                <span>Menarik...</span>
-              </>
-            ) : (
-              <>
-                <CloudDownload className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-300 stroke-[2.5]" />
-                <span>Tarik Data</span>
-              </>
-            )}
+            <CloudDownload className={`w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-300 stroke-[2.5] ${isSyncingActive ? 'animate-bounce' : ''}`} />
+            <span className={isSyncingActive ? 'animate-pulse' : ''}>Tarik Data</span>
           </button>
 
           {/* Menu "Upload Berkas" */}
@@ -759,34 +750,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             <p className="text-xs sm:text-sm text-sky-100 font-medium max-w-3xl leading-relaxed">
               Halaman laporan publik berisi informasi statistik agregat data siswa, PTK (pendidik &amp; tenaga kependidikan), rekapitulasi alumni per tahun, demografi tempat tinggal, serta kelaikan sarana &amp; prasarana sekolah.
             </p>
-          </div>
-
-          {/* Quick Action: Tarik Data Button in Banner */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0">
-            <button
-              type="button"
-              id="banner-btn-tarik-data-public"
-              onClick={handleManualSync}
-              disabled={isSyncingActive}
-              className={`px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2.5 shadow-xl transition-all cursor-pointer ${
-                isSyncingActive
-                  ? 'bg-amber-400 text-slate-950 border border-amber-300 animate-pulse cursor-wait'
-                  : 'bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 hover:from-emerald-300 hover:to-cyan-300 text-slate-950 hover:scale-[1.03] active:scale-[0.98] border border-emerald-200/60 shadow-emerald-950/20'
-              }`}
-              title="Tarik data terbaru dari Google Spreadsheet ke aplikasi"
-            >
-              {isSyncingActive ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
-                  <span>Sedang Menarik Data...</span>
-                </>
-              ) : (
-                <>
-                  <CloudDownload className="w-4 h-4 text-slate-950 stroke-[2.5]" />
-                  <span>Tarik Data</span>
-                </>
-              )}
-            </button>
           </div>
         </div>
 

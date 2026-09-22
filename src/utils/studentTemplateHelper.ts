@@ -69,7 +69,9 @@ export const DAPODIK_STUDENT_HEADERS = [
   'Lingkar Kepala',
   'Jml. Saudara Kandung',
   'Jarak Rumah Ke Sekolah (KM)',
-  'Tahun Lulus'
+  'Tahun Lulus',
+  'Alasan Keluar / Mutasi',
+  'Status'
 ];
 
 export const SAMPLE_STUDENT_ROW = [
@@ -139,7 +141,9 @@ export const SAMPLE_STUDENT_ROW = [
   '52',
   '2',
   '1.5',
-  ''
+  '',
+  '',
+  'Aktif'
 ];
 
 export const SAMPLE_STUDENT_ROW_2 = [
@@ -209,7 +213,9 @@ export const SAMPLE_STUDENT_ROW_2 = [
   '51',
   '1',
   '0.8',
-  '2024/2025'
+  '2024/2025',
+  '',
+  'Lulus'
 ];
 
 /**
@@ -333,7 +339,9 @@ export function exportStudentsToExcel(
     s.lingkarKepala || '',
     s.jmlSaudaraKandung || '',
     s.jarakRumahKeSekolah || '',
-    s.tahunLulus || ''
+    s.tahunLulus || (s.status === 'Lulus' ? '2024/2025' : ''),
+    s.alasanKeluar || (s.status === 'Mutasi' || s.status === 'Keluar' ? (s.alasanKeluar || 'Mutasi') : ''),
+    s.status || (s.tahunLulus ? 'Lulus' : (s.alasanKeluar ? 'Mutasi' : 'Aktif'))
   ]);
 
   const wsData = [
@@ -550,6 +558,21 @@ export async function parseStudentImportFile(file: File): Promise<{ students: St
           const jmlSaudaraKandung = getVal(64, 'Jml. Saudara Kandung', 'Jml Saudara');
           const jarakRumahKeSekolah = getVal(65, 'Jarak Rumah Ke Sekolah (KM)', 'Jarak Rumah Ke Sekolah');
           const tahunLulus = getVal(66, 'Tahun Lulus', 'Tahun Kelulusan', 'Tahun Lulusan', 'Tahun Tamat');
+          const alasanKeluar = getVal(67, 'Alasan Keluar / Mutasi', 'Alasan Keluar', 'Mutasi', 'Alasan Mutasi', 'Keterangan Mutasi');
+          const statusRaw = getVal(68, 'Status', 'Status Siswa', 'Status Keaktifan');
+
+          let studentStatus: 'Aktif' | 'Lulus' | 'Mutasi' | 'Keluar' = 'Aktif';
+          if (statusRaw) {
+            const sLow = statusRaw.toLowerCase();
+            if (sLow.includes('lulus') || sLow.includes('alumni')) studentStatus = 'Lulus';
+            else if (sLow.includes('mutasi')) studentStatus = 'Mutasi';
+            else if (sLow.includes('keluar') || sLow.includes('drop')) studentStatus = 'Keluar';
+            else studentStatus = 'Aktif';
+          } else if (tahunLulus) {
+            studentStatus = 'Lulus';
+          } else if (alasanKeluar) {
+            studentStatus = 'Mutasi';
+          }
 
           // Skip if missing name
           if (!nama) continue;
@@ -565,7 +588,7 @@ export async function parseStudentImportFile(file: File): Promise<{ students: St
             tanggalLahir: formatDateIndonesian(tanggalLahir) || '01 Januari 2011',
             namaIbu: namaIbu || '-',
             alamat: alamat || 'Jl. Pendidikan',
-            status: tahunLulus ? 'Lulus' : 'Aktif',
+            status: studentStatus,
             agama: agama || 'Islam',
             nis,
             rt,
@@ -623,7 +646,8 @@ export async function parseStudentImportFile(file: File): Promise<{ students: St
             lingkarKepala,
             jmlSaudaraKandung,
             jarakRumahKeSekolah,
-            tahunLulus: tahunLulus || undefined
+            tahunLulus: tahunLulus || (studentStatus === 'Lulus' ? '2024/2025' : undefined),
+            alasanKeluar: alasanKeluar || (studentStatus === 'Mutasi' || studentStatus === 'Keluar' ? (alasanKeluar || 'Mutasi') : undefined)
           });
         }
 

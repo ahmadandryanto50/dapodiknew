@@ -296,13 +296,33 @@ export default function App() {
   
   const [students, setStudents] = useState<Student[]>(() => {
     // Purge obsolete offline cache from localStorage so all browsers and mobile devices synchronize immediately
-    const CLEAN_OFFLINE_VER = 'dapodik_offline_clean_v2026_09_19_baseline_335';
+    const CLEAN_OFFLINE_VER = 'dapodik_offline_clean_v2026_09_22_empty_mutasi_alumni_v2';
     if (typeof window !== 'undefined' && localStorage.getItem(CLEAN_OFFLINE_VER) !== 'true') {
       localStorage.setItem('dapodik_students', JSON.stringify(initialStudents));
       localStorage.setItem('dapodik_teachers', JSON.stringify(initialTeachers));
       localStorage.setItem('dapodik_sarpras', JSON.stringify(initialSarpras));
       localStorage.setItem('dapodik_kib_b', JSON.stringify(initialKibB));
       localStorage.setItem('dapodik_reports', JSON.stringify(initialReports));
+      
+      // Clean any cached school-specific student keys that had obsolete mutasi/alumni mock data
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('dapodik_students_')) {
+            const val = localStorage.getItem(key);
+            if (val) {
+              const parsed = JSON.parse(val);
+              if (Array.isArray(parsed)) {
+                const filtered = parsed.filter((s: any) => s && s.status !== 'Mutasi' && s.status !== 'Lulus' && s.status !== 'Keluar');
+                localStorage.setItem(key, JSON.stringify(filtered));
+              }
+            }
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+
       localStorage.setItem(CLEAN_OFFLINE_VER, 'true');
     }
     const saved = localStorage.getItem('dapodik_students');
@@ -1122,7 +1142,7 @@ export default function App() {
           isSyncingFromServerRef.current = true;
 
           if (Array.isArray(siswa)) {
-            // Merge with local students to prevent losing "Mutasi" (Siswa Keluar) and "Alumni" data when the spreadsheet doesn't return them
+            // Merge with local students to prevent losing "Mutasi" (Siswa Keluar) and "Alumni" data or column attributes
             const localStudentsStr = localStorage.getItem(getStorageKey('dapodik_students'));
             let localStudents: Student[] = [];
             if (localStudentsStr) {
@@ -1133,15 +1153,36 @@ export default function App() {
               }
             }
             
-            // Build a map of loaded students by ID
-            const loadedMap = new Map(siswa.map(s => [s.id, s]));
-            const mergedStudents = [...siswa];
+            // Build map of local students by ID and NISN for safe deep property preservation
+            const localMap = new Map<string, Student>();
+            for (const ls of localStudents) {
+              if (ls && ls.id) localMap.set(ls.id, ls);
+              if (ls && ls.nisn) localMap.set(`nisn_${ls.nisn}`, ls);
+            }
+
+            // Merge loaded students with local student fields to ensure complete data retention
+            const mergedStudents = siswa.map(s => {
+              const matchedLocal = localMap.get(s.id) || (s.nisn ? localMap.get(`nisn_${s.nisn}`) : undefined);
+              if (!matchedLocal) return s;
+
+              const merged: any = { ...matchedLocal, ...s };
+              // Ensure fields with existing non-empty values in local state are never overwritten by empty spreadsheet cells
+              for (const [k, v] of Object.entries(matchedLocal)) {
+                if (v !== undefined && v !== null && String(v).trim() !== '' && (merged[k] === undefined || merged[k] === null || String(merged[k]).trim() === '')) {
+                  merged[k] = v;
+                }
+              }
+              return merged as Student;
+            });
+
+            const loadedIds = new Set(mergedStudents.map(s => s.id));
+            const loadedNisns = new Set(mergedStudents.filter(s => s.nisn).map(s => s.nisn));
             
-            // For any student in the local state but not in the loaded state, check if we need to preserve them
+            // For any student in the local state but not in the loaded state, preserve them if non-active (Mutasi/Alumni)
             for (const localStudent of localStudents) {
-              if (localStudent && localStudent.id && !loadedMap.has(localStudent.id)) {
+              if (localStudent && localStudent.id && !loadedIds.has(localStudent.id) && (!localStudent.nisn || !loadedNisns.has(localStudent.nisn))) {
                 // Ignore initial mock students so they don't pollute real Google Spreadsheet data
-                if (localStudent.id.startsWith('std-imp-1789398207702-')) {
+                if (localStudent.id.startsWith('std-imp-1789398207')) {
                   continue;
                 }
                 // If they are Mutasi/Lulus, keep them!

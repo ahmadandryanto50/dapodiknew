@@ -1166,22 +1166,13 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
               disabled={isSyncing || isPullingData}
               className={`w-full sm:w-auto px-6 py-3 rounded-2xl font-black text-xs sm:text-sm uppercase tracking-wider flex items-center justify-center gap-2.5 shadow-xl transition-all cursor-pointer ${
                 isSyncing || isPullingData
-                  ? 'bg-amber-400/95 text-slate-950 border border-amber-300 animate-pulse cursor-wait'
+                  ? 'bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 text-slate-950 border border-cyan-200 animate-pulse cursor-wait'
                   : 'bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 hover:from-emerald-300 hover:to-cyan-300 text-slate-950 hover:scale-[1.03] active:scale-[0.98] border border-emerald-200/60 shadow-emerald-950/20'
               }`}
-              title="Klik untuk mengambil semua data terbaru dari Google Spreadsheet ke aplikasi ini"
+              title={isSyncing || isPullingData ? 'Sedang menarik data terbaru...' : 'Klik untuk mengambil semua data terbaru dari Google Spreadsheet ke aplikasi ini'}
             >
-              {isSyncing || isPullingData ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
-                  <span>Sedang Menarik Data...</span>
-                </>
-              ) : (
-                <>
-                  <CloudDownload className="w-5 h-5 text-slate-950 stroke-[2.5]" />
-                  <span>Tarik Data</span>
-                </>
-              )}
+              <CloudDownload className={`w-5 h-5 text-slate-950 stroke-[2.5] ${isSyncing || isPullingData ? 'animate-bounce' : ''}`} />
+              <span className={isSyncing || isPullingData ? 'animate-pulse' : ''}>Tarik Data</span>
             </button>
           </div>
 
