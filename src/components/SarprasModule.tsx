@@ -17,10 +17,18 @@ import {
   ChevronDown,
   Package,
   DoorOpen,
-  Building
+  Building,
+  FileSpreadsheet
 } from 'lucide-react';
 import { SarprasItem, KibBItem, BangunanItem, RuangItem } from '../types';
 import { exportToCSV } from '../services/googleSheetsService';
+import { 
+  exportSarprasItemsToExcel,
+  exportKibBItemsToExcel,
+  exportBangunanItemsToExcel,
+  exportRuangItemsToExcel,
+  exportAllSarprasToExcel
+} from '../utils/sarprasExportHelper';
 import { KibBModule } from './KibBModule';
 import { BangunanModule } from './BangunanModule';
 import { RuangModule } from './RuangModule';
@@ -82,6 +90,7 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
   const [editingItem, setEditingItem] = useState<SarprasItem | null>(null);
   const [openActionId, setOpenActionId] = useState<string | null>(null);
   const [actionMenuPos, setActionMenuPos] = useState<{ top: number; right?: number; left?: number } | null>(null);
+  const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
 
   useEffect(() => {
     if (!openActionId) return;
@@ -192,45 +201,174 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
   return (
     <div className="space-y-6">
       {/* Header Bar */}
-      <div className="sticky top-[57px] z-30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/95 backdrop-blur-xl border border-slate-200/80 p-5 rounded-2xl shadow-md transition-all">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={onBackToHome}
-            className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors border border-slate-200/60 cursor-pointer"
-            title="Kembali ke Beranda"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-slate-900">
-                {activeSubTab === 'sarpras' && 'Sarana & Prasarana (Sarpras)'}
-                {activeSubTab === 'kib_b' && 'Menu KIB B (Peralatan & Mesin)'}
-                {activeSubTab === 'bangunan' && 'Menu Bangunan'}
-                {activeSubTab === 'ruang' && 'Menu Ruang'}
-              </h1>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                {activeSubTab === 'sarpras' && `${sarpras.length} Aset & Ruangan`}
-                {activeSubTab === 'kib_b' && `${kibB.length} Barang KIB B`}
-                {activeSubTab === 'bangunan' && `${bangunan.length} Bangunan`}
-                {activeSubTab === 'ruang' && `${ruang.length} Ruangan`}
-              </span>
+      <div className="sticky top-0 sm:top-[57px] z-30 flex flex-col gap-3.5 bg-white/95 backdrop-blur-xl border border-slate-200/80 p-3 sm:p-5 rounded-2xl shadow-md transition-all">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <button
+              onClick={onBackToHome}
+              className="p-2 sm:p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors border border-slate-200/60 cursor-pointer shrink-0"
+              title="Kembali ke Beranda"
+            >
+              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+            </button>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-base sm:text-xl font-bold text-slate-900 truncate">
+                  {activeSubTab === 'sarpras' && 'Sarana & Prasarana'}
+                  {activeSubTab === 'kib_b' && 'KIB B (Peralatan & Mesin)'}
+                  {activeSubTab === 'bangunan' && 'Bangunan Sekolah'}
+                  {activeSubTab === 'ruang' && 'Ruang Sekolah'}
+                </h1>
+                <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                  {activeSubTab === 'sarpras' && `${sarpras.length} Aset`}
+                  {activeSubTab === 'kib_b' && `${kibB.length} Barang`}
+                  {activeSubTab === 'bangunan' && `${bangunan.length} Gedung`}
+                  {activeSubTab === 'ruang' && `${ruang.length} Ruang`}
+                </span>
+              </div>
+              <p className="text-[11px] sm:text-xs text-slate-500 truncate hidden sm:block">
+                {activeSubTab === 'sarpras' && 'Monitoring kondisi fisik ruangan, laboratorium, buku perpustakaan, dan inventaris sekolah'}
+                {activeSubTab === 'kib_b' && 'Pengelolaan Kartu Inventaris Barang (KIB B) peralatan dan mesin sekolah'}
+                {activeSubTab === 'bangunan' && 'Pengelolaan data fisik bangunan sekolah, luas tapak, dan keandalan bangunan'}
+                {activeSubTab === 'ruang' && 'Pengelolaan data prasarana ruangan, dimensi, luas, dan tingkat kerusakan'}
+              </p>
             </div>
-            <p className="text-xs text-slate-500">
-              {activeSubTab === 'sarpras' && 'Monitoring kondisi fisik ruangan, laboratorium, buku perpustakaan, dan inventaris sekolah'}
-              {activeSubTab === 'kib_b' && 'Pengelolaan Kartu Inventaris Barang (KIB B) peralatan dan mesin sekolah'}
-              {activeSubTab === 'bangunan' && 'Pengelolaan data fisik bangunan sekolah, luas tapak, dan keandalan bangunan'}
-              {activeSubTab === 'ruang' && 'Pengelolaan data prasarana ruangan, dimensi, luas, dan tingkat kerusakan'}
-            </p>
+          </div>
+
+          {/* Quick Excel Export on mobile/header */}
+          <div className="relative shrink-0">
+            <button
+              onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
+              className="px-2.5 sm:px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold border border-emerald-300 transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+              title="Pilih data yang ingin diunduh format Excel (.xlsx)"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span className="hidden xs:inline">Unduh Excel</span>
+              <ChevronDown className={`w-3 h-3 text-emerald-700 transition-transform ${isExportDropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isExportDropdownOpen && (
+              <div 
+                className="absolute right-0 mt-2 w-72 bg-white border border-slate-200 rounded-2xl shadow-xl p-2 z-50 backdrop-blur-xl space-y-1 animate-in fade-in zoom-in-95 duration-150"
+                onMouseLeave={() => setIsExportDropdownOpen(false)}
+              >
+                <div className="px-3 py-1.5 text-[11px] font-bold text-slate-400 border-b border-slate-100 flex items-center justify-between">
+                  <span>Unduh Format Excel (.xlsx):</span>
+                  <span className="text-[9px] text-slate-400 font-mono">DAPODIK</span>
+                </div>
+
+                {/* 1. Unduh Sarpras */}
+                <button
+                  onClick={() => {
+                    exportSarprasItemsToExcel(sarpras);
+                    setIsExportDropdownOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-xl hover:bg-emerald-50 text-slate-800 text-xs font-medium flex items-center justify-between gap-2 transition-colors cursor-pointer group"
+                >
+                  <div className="flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <div>
+                      <div className="font-bold text-slate-900 text-[11px] group-hover:text-emerald-800">Data Sarpras</div>
+                      <div className="text-[10px] text-slate-500">Aset inventaris, ruangan & lab</div>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold shrink-0">
+                    {sarpras.length}
+                  </span>
+                </button>
+
+                {/* 2. Unduh KIB B */}
+                <button
+                  onClick={() => {
+                    exportKibBItemsToExcel(kibB);
+                    setIsExportDropdownOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-xl hover:bg-emerald-50 text-slate-800 text-xs font-medium flex items-center justify-between gap-2 transition-colors cursor-pointer group"
+                >
+                  <div className="flex items-center gap-2">
+                    <Package className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <div>
+                      <div className="font-bold text-slate-900 text-[11px] group-hover:text-emerald-800">Data KIB B</div>
+                      <div className="text-[10px] text-slate-500">Peralatan, mesin & kendaraan</div>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold shrink-0">
+                    {kibB.length}
+                  </span>
+                </button>
+
+                {/* 3. Unduh Bangunan */}
+                <button
+                  onClick={() => {
+                    exportBangunanItemsToExcel(bangunan);
+                    setIsExportDropdownOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-xl hover:bg-emerald-50 text-slate-800 text-xs font-medium flex items-center justify-between gap-2 transition-colors cursor-pointer group"
+                >
+                  <div className="flex items-center gap-2">
+                    <Building className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <div>
+                      <div className="font-bold text-slate-900 text-[11px] group-hover:text-emerald-800">Data Bangunan</div>
+                      <div className="text-[10px] text-slate-500">Fisik gedung, luas tapak & lantai</div>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold shrink-0">
+                    {bangunan.length}
+                  </span>
+                </button>
+
+                {/* 4. Unduh Ruang */}
+                <button
+                  onClick={() => {
+                    exportRuangItemsToExcel(ruang);
+                    setIsExportDropdownOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-xl hover:bg-emerald-50 text-slate-800 text-xs font-medium flex items-center justify-between gap-2 transition-colors cursor-pointer group"
+                >
+                  <div className="flex items-center gap-2">
+                    <DoorOpen className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <div>
+                      <div className="font-bold text-slate-900 text-[11px] group-hover:text-emerald-800">Data Ruang</div>
+                      <div className="text-[10px] text-slate-500">Prasarana ruangan & dimensi</div>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold shrink-0">
+                    {ruang.length}
+                  </span>
+                </button>
+
+                {/* 5. Unduh Semua Sekaligus */}
+                <div className="pt-1 border-t border-slate-100">
+                  <button
+                    onClick={() => {
+                      exportAllSarprasToExcel(sarpras, kibB, bangunan, ruang);
+                      setIsExportDropdownOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-2 rounded-xl hover:bg-sky-50 text-slate-800 text-xs font-medium flex items-center justify-between gap-2 transition-colors cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-2">
+                      <FileSpreadsheet className="w-4 h-4 text-sky-600 shrink-0" />
+                      <div>
+                        <div className="font-bold text-slate-900 text-[11px] group-hover:text-sky-800">Semua Data Sarpras</div>
+                        <div className="text-[10px] text-slate-500">1 File Excel (4 Sheet Lengkap)</div>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-800 font-bold shrink-0">
+                      4 Sheet
+                    </span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Tab Selector & Action Buttons */}
-        <div className="flex flex-wrap items-center gap-2.5">
-          <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 gap-0.5">
+        {/* Row 2: Subtabs & Action Buttons */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          <div className="flex items-center bg-slate-100/90 p-1 rounded-xl border border-slate-200 gap-1 overflow-x-auto max-w-full scrollbar-none py-1 shrink-0">
             <button
               onClick={() => setActiveSubTab('sarpras')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
                 activeSubTab === 'sarpras'
                   ? 'bg-emerald-600 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
@@ -247,7 +385,7 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
 
             <button
               onClick={() => setActiveSubTab('kib_b')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
                 activeSubTab === 'kib_b'
                   ? 'bg-emerald-600 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
@@ -264,7 +402,7 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
 
             <button
               onClick={() => setActiveSubTab('bangunan')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
                 activeSubTab === 'bangunan'
                   ? 'bg-emerald-600 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
@@ -281,7 +419,7 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
 
             <button
               onClick={() => setActiveSubTab('ruang')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
                 activeSubTab === 'ruang'
                   ? 'bg-emerald-600 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
@@ -298,23 +436,24 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
           </div>
 
           {activeSubTab === 'sarpras' && (
-            <>
+            <div className="flex items-center gap-2 justify-end">
               <button
-                onClick={() => exportToCSV(sarpras, 'DAPODIK_DATA_SARPRAS')}
-                className="px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+                onClick={() => exportSarprasItemsToExcel(sarpras)}
+                className="px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200 transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                title="Ekspor data Sarpras ke file Excel (.xlsx)"
               >
                 <Download className="w-3.5 h-3.5 text-emerald-600" />
-                <span className="hidden sm:inline">Ekspor Database</span>
+                <span>Ekspor Excel Sarpras</span>
               </button>
 
               <button
                 onClick={handleOpenAdd}
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
               >
                 <Plus className="w-4 h-4" />
                 <span>Tambah Sarpras</span>
               </button>
-            </>
+            </div>
           )}
         </div>
       </div>
@@ -398,7 +537,81 @@ export const SarprasModule: React.FC<SarprasModuleProps> = ({
 
       {/* Sarpras Grid/Table */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-        <div className="overflow-x-auto max-h-[650px] overflow-y-auto scrollbar-thin">
+        {/* Mobile Card View (visible on < md screens) */}
+        <div className="md:hidden divide-y divide-slate-100">
+          {filteredSarpras.length === 0 ? (
+            <div className="py-12 text-center text-slate-400 p-4">
+              <Building2 className="w-10 h-10 mx-auto mb-2 opacity-30 text-slate-500" />
+              <p className="font-semibold text-slate-600">Tidak ada data sarpras ditemukan</p>
+              <p className="text-xs text-slate-400 mt-1">Coba sesuaikan pencarian atau filter kategori Anda.</p>
+            </div>
+          ) : (
+            filteredSarpras.map((item, idx) => (
+              <div key={item.id} className="p-3.5 space-y-2.5 hover:bg-slate-50/60 transition-colors">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
+                      <Building2 className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="font-bold text-slate-900 text-xs truncate">{item.namaBarang}</h3>
+                      <span className="text-[10px] text-emerald-700 font-mono">{item.kodeBarang}</span>
+                    </div>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 flex items-center gap-1 ${
+                    item.kondisi === 'Baik' 
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                      : item.kondisi === 'Rusak Ringan'
+                      ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                      : 'bg-rose-50 text-rose-700 border border-rose-200'
+                  }`}>
+                    {item.kondisi === 'Baik' ? <CheckCircle className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+                    {item.kondisi}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-[11px] bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                  <div>
+                    <span className="text-slate-400 text-[10px] block">Kategori</span>
+                    <span className="font-medium text-slate-700 truncate block">{item.kategori}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 text-[10px] block">Volume / Jumlah</span>
+                    <span className="font-bold text-slate-900">{item.jumlah} {item.satuan}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 text-[10px] block">Letak / Lokasi</span>
+                    <span className="text-slate-700 truncate block">{item.letakRuang}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 text-[10px] block">Tahun Pengadaan</span>
+                    <span className="font-mono text-slate-600">{item.tahunPengadaan}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
+                  <button
+                    onClick={() => handleOpenEdit(item)}
+                    className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Edit3 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Edit</span>
+                  </button>
+                  <button
+                    onClick={() => handleDelete(item.id, item.namaBarang)}
+                    className="px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Hapus</span>
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Desktop Table View (hidden on mobile, visible on >= md) */}
+        <div className="hidden md:block overflow-x-auto max-h-[650px] overflow-y-auto scrollbar-thin">
           <table className="w-full text-left text-xs text-slate-700 relative border-collapse">
             <thead className="bg-slate-50 text-slate-600 uppercase tracking-wider font-semibold border-b border-slate-200 sticky top-0 z-10">
               <tr>

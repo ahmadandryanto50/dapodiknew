@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { BangunanItem } from '../types';
 import { exportToCSV, exportToExcel } from '../services/googleSheetsService';
+import { exportBangunanItemsToExcel } from '../utils/sarprasExportHelper';
 
 interface BangunanModuleProps {
   bangunan: BangunanItem[];
@@ -215,7 +216,7 @@ export const BangunanModule: React.FC<BangunanModuleProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {onSync && (
             <button
               onClick={() => onSync()}
@@ -229,8 +230,9 @@ export const BangunanModule: React.FC<BangunanModuleProps> = ({
           )}
 
           <button
-            onClick={() => exportToExcel(bangunan, 'Data_Bangunan_Sekolah')}
+            onClick={() => exportBangunanItemsToExcel(bangunan)}
             className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold border border-slate-200/80 transition-all flex items-center gap-1.5 cursor-pointer"
+            title="Unduh Data Bangunan Sekolah ke file Excel (.xlsx)"
           >
             <Download className="w-3.5 h-3.5 text-emerald-600" />
             <span>Ekspor Excel</span>
@@ -246,9 +248,78 @@ export const BangunanModule: React.FC<BangunanModuleProps> = ({
         </div>
       </div>
 
-      {/* Bangunan Table */}
+      {/* Bangunan Table / Mobile Card */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile View (< md) */}
+        <div className="md:hidden divide-y divide-slate-100">
+          {filteredBangunan.length === 0 ? (
+            <div className="py-12 text-center text-slate-400 p-4">
+              <Building2 className="w-10 h-10 mx-auto mb-2 opacity-30 text-slate-500" />
+              <p className="font-semibold text-slate-600">Belum ada data bangunan</p>
+              <p className="text-xs text-slate-400">Klik "Tambah Bangunan" untuk memasukkan data baru.</p>
+            </div>
+          ) : (
+            filteredBangunan.map((item, idx) => (
+              <div key={item.id} className="p-3.5 space-y-2.5 hover:bg-slate-50/60 transition-colors">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-slate-900 text-xs truncate">{item.namaBangunan}</h3>
+                    <span className="text-[10px] text-emerald-700 font-mono">{item.kodeBangunan || '-'}</span>
+                  </div>
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border shrink-0 ${
+                    !item.kondisi || item.kondisi.toLowerCase().includes('tidak ada') || item.kondisi.toLowerCase().includes('baik')
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : 'bg-amber-50 text-amber-700 border-amber-200'
+                  }`}>
+                    {item.kondisi || 'Baik'}
+                    {item.bobotKerusakan && item.bobotKerusakan !== '0.0' && item.bobotKerusakan !== '0' && (
+                      <span className="text-[9px] opacity-75">({item.bobotKerusakan}%)</span>
+                    )}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-[11px] bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                  <div>
+                    <span className="text-slate-400 text-[10px] block">Luas Tapak</span>
+                    <span className="font-bold text-slate-800">{item.luasTapak || '0'} m²</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 text-[10px] block">Tahun Bangun</span>
+                    <span className="font-mono text-slate-700">{item.tahunPembangunan || '-'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 text-[10px] block">Lantai & Ruang</span>
+                    <span className="text-slate-700">{item.jumlahLantai || 1} Lantai / {item.jumlahRuang || 1} Ruang</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 text-[10px] block">Keterangan</span>
+                    <span className="text-slate-600 truncate block">{item.keterangan || '-'}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
+                  <button
+                    onClick={() => handleOpenEdit(item)}
+                    className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Edit3 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Edit</span>
+                  </button>
+                  <button
+                    onClick={() => setDeletingItem(item)}
+                    className="px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Hapus</span>
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Desktop Table View (>= md) */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider">

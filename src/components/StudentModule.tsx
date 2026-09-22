@@ -696,67 +696,124 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
                 </div>
                 
                 {/* 1. Siswa Aktif */}
-                <button
-                  onClick={() => {
-                    const activeStudents = students.filter(s => !s.status || s.status === 'Aktif');
-                    exportStudentsToExcel(activeStudents, 'ALL');
-                    setIsExportMenuOpen(false);
-                  }}
-                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-emerald-50 text-emerald-700 text-xs font-medium flex items-center gap-2 transition-colors cursor-pointer"
-                >
-                  <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <div>
-                    <div className="font-bold text-slate-900 text-[11px]">Data Siswa Aktif</div>
-                    <div className="text-[10px] text-slate-500">Hanya siswa yang sedang aktif bersekolah</div>
-                  </div>
-                </button>
+                {(() => {
+                  const activeStudents = students.filter(s => !s.status || s.status === 'Aktif');
+                  const keluarList = (studentsKeluar && studentsKeluar.length > 0)
+                    ? studentsKeluar
+                    : students.filter(s => s.status && s.status !== 'Aktif' && s.status !== 'Lulus');
+                  const alumniList = (alumni && alumni.length > 0)
+                    ? alumni
+                    : students.filter(s => s.status === 'Lulus');
+                  
+                  const allMap = new Map<string, Student>();
+                  [...students, ...(studentsKeluar || []), ...(alumni || [])].forEach((s, idx) => {
+                    const key = s.id || s.nisn || `std_${idx}`;
+                    if (!allMap.has(key)) {
+                      allMap.set(key, s);
+                    }
+                  });
+                  const combinedStudents = Array.from(allMap.values());
 
-                {/* 2. Siswa Keluar / Mutasi */}
-                <button
-                  onClick={() => {
-                    const keluarStudents = students.filter(s => s.status && s.status !== 'Aktif' && s.status !== 'Lulus');
-                    exportStudentsToExcel(keluarStudents, 'ALL');
-                    setIsExportMenuOpen(false);
-                  }}
-                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-amber-50 text-amber-700 text-xs font-medium flex items-center gap-2 transition-colors cursor-pointer"
-                >
-                  <FileSpreadsheet className="w-4 h-4 text-amber-600 shrink-0" />
-                  <div>
-                    <div className="font-bold text-slate-900 text-[11px]">Data Siswa Keluar / Mutasi</div>
-                    <div className="text-[10px] text-slate-500">Hanya siswa mutasi, dikeluarkan, dll.</div>
-                  </div>
-                </button>
+                  return (
+                    <>
+                      {/* 1. Siswa Aktif */}
+                      <button
+                        onClick={() => {
+                          exportStudentsToExcel(activeStudents, 'ALL', {
+                            categoryName: 'Siswa Aktif',
+                            sheetName: 'Siswa_Aktif',
+                            filename: `Data_Siswa_Aktif_${new Date().toISOString().slice(0, 10)}.xlsx`
+                          });
+                          setIsExportMenuOpen(false);
+                        }}
+                        className="w-full text-left px-3 py-2 rounded-lg hover:bg-emerald-50 text-emerald-700 text-xs font-medium flex items-center justify-between gap-2 transition-colors cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-2">
+                          <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
+                          <div>
+                            <div className="font-bold text-slate-900 text-[11px] group-hover:text-emerald-800">Data Siswa Aktif</div>
+                            <div className="text-[10px] text-slate-500">Hanya siswa yang sedang aktif bersekolah</div>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold shrink-0">
+                          {activeStudents.length}
+                        </span>
+                      </button>
 
-                {/* 3. Alumni / Lulus */}
-                <button
-                  onClick={() => {
-                    const alumniStudents = students.filter(s => s.status === 'Lulus');
-                    exportStudentsToExcel(alumniStudents, 'ALL');
-                    setIsExportMenuOpen(false);
-                  }}
-                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-purple-50 text-purple-700 text-xs font-medium flex items-center gap-2 transition-colors cursor-pointer"
-                >
-                  <FileSpreadsheet className="w-4 h-4 text-purple-600 shrink-0" />
-                  <div>
-                    <div className="font-bold text-slate-900 text-[11px]">Data Alumni / Lulus</div>
-                    <div className="text-[10px] text-slate-500">Hanya data siswa yang telah lulus</div>
-                  </div>
-                </button>
+                      {/* 2. Siswa Keluar / Mutasi */}
+                      <button
+                        onClick={() => {
+                          exportStudentsToExcel(keluarList, 'ALL', {
+                            categoryName: 'Siswa Keluar / Mutasi',
+                            sheetName: 'Siswa_Keluar',
+                            filename: `Data_Siswa_Keluar_Mutasi_${new Date().toISOString().slice(0, 10)}.xlsx`
+                          });
+                          setIsExportMenuOpen(false);
+                        }}
+                        className="w-full text-left px-3 py-2 rounded-lg hover:bg-amber-50 text-amber-700 text-xs font-medium flex items-center justify-between gap-2 transition-colors cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-2">
+                          <FileSpreadsheet className="w-4 h-4 text-amber-600 shrink-0" />
+                          <div>
+                            <div className="font-bold text-slate-900 text-[11px] group-hover:text-amber-800">Data Siswa Keluar / Mutasi</div>
+                            <div className="text-[10px] text-slate-500">Hanya siswa mutasi, dikeluarkan, dll.</div>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold shrink-0">
+                          {keluarList.length}
+                        </span>
+                      </button>
 
-                {/* 4. Semua Data Siswa */}
-                <button
-                  onClick={() => {
-                    exportStudentsToExcel(students, 'ALL');
-                    setIsExportMenuOpen(false);
-                  }}
-                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-sky-50 text-sky-700 text-xs font-medium flex items-center gap-2 transition-colors cursor-pointer"
-                >
-                  <FileSpreadsheet className="w-4 h-4 text-sky-600 shrink-0" />
-                  <div>
-                    <div className="font-bold text-slate-900 text-[11px]">Semua Data Siswa</div>
-                    <div className="text-[10px] text-slate-500">Gabungan Siswa Aktif, Keluar, dan Alumni</div>
-                  </div>
-                </button>
+                      {/* 3. Alumni / Lulus */}
+                      <button
+                        onClick={() => {
+                          exportStudentsToExcel(alumniList, 'ALL', {
+                            categoryName: 'Alumni / Lulus',
+                            sheetName: 'Alumni_Lulus',
+                            filename: `Data_Alumni_Lulus_${new Date().toISOString().slice(0, 10)}.xlsx`
+                          });
+                          setIsExportMenuOpen(false);
+                        }}
+                        className="w-full text-left px-3 py-2 rounded-lg hover:bg-purple-50 text-purple-700 text-xs font-medium flex items-center justify-between gap-2 transition-colors cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-2">
+                          <FileSpreadsheet className="w-4 h-4 text-purple-600 shrink-0" />
+                          <div>
+                            <div className="font-bold text-slate-900 text-[11px] group-hover:text-purple-800">Data Alumni / Lulus</div>
+                            <div className="text-[10px] text-slate-500">Hanya data siswa yang telah lulus</div>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-800 font-bold shrink-0">
+                          {alumniList.length}
+                        </span>
+                      </button>
+
+                      {/* 4. Semua Data Siswa */}
+                      <button
+                        onClick={() => {
+                          exportStudentsToExcel(combinedStudents, 'ALL', {
+                            categoryName: 'Semua Data Siswa',
+                            sheetName: 'Semua_Data_Siswa',
+                            filename: `Semua_Data_Siswa_Dapodik_${new Date().toISOString().slice(0, 10)}.xlsx`
+                          });
+                          setIsExportMenuOpen(false);
+                        }}
+                        className="w-full text-left px-3 py-2 rounded-lg hover:bg-sky-50 text-sky-700 text-xs font-medium flex items-center justify-between gap-2 transition-colors cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-2">
+                          <FileSpreadsheet className="w-4 h-4 text-sky-600 shrink-0" />
+                          <div>
+                            <div className="font-bold text-slate-900 text-[11px] group-hover:text-sky-800">Semua Data Siswa</div>
+                            <div className="text-[10px] text-slate-500">Gabungan Siswa Aktif, Keluar, dan Alumni</div>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-800 font-bold shrink-0">
+                          {combinedStudents.length}
+                        </span>
+                      </button>
+                    </>
+                  );
+                })()}
               </div>
             )}
           </div>

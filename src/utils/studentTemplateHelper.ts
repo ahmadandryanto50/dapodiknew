@@ -240,9 +240,14 @@ export function downloadStudentExcelTemplate() {
  * Exports real student data from database to Excel (.xlsx) file
  * Supports exporting ALL students or filtered per Rombel/Kelas
  */
-export function exportStudentsToExcel(students: Student[], selectedRombel: string = 'ALL') {
+export function exportStudentsToExcel(
+  students: Student[], 
+  selectedRombel: string = 'ALL',
+  customOptions?: { categoryName?: string; filename?: string; sheetName?: string }
+) {
+  const categoryLabel = customOptions?.categoryName || 'siswa';
   if (!students || students.length === 0) {
-    alert('Tidak ada data siswa di database untuk diekspor.');
+    alert(`Tidak ada data ${categoryLabel} di database untuk diekspor.`);
     return;
   }
 
@@ -257,7 +262,7 @@ export function exportStudentsToExcel(students: Student[], selectedRombel: strin
       });
 
   if (targetStudents.length === 0) {
-    alert(`Tidak ada data siswa di database untuk rombel/kelas "${selectedRombel}".`);
+    alert(`Tidak ada data ${categoryLabel} di database untuk rombel/kelas "${selectedRombel}".`);
     return;
   }
 
@@ -345,12 +350,21 @@ export function exportStudentsToExcel(students: Student[], selectedRombel: strin
   ws['!cols'] = colWidths;
 
   const wb = XLSX.utils.book_new();
-  const sheetName = selectedRombel === 'ALL' ? 'Semua_Siswa' : selectedRombel.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30);
-  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  const rawSheetName = customOptions?.sheetName 
+    || (selectedRombel === 'ALL' ? (customOptions?.categoryName || 'Data_Siswa') : selectedRombel);
+  const cleanSheet = rawSheetName.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 31);
+  XLSX.utils.book_append_sheet(wb, ws, cleanSheet);
 
-  const cleanRombelName = selectedRombel === 'ALL' ? 'SEMUA_ROMBEL' : selectedRombel.replace(/\s+/g, '_');
   const dateStr = new Date().toISOString().slice(0, 10);
-  XLSX.writeFile(wb, `Data_Siswa_${cleanRombelName}_${dateStr}.xlsx`);
+  let finalFileName = '';
+  if (customOptions?.filename) {
+    finalFileName = customOptions.filename.endsWith('.xlsx') ? customOptions.filename : `${customOptions.filename}_${dateStr}.xlsx`;
+  } else {
+    const cleanRombelName = selectedRombel === 'ALL' ? (customOptions?.categoryName || 'SEMUA_ROMBEL') : selectedRombel.replace(/\s+/g, '_');
+    finalFileName = `Data_Siswa_${cleanRombelName}_${dateStr}.xlsx`;
+  }
+
+  XLSX.writeFile(wb, finalFileName);
 }
 
 /**
