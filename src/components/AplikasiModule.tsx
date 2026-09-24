@@ -21,7 +21,10 @@ import {
   Plus,
   Trash2,
   CheckCircle2,
-  Sparkles
+  Sparkles,
+  Loader2,
+  X,
+  Link2
 } from 'lucide-react';
 
 export interface AplikasiLink {
@@ -41,7 +44,7 @@ interface AplikasiModuleProps {
   isSyncing?: boolean;
   aplikasiLinks?: any[];
   setAplikasiLinks?: React.Dispatch<React.SetStateAction<any[]>>;
-  onSaveLinks?: (newLinks: AplikasiLink[]) => void;
+  onSaveLinks?: (newLinks: AplikasiLink[]) => void | Promise<any>;
 }
 
 // Map string icon name to Lucide Icon component
@@ -156,9 +159,88 @@ export const AplikasiModule: React.FC<AplikasiModuleProps> = ({
   }, [aplikasiLinks]);
 
   const [isSettingsMode, setIsSettingsMode] = useState(false);
-  const [settingsCategoryTab, setSettingsCategoryTab] = useState<'main' | 'other'>('main');
   const [editLinks, setEditLinks] = useState<AplikasiLink[]>([]);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [modalError, setModalError] = useState('');
+  const [newShortcutForm, setNewShortcutForm] = useState<Partial<AplikasiLink>>({
+    label: '',
+    url: 'https://',
+    icon: 'Laptop',
+    color: 'from-indigo-500 to-indigo-600',
+    category: 'main',
+    desc: '',
+    tag: ''
+  });
+
+  // Open Quick Add Modal
+  const handleOpenAddModal = (cat: 'main' | 'other' = 'main') => {
+    setNewShortcutForm({
+      label: '',
+      url: 'https://',
+      icon: cat === 'other' ? 'Globe' : 'Laptop',
+      color: cat === 'other' ? 'bg-sky-500/20 text-sky-300 border-sky-500/30 hover:bg-sky-500/30' : 'from-indigo-500 to-indigo-600',
+      category: cat,
+      desc: '',
+      tag: cat === 'other' ? 'Umum' : ''
+    });
+    setModalError('');
+    setShowAddModal(true);
+  };
+
+  // Submit Quick Add Modal (directly saves and syncs to Spreadsheet)
+  const handleSaveQuickAdd = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!newShortcutForm.label || !newShortcutForm.label.trim()) {
+      setModalError('Nama tautan / pintasan wajib diisi.');
+      return;
+    }
+    let rawUrl = (newShortcutForm.url || '').trim();
+    if (!rawUrl || rawUrl === 'https://' || rawUrl === 'http://') {
+      setModalError('Alamat URL website wajib diisi.');
+      return;
+    }
+    if (!/^https?:\/\//i.test(rawUrl)) {
+      rawUrl = `https://${rawUrl}`;
+    }
+
+    setIsSaving(true);
+    setModalError('');
+
+    const newLink: AplikasiLink = {
+      id: String(Date.now()),
+      label: newShortcutForm.label.trim(),
+      url: rawUrl,
+      icon: newShortcutForm.icon || 'Laptop',
+      color: newShortcutForm.color || 'from-indigo-500 to-indigo-600',
+      category: newShortcutForm.category || 'main',
+      desc: newShortcutForm.desc?.trim() || '',
+      tag: newShortcutForm.tag?.trim() || ''
+    };
+
+    const updatedLinks = [...links, newLink];
+    setLinks(updatedLinks);
+    localStorage.setItem('dapodik_aplikasi_links', JSON.stringify(updatedLinks));
+    if (setAplikasiLinks) {
+      setAplikasiLinks(updatedLinks);
+    }
+
+    try {
+      if (onSaveLinks) {
+        await onSaveLinks(updatedLinks);
+      } else {
+        onSync();
+      }
+      setShowAddModal(false);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 4000);
+    } catch (err) {
+      console.error('Error saving new shortcut to spreadsheet:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   // Enter Settings Mode and backup links
   const handleOpenSettings = () => {
@@ -172,8 +254,8 @@ export const AplikasiModule: React.FC<AplikasiModuleProps> = ({
     setEditLinks(prev => prev.map(lnk => lnk.id === id ? { ...lnk, [field]: value } : lnk));
   };
 
-  // Add Link Shortcut
-  const handleAddLink = (category: 'main' | 'other' = settingsCategoryTab) => {
+  // Add Link Shortcut in Settings Mode
+  const handleAddLink = (category: 'main' | 'other' = 'main') => {
     const newId = String(Date.now());
     if (category === 'other') {
       const newLink: AplikasiLink = {
@@ -206,37 +288,38 @@ export const AplikasiModule: React.FC<AplikasiModuleProps> = ({
   };
 
   // Save Settings
-  const handleSaveSettings = () => {
+  const handleSaveSettings = async () => {
+    setIsSaving(true);
     setLinks(editLinks);
     localStorage.setItem('dapodik_aplikasi_links', JSON.stringify(editLinks));
     if (setAplikasiLinks) {
       setAplikasiLinks(editLinks);
     }
-    
-    // Auto sync logic
-    setIsSettingsMode(false);
-    setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 3000);
-    
-    // Call parent onSaveLinks handler if provided (for instant Firestore & Server sync)
-    if (onSaveLinks) {
-      onSaveLinks(editLinks);
-    } else {
-      setTimeout(() => {
+
+    try {
+      if (onSaveLinks) {
+        await onSaveLinks(editLinks);
+      } else {
         onSync();
-      }, 500);
+      }
+      setIsSettingsMode(false);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 4000);
+    } catch (err) {
+      console.error('Error saving shortcut links to spreadsheet:', err);
+    } finally {
+      setIsSaving(false);
     }
   };
 
   // Reset to Default Link Config
   const handleResetToDefault = () => {
     if (window.confirm('Apakah Anda yakin ingin menyetel ulang semua tautan pintasan ke bawaan?')) {
-      setEditLinks(JSON.parse(JSON.stringify([...defaultAplikasiLinks, ...defaultOtherAplikasiLinks])));
+      setEditLinks(JSON.parse(JSON.stringify(defaultAplikasiLinks)));
     }
   };
 
-  const mainLinks = links.filter(l => l.category !== 'other');
-  const otherLinks = links.filter(l => l.category === 'other');
+  const mainLinks = links;
 
   return (
     <div className="space-y-6">
@@ -264,29 +347,61 @@ export const AplikasiModule: React.FC<AplikasiModuleProps> = ({
 
         <div className="flex items-center gap-2">
           {!isSettingsMode ? (
-            <button
-              onClick={handleOpenSettings}
-              className="px-4 py-2 bg-sky-50 hover:bg-sky-100 text-sky-700 rounded-xl text-xs font-black border border-sky-200 shadow-sm transition-all flex items-center gap-2"
-            >
-              <Settings className="w-4 h-4 animate-spin-slow" />
-              <span>Pengaturan Link</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleOpenAddModal('main')}
+                className="px-3.5 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-black shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+                title="Tambah Pintasan Utama ke Spreadsheet"
+              >
+                <Plus className="w-4 h-4 stroke-[3px]" />
+                <span>Tambah Pintasan Utama</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleOpenSettings}
+                className="px-4 py-2 bg-sky-50 hover:bg-sky-100 text-sky-700 rounded-xl text-xs font-black border border-sky-200 shadow-sm transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <Settings className="w-4 h-4 animate-spin-slow" />
+                <span>Pengaturan Link</span>
+              </button>
+            </div>
           ) : (
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <button
+                type="button"
+                onClick={() => handleOpenAddModal('main')}
+                className="px-3 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-black shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5 stroke-[3px]" />
+                <span className="hidden sm:inline">Tambah Pintasan</span>
+              </button>
+              <button
+                type="button"
                 onClick={handleResetToDefault}
-                className="p-2 sm:px-3 sm:py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-bold border border-rose-200 transition-all flex items-center gap-1.5"
+                className="p-2 sm:px-3 sm:py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-bold border border-rose-200 transition-all flex items-center gap-1.5 cursor-pointer"
                 title="Reset Bawaan"
               >
                 <RotateCcw className="w-4 h-4" />
                 <span className="hidden sm:inline">Reset Bawaan</span>
               </button>
               <button
+                type="button"
                 onClick={handleSaveSettings}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-sm transition-all flex items-center gap-2"
+                disabled={isSaving}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white rounded-xl text-xs font-black shadow-sm transition-all flex items-center gap-2 cursor-pointer"
               >
-                <Save className="w-4 h-4" />
-                <span>Simpan Link</span>
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Menyimpan ke Spreadsheet...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    <span>Simpan Link</span>
+                  </>
+                )}
               </button>
             </div>
           )}
@@ -359,7 +474,15 @@ export const AplikasiModule: React.FC<AplikasiModuleProps> = ({
                   <div className="col-span-full py-12 text-center bg-slate-50 rounded-3xl border border-slate-200">
                     <Laptop className="w-12 h-12 text-slate-400 mx-auto mb-3" />
                     <h3 className="text-sm font-black text-slate-700">Belum ada Tautan Utama</h3>
-                    <p className="text-xs text-slate-500 mt-1">Tambahkan tautan cepat Anda melalui tombol Pengaturan Link di atas.</p>
+                    <p className="text-xs text-slate-500 mt-1">Tambahkan tautan cepat Anda ke Google Spreadsheet melalui tombol di bawah.</p>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenAddModal('main')}
+                      className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-black shadow-sm transition-all cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5 stroke-[3px]" />
+                      <span>Tambah Pintasan Sekarang</span>
+                    </button>
                   </div>
                 )}
               </div>
@@ -375,55 +498,24 @@ export const AplikasiModule: React.FC<AplikasiModuleProps> = ({
             transition={{ duration: 0.25 }}
             className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-4"
           >
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
-              <div>
-                <h2 className="text-sm font-black text-slate-900 uppercase tracking-wider">Konfigurasi Pintasan Tautan</h2>
-                <p className="text-xs text-slate-500 mt-0.5">Ubah nama, URL tautan, deskripsi, tag, warna, atau ikon setiap aplikasi.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleAddLink(settingsCategoryTab)}
-                className="px-3.5 py-2 bg-sky-600 hover:bg-sky-700 text-white text-xs font-black rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm shrink-0"
-              >
-                <Plus className="w-3.5 h-3.5 stroke-[3px]" />
-                <span>Tambah {settingsCategoryTab === 'other' ? 'Aplikasi Lain' : 'Pintasan Utama'}</span>
-              </button>
+            <div className="border-b border-slate-100 pb-4">
+              <h2 className="text-sm font-black text-slate-900 uppercase tracking-wider">Konfigurasi Pintasan Tautan</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Ubah nama, URL tautan, deskripsi, tag, warna, atau ikon setiap aplikasi.</p>
             </div>
 
             {/* Category Header Tabs */}
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-xl border border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setSettingsCategoryTab('main')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
-                    settingsCategoryTab === 'main'
-                      ? 'bg-white text-sky-700 shadow-sm border border-slate-200/80 font-black'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
+                <div className="px-3 py-1.5 rounded-lg text-xs font-black bg-white text-sky-700 shadow-sm border border-slate-200/80 flex items-center gap-2">
                   <Laptop className="w-3.5 h-3.5 text-sky-600" />
-                  <span>Pintasan Utama ({editLinks.filter(l => l.category !== 'other').length})</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSettingsCategoryTab('other')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
-                    settingsCategoryTab === 'other'
-                      ? 'bg-white text-purple-700 shadow-sm border border-slate-200/80 font-black'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <Globe className="w-3.5 h-3.5 text-purple-600" />
-                  <span>Layanan Lainnya ({editLinks.filter(l => l.category === 'other').length})</span>
-                </button>
+                  <span>Pintasan Utama ({editLinks.length})</span>
+                </div>
               </div>
             </div>
 
             {/* Settings Cards List */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[60vh] overflow-y-auto pr-1">
               {editLinks
-                .filter(lnk => settingsCategoryTab === 'other' ? lnk.category === 'other' : lnk.category !== 'other')
                 .map((lnk, idx) => {
                   const IconComp = iconMap[lnk.icon] || Laptop;
                   const isOther = lnk.category === 'other';
@@ -577,12 +669,12 @@ export const AplikasiModule: React.FC<AplikasiModuleProps> = ({
                   );
                 })}
 
-              {editLinks.filter(lnk => settingsCategoryTab === 'other' ? lnk.category === 'other' : lnk.category !== 'other').length === 0 && (
+              {editLinks.length === 0 && (
                 <div className="col-span-full py-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                  <p className="text-xs text-slate-500 font-bold">Belum ada item di kategori ini.</p>
+                  <p className="text-xs text-slate-500 font-bold">Belum ada item pintasan.</p>
                   <button
                     type="button"
-                    onClick={() => handleAddLink(settingsCategoryTab)}
+                    onClick={() => handleAddLink('main')}
                     className="mt-2 text-xs text-sky-600 hover:text-sky-700 font-black underline"
                   >
                     + Tambah Sekarang
@@ -602,13 +694,174 @@ export const AplikasiModule: React.FC<AplikasiModuleProps> = ({
               <button
                 type="button"
                 onClick={handleSaveSettings}
-                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-sm transition-all flex items-center gap-1.5"
+                disabled={isSaving}
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white rounded-xl text-xs font-black shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
               >
-                <Save className="w-4 h-4" />
-                <span>Simpan Seluruh Tautan</span>
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Menyimpan ke Spreadsheet...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    <span>Simpan Seluruh Tautan</span>
+                  </>
+                )}
               </button>
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* QUICK ADD MODAL */}
+      <AnimatePresence>
+        {showAddModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 relative space-y-4"
+            >
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center border border-sky-100">
+                    <Laptop className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-slate-900">
+                      Tambah Pintasan Utama Dapodik
+                    </h3>
+                    <p className="text-xs text-slate-500 font-medium">
+                      Data otomatis tersimpan langsung ke Google Spreadsheet & aplikasi.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={isSaving}
+                  onClick={() => setShowAddModal(false)}
+                  className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {modalError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
+                  {modalError}
+                </div>
+              )}
+
+              <form onSubmit={handleSaveQuickAdd} className="space-y-3.5">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wide">
+                    Nama Tautan / Aplikasi <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newShortcutForm.label || ''}
+                    onChange={(e) => setNewShortcutForm(prev => ({ ...prev, label: e.target.value }))}
+                    placeholder="Contoh: Login Dapodik, Info GTK, SimPKB"
+                    className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wide">
+                    Alamat URL Website <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="relative mt-1">
+                    <Link2 className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                    <input
+                      type="text"
+                      required
+                      value={newShortcutForm.url || ''}
+                      onChange={(e) => setNewShortcutForm(prev => ({ ...prev, url: e.target.value }))}
+                      placeholder="https://sp.datadik.kemdikbud.go.id"
+                      className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-800 focus:bg-white focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wide">
+                      Ikon Tautan
+                    </label>
+                    <select
+                      value={newShortcutForm.icon || 'Laptop'}
+                      onChange={(e) => setNewShortcutForm(prev => ({ ...prev, icon: e.target.value }))}
+                      className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-sky-500"
+                    >
+                      <option value="Laptop">Laptop / Komputer</option>
+                      <option value="Database">Database / Data</option>
+                      <option value="School">Sekolah / Gedung</option>
+                      <option value="Globe">Web Global</option>
+                      <option value="Users">Pengguna / PD</option>
+                      <option value="UserCheck">Verifikasi PTK</option>
+                      <option value="FileText">Dokumen / Berkas</option>
+                      <option value="Archive">Buku / Prefill</option>
+                      <option value="Wallet">BOSP / Keuangan</option>
+                      <option value="ShieldCheck">SDM / Keamanan</option>
+                      <option value="Info">Informasi / Bantuan</option>
+                      <option value="Box">Modul / Kotak</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wide">
+                      Tema Warna Card
+                    </label>
+                    <select
+                      value={newShortcutForm.color || 'from-indigo-500 to-indigo-600'}
+                      onChange={(e) => setNewShortcutForm(prev => ({ ...prev, color: e.target.value }))}
+                      className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-sky-500"
+                    >
+                      <option value="from-indigo-500 to-indigo-600">Nila (Indigo)</option>
+                      <option value="from-sky-500 to-blue-600">Biru Langit</option>
+                      <option value="from-blue-600 to-indigo-700">Biru Tua</option>
+                      <option value="from-teal-500 to-emerald-600">Hijau Zamrud</option>
+                      <option value="from-pink-500 to-rose-600">Merah Rose</option>
+                      <option value="from-orange-500 to-amber-600">Oranye Hangat</option>
+                      <option value="from-indigo-600 to-purple-600">Ungu Gelap</option>
+                      <option value="from-cyan-500 to-blue-600">Sian ke Biru</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    disabled={isSaving}
+                    onClick={() => setShowAddModal(false)}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="px-5 py-2 bg-sky-600 hover:bg-sky-700 disabled:bg-sky-400 text-white text-xs font-black rounded-xl shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Menyimpan ke Spreadsheet...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4" />
+                        <span>Simpan & Sinkron ke Spreadsheet</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 

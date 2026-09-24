@@ -359,7 +359,11 @@ function doPost(e) {
       if (data.pengaturan !== undefined) saveSheetData(ss, 'Data_Pengaturan', data.pengaturan);
       if (data.administrator !== undefined) saveSheetData(ss, 'Administrator', data.administrator);
       if (data.profilSekolah !== undefined) saveSheetData(ss, 'Profil_Sekolah', data.profilSekolah);
-      if (data.aplikasi !== undefined) saveSheetData(ss, 'Data_Aplikasi', data.aplikasi, HEADERS_MAP['Data_Aplikasi']);
+      if (data.aplikasi !== undefined) {
+        var targetAppSheet = ss.getSheetByName('Data_Aplikasi') || ss.getSheetByName('Data Aplikasi') || ss.getSheetByName('Aplikasi') || ss.getSheetByName('Pintasan') || ss.getSheetByName('Portal Pintasan');
+        var appSheetName = targetAppSheet ? targetAppSheet.getName() : 'Data_Aplikasi';
+        saveSheetData(ss, appSheetName, data.aplikasi, HEADERS_MAP['Data_Aplikasi']);
+      }
       if (data.notifikasi !== undefined) saveSheetData(ss, 'Notifikasi', data.notifikasi, HEADERS_MAP['Notifikasi']);
       if (data.berkas !== undefined) appendOrMergeSheetData(ss, 'Data_Berkas', data.berkas, HEADERS_MAP['Data_Berkas']);
       if (data.schoolAccounts !== undefined) saveSheetData(ss, 'Data_Multi_Sekolah', data.schoolAccounts, HEADERS_MAP['Data_Multi_Sekolah']);
@@ -543,7 +547,15 @@ function doPost(e) {
     } else if (data.type === 'SYNC_PROFIL_SEKOLAH') {
       saveSheetData(ss, 'Profil_Sekolah', data.payload);
     } else if (data.type === 'SYNC_APLIKASI') {
-      saveSheetData(ss, 'Data_Aplikasi', data.payload, HEADERS_MAP['Data_Aplikasi']);
+      var appItems = data.payload || data.aplikasi || [];
+      var targetAppSheet = ss.getSheetByName('Data_Aplikasi') || ss.getSheetByName('Data Aplikasi') || ss.getSheetByName('Aplikasi') || ss.getSheetByName('Pintasan') || ss.getSheetByName('Portal Pintasan');
+      var sheetName = targetAppSheet ? targetAppSheet.getName() : 'Data_Aplikasi';
+      saveSheetData(ss, sheetName, appItems, HEADERS_MAP['Data_Aplikasi']);
+      return ContentService.createTextOutput(JSON.stringify({ 
+        status: 'success', 
+        message: 'Data Pintasan Aplikasi berhasil disinkronkan ke Google Sheet (' + sheetName + ')!',
+        total: appItems.length
+      })).setMimeType(ContentService.MimeType.JSON);
     }
     
     return ContentService.createTextOutput(JSON.stringify({ 
@@ -560,6 +572,17 @@ function doPost(e) {
 
 function getSheetData(ss, sheetName) {
   let sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    if (sheetName === 'Data_Bangunan') {
+      sheet = ss.getSheetByName('Bangunan') || ss.getSheetByName('Data Bangunan') || ss.getSheetByName('Data_Bangunan_Sekolah');
+    } else if (sheetName === 'Data_Ruang') {
+      sheet = ss.getSheetByName('Ruang') || ss.getSheetByName('Data Ruang') || ss.getSheetByName('Data_Ruang_Sekolah');
+    } else if (sheetName === 'KIB B' || sheetName === 'Data_KIB_B') {
+      sheet = ss.getSheetByName('KIB B') || ss.getSheetByName('Data_KIB_B') || ss.getSheetByName('KIB_B');
+    } else if (sheetName === 'Data_Aplikasi') {
+      sheet = ss.getSheetByName('Data Aplikasi') || ss.getSheetByName('Aplikasi') || ss.getSheetByName('Pintasan') || ss.getSheetByName('Portal Pintasan');
+    }
+  }
   if (!sheet) return [];
   const range = sheet.getDataRange();
   const rows = range.getValues();
@@ -613,6 +636,8 @@ function saveSheetData(ss, sheetName, items, fallbackHeaders) {
       sheet = ss.getSheetByName('Ruang') || ss.getSheetByName('Data Ruang') || ss.getSheetByName('Data_Ruang_Sekolah');
     } else if (sheetName === 'KIB B' || sheetName === 'Data_KIB_B') {
       sheet = ss.getSheetByName('KIB B') || ss.getSheetByName('Data_KIB_B') || ss.getSheetByName('KIB_B');
+    } else if (sheetName === 'Data_Aplikasi') {
+      sheet = ss.getSheetByName('Data Aplikasi') || ss.getSheetByName('Aplikasi') || ss.getSheetByName('Pintasan') || ss.getSheetByName('Portal Pintasan');
     }
   }
   if (!sheet) {
@@ -771,6 +796,14 @@ function saveSheetData(ss, sheetName, items, fallbackHeaders) {
         else if (key === 'Asal Usul' || key === 'asalUsul' || key === 'Asal Usul Perolehan') val = items[i]['asalUsul'] || items[i]['Asal Usul'];
         else if (key === 'Harga' || key === 'harga') val = items[i]['harga'] || items[i]['Harga'];
         else if (key === 'Keterangan' || key === 'keterangan') val = items[i]['keterangan'] || items[i]['Keterangan'];
+        // Data Aplikasi aliases (support both English and Indonesian column headers)
+        else if (key === 'label' || key === 'Nama Tautan' || key === 'Nama Aplikasi' || key === 'Label' || key === 'Nama' || key === 'nama') val = items[i]['label'] || items[i]['Nama Tautan'] || items[i]['Nama Aplikasi'] || items[i]['Label'] || items[i]['Nama'] || items[i]['nama'];
+        else if (key === 'url' || key === 'URL' || key === 'Tautan' || key === 'Alamat URL' || key === 'Link' || key === 'URL Tautan' || key === 'link') val = items[i]['url'] || items[i]['URL'] || items[i]['Tautan'] || items[i]['Alamat URL'] || items[i]['Link'] || items[i]['link'];
+        else if (key === 'icon' || key === 'Ikon' || key === 'Icon') val = items[i]['icon'] || items[i]['Ikon'] || items[i]['Icon'];
+        else if (key === 'color' || key === 'Warna' || key === 'Color' || key === 'Warna Tema') val = items[i]['color'] || items[i]['Warna'] || items[i]['Color'] || items[i]['Warna Tema'];
+        else if (key === 'category' || key === 'Kategori' || key === 'Category') val = items[i]['category'] || items[i]['Kategori'] || items[i]['Category'];
+        else if (key === 'desc' || key === 'Deskripsi' || key === 'Desc' || key === 'Keterangan Singkat' || key === 'Ket') val = items[i]['desc'] || items[i]['Deskripsi'] || items[i]['Desc'] || items[i]['Keterangan Singkat'] || items[i]['Ket'];
+        else if (key === 'tag' || key === 'Tag' || key === 'Label Tag') val = items[i]['tag'] || items[i]['Tag'] || items[i]['Label Tag'];
       }
       if (typeof val === 'object' && val !== null) {
         val = JSON.stringify(val);
@@ -1509,7 +1542,18 @@ function parseSheetsResult(result: any) {
       pengaturan: Array.isArray(result.pengaturan) ? result.pengaturan : [],
       administrator: Array.isArray(result.administrator) ? result.administrator : [],
       profilSekolah: Array.isArray(result.profilSekolah) ? result.profilSekolah : [],
-      aplikasi: Array.isArray(result.aplikasi) ? result.aplikasi : [],
+      aplikasi: Array.isArray(result.aplikasi) ? (result.aplikasi as any[]).map((item: any, idx: number) => {
+        return {
+          id: String(item.id || item.ID || item.Id || `link-${idx + 1}`),
+          label: String(item.label || item['Nama Tautan'] || item['Nama Aplikasi'] || item.Label || item.Nama || item.nama || ''),
+          url: String(item.url || item['Alamat URL'] || item.URL || item.Tautan || item.Link || item.link || ''),
+          icon: String(item.icon || item.Ikon || item.Icon || 'Laptop'),
+          color: String(item.color || item.Warna || item.Color || (item.category === 'other' ? 'bg-sky-500/20 text-sky-300 border-sky-500/30 hover:bg-sky-500/30' : 'from-indigo-500 to-indigo-600')),
+          category: (item.category || item.Kategori || (item.tag || item.desc ? 'other' : 'main')) as 'main' | 'other',
+          desc: String(item.desc || item.Deskripsi || item.Keterangan || ''),
+          tag: String(item.tag || item.Tag || '')
+        };
+      }).filter((l: any) => l.label && l.url) : [],
       schoolAccounts: Array.isArray(result.schoolAccounts) ? result.schoolAccounts : [],
       notifikasi: (result.notifikasi || []).map((n: any, idx: number) => {
         const id = String(n.id || n.ID || `notif-${Date.now()}-${idx}`);
@@ -1741,12 +1785,15 @@ export async function syncToGoogleSheets(
 
     const result = await callProxyOrDirectPost(config.webAppUrl, payload);
     if (result.success) {
-      // Failsafe untuk versi skrip lama: kirim juga secara mandiri data Bangunan & Ruang
+      // Failsafe untuk versi skrip lama: kirim juga secara mandiri data Bangunan, Ruang, dan Aplikasi
       if (data.bangunan && data.bangunan.length > 0) {
         try { await syncBangunanToGoogleSheets(config, data.bangunan); } catch (e) {}
       }
       if (data.ruang && data.ruang.length > 0) {
         try { await syncRuangToGoogleSheets(config, data.ruang); } catch (e) {}
+      }
+      if (data.aplikasi && data.aplikasi.length > 0) {
+        try { await syncAplikasiToGoogleSheets(config, data.aplikasi); } catch (e) {}
       }
     }
     return result;
@@ -1949,6 +1996,59 @@ export async function syncRuangToGoogleSheets(
     };
   }
 
+  return res;
+}
+
+/**
+ * Fungsi khusus sinkronisasi instan Data Pintasan Aplikasi langsung ke sheet "Data_Aplikasi" di Google Spreadsheet
+ */
+export async function syncAplikasiToGoogleSheets(
+  config: SyncConfig,
+  items: any[]
+): Promise<{ success: boolean; message: string; isOldScriptVersion?: boolean; data?: any }> {
+  if (!config.webAppUrl) {
+    return {
+      success: false,
+      message: 'URL Google Apps Script belum diisi di Pengaturan.'
+    };
+  }
+
+  const mappedItems = (items || []).map((item, idx) => ({
+    id: String(item.id || `app-${Date.now()}-${idx}`),
+    'ID': String(item.id || `app-${Date.now()}-${idx}`),
+    label: item.label || 'Tautan Baru',
+    'Nama Tautan': item.label || 'Tautan Baru',
+    'Nama Aplikasi': item.label || 'Tautan Baru',
+    'Label': item.label || 'Tautan Baru',
+    url: item.url || '',
+    'Alamat URL': item.url || '',
+    'URL': item.url || '',
+    'Tautan': item.url || '',
+    icon: item.icon || 'Laptop',
+    'Ikon': item.icon || 'Laptop',
+    'Icon': item.icon || 'Laptop',
+    color: item.color || (item.category === 'other' ? 'bg-sky-500/20 text-sky-300 border-sky-500/30' : 'from-indigo-500 to-indigo-600'),
+    'Warna': item.color || (item.category === 'other' ? 'bg-sky-500/20 text-sky-300 border-sky-500/30' : 'from-indigo-500 to-indigo-600'),
+    'Warna Tema': item.color || (item.category === 'other' ? 'bg-sky-500/20 text-sky-300 border-sky-500/30' : 'from-indigo-500 to-indigo-600'),
+    category: item.category || 'main',
+    'Kategori': item.category || 'main',
+    desc: item.desc || '',
+    'Deskripsi': item.desc || '',
+    'Keterangan': item.desc || '',
+    tag: item.tag || '',
+    'Tag': item.tag || '',
+    'Label Tag': item.tag || ''
+  }));
+
+  const payload = {
+    type: 'SYNC_APLIKASI',
+    spreadsheetUrl: config.spreadsheetUrl || '',
+    payload: mappedItems,
+    aplikasi: mappedItems,
+    timestamp: new Date().toLocaleString('id-ID')
+  };
+
+  const res = await callProxyOrDirectPost(config.webAppUrl, payload);
   return res;
 }
 

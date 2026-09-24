@@ -49,7 +49,7 @@ import { NotificationDrawer } from './components/NotificationDrawer';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { SafeImage } from './components/SafeImage';
 import { formatDateIndonesian, cleanLeadingZerosCode } from './utils/dateUtils';
-import { loadFromGoogleSheets, syncToGoogleSheets, syncKibBToGoogleSheets, syncBangunanToGoogleSheets, syncRuangToGoogleSheets, normalizeWebAppUrl } from './services/googleSheetsService';
+import { loadFromGoogleSheets, syncToGoogleSheets, syncKibBToGoogleSheets, syncBangunanToGoogleSheets, syncRuangToGoogleSheets, syncAplikasiToGoogleSheets, normalizeWebAppUrl } from './services/googleSheetsService';
 
 const SHARED_CONTAINER_URL = "https://ais-pre-rl7bj4twi2wve75vqpw7yr-169174220206.asia-east1.run.app";
 import { 
@@ -1242,8 +1242,9 @@ export default function App() {
             notificationsRef.current = mergedNotifs;
             localStorage.setItem(getStorageKey('dapodik_notifications'), JSON.stringify(mergedNotifs));
           }
-          if (Array.isArray(aplikasi)) {
+          if (Array.isArray(aplikasi) && aplikasi.length > 0) {
             setAplikasiLinks(aplikasi);
+            localStorage.setItem('dapodik_aplikasi_links', JSON.stringify(aplikasi));
             localStorage.setItem(getStorageKey('dapodik_aplikasi_links'), JSON.stringify(aplikasi));
           }
           if (Array.isArray(pulledSchoolAccounts) && pulledSchoolAccounts.length > 0) {
@@ -2005,10 +2006,11 @@ export default function App() {
     showToast('Seluruh cache data offline (Siswa, PTK, Sarpras, Rapor) berhasil dibersihkan permanen!');
   };
 
-  const handleSaveAplikasiLinks = (newLinks: any[]) => {
+  const handleSaveAplikasiLinks = async (newLinks: any[]) => {
     lastLocalMutationRef.current = Date.now();
     setAplikasiLinks(newLinks);
     localStorage.setItem('dapodik_aplikasi_links', JSON.stringify(newLinks));
+    localStorage.setItem(getStorageKey('dapodik_aplikasi_links'), JSON.stringify(newLinks));
 
     triggerAutoSync(
       students,
@@ -2027,6 +2029,28 @@ export default function App() {
       },
       newLinks
     );
+
+    const currentCfg = getEffectiveSyncConfig();
+    if (currentCfg && currentCfg.webAppUrl) {
+      setIsSyncing(true);
+      showToast('Menyinkronkan Pintasan Dapodik ke Google Spreadsheet...');
+      try {
+        const res = await syncAplikasiToGoogleSheets(currentCfg, newLinks);
+        if (res && res.success) {
+          showToast('✅ Berhasil: Pintasan Dapodik disimpan ke Google Spreadsheet!');
+          try { (window as any).confetti?.({ particleCount: 30, spread: 40 }); } catch (e) {}
+        } else {
+          showToast(`⚠️ Tersimpan di aplikasi lokal & server: ${res.message || 'Cek koneksi Spreadsheet'}`);
+        }
+      } catch (err: any) {
+        console.error('Sync aplikasi links error:', err);
+        showToast('⚠️ Pintasan tersimpan di database lokal & server.');
+      } finally {
+        setIsSyncing(false);
+      }
+    } else {
+      showToast('✅ Pintasan Dapodik disimpan secara lokal.');
+    }
   };
 
   const handleSaveDisplayConfig = (newConfig: AppDisplayConfig) => {
