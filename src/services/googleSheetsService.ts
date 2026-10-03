@@ -1228,6 +1228,36 @@ async function callProxyOrDirectPost(rawWebAppUrl: string, payload: any): Promis
   }
 }
 
+export const APP_FULL_STUDENT_HEADERS = [
+  'id', 'nisn', 'nik', 'nama', 'jenisKelamin', 'tempatLahir', 'tanggalLahir', 'rombel', 'namaIbu', 'alamat', 
+  'status', 'agama', 'nis', 'rt', 'rw', 'dusun', 'kelurahan', 'kecamatan', 'kodePos', 'jenisTinggal', 
+  'alatTransportasi', 'telepon', 'hp', 'email', 'skhun', 'penerimaKps', 'noKps', 'namaAyah', 'tahunLahirAyah', 
+  'jenjangPendidikanAyah', 'pekerjaanAyah', 'penghasilanAyah', 'nikAyah', 'tahunLahirIbu', 'jenjangPendidikanIbu', 
+  'pekerjaanIbu', 'penghasilanIbu', 'nikIbu', 'namaWali', 'tahunLahirWali', 'jenjangPendidikanWali', 
+  'pekerjaanWali', 'penghasilanWali', 'nikWali', 'rombelSaatIni', 'noPesertaUn', 'noSeriIjazah', 'penerimaKip', 
+  'nomorKip', 'namaDiKip', 'nomorKks', 'noRegistrasiAktaLahir', 'bank', 'nomorRekeningBank', 'rekeningAtasNama', 
+  'layakPip', 'alasanLayakPip', 'kebutuhanKhusus', 'sekolahAsal', 'anakKeBerapa', 'lintang', 'bujur', 'noKk', 
+  'beratBadan', 'tinggiBadan', 'lingkarKepala', 'jmlSaudaraKandung', 'jarakRumahKeSekolah', 'alasanKeluar', 'tahunLulus'
+];
+
+export const HEADERS_MAP: Record<string, string[]> = {
+  'Data_Siswa': APP_FULL_STUDENT_HEADERS,
+  'Data_Siswa_Keluar': APP_FULL_STUDENT_HEADERS,
+  'Data_Alumni': APP_FULL_STUDENT_HEADERS,
+  'Data_PTK': ['id', 'nuptk', 'nip', 'nama', 'jenisKelamin', 'statusKepegawaian', 'jenisPtk', 'mapel', 'pendidikanTerakhir', 'noHp', 'email', 'statusSertifikasi', 'tempatLahir', 'tanggalLahir', 'agama', 'alamatJalan', 'rt', 'rw', 'namaDusun', 'desaKelurahan', 'kecamatan', 'kodePos', 'tugasTambahan', 'skCpns', 'tanggalCpns', 'skPengangkatan', 'tmtPengangkatan', 'pangkatGolongan', 'nik', 'noKk'],
+  'Data_Sarpras': ['id', 'kodeBarang', 'namaBarang', 'kategori', 'kondisi', 'jumlah', 'satuan', 'letakRuang', 'tahunPengadaan', 'layakPakai'],
+  'Data_Bangunan': ['id', 'no', 'namaBangunan', 'kodeBangunan', 'tahunPembangunan', 'luasTapak', 'jumlahLantai', 'jumlahRuang', 'kondisi', 'bobotKerusakan', 'keterangan'],
+  'Data_Ruang': ['id', 'no', 'jenisPrasarana', 'namaBangunan', 'namaRuang', 'kodeRuang', 'lantai', 'panjang', 'lebar', 'luas', 'bobotKerusakan', 'klasifikasiKerusakan', 'kondisi', 'keterangan'],
+  'KIB B': ['id', 'No', 'NAMA / JENIS BARANG', 'MEREK / MODEL', 'NO SERI PABRIK', 'BAHAN', 'TAHUN PEMBUATAN / PEMBELIAN', 'KODE BARANG', 'JUMLAH BARANG / REGISTER', 'HARGA BELI', 'BAIK', 'KURANG BAIK', 'RUSAK BERAT', 'KETERANGAN MUTASI', 'Kondisi', 'Ukuran / CC', 'No Rangka', 'No Mesin', 'No Polisi', 'No Bpkb', 'Asal Usul', 'Keterangan'],
+  'Data_KIB_B': ['id', 'No', 'NAMA / JENIS BARANG', 'MEREK / MODEL', 'NO SERI PABRIK', 'BAHAN', 'TAHUN PEMBUATAN / PEMBELIAN', 'KODE BARANG', 'JUMLAH BARANG / REGISTER', 'HARGA BELI', 'BAIK', 'KURANG BAIK', 'RUSAK BERAT', 'KETERANGAN MUTASI', 'Kondisi', 'Ukuran / CC', 'No Rangka', 'No Mesin', 'No Polisi', 'No Bpkb', 'Asal Usul', 'Keterangan'],
+  'Data_Rapor': ['id', 'studentId', 'nisn', 'studentName', 'rombel', 'semester', 'tahunAjaran', 'scores', 'kehadiran', 'catatanWaliKelas', 'statusKenaikan'],
+  'Notifikasi': ['id', 'title', 'message', 'time', 'type', 'read'],
+  'Permintaan_Akses_Berkas': ['id', 'fileId', 'fileName', 'requesterName', 'requesterRole', 'requesterEmail', 'requestedAt', 'reason', 'status', 'reviewedBy', 'reviewedAt', 'reviewNotes'],
+  'Data_Berkas': ['id', 'Nama Berkas', 'Nama Pengirim/Orang Tua', 'Kategori', 'Tanggal', 'Link Drive', 'Ukuran File'],
+  'Data_Aplikasi': ['id', 'label', 'url', 'icon', 'color', 'category', 'desc', 'tag'],
+  'Data_Multi_Sekolah': ['id', 'npsn', 'namaSekolah', 'password', 'status', 'role', 'bentukPendidikan', 'kepalaSekolah', 'nipKepalaSekolah', 'alamat', 'kabupatenKota', 'provinsi', 'spreadsheetUrl', 'webAppUrl', 'kontakAdmin', 'catatan', 'createdAt', 'lastLogin']
+};
+
 export function normalizeStudentObject(raw: any, defaultStatus: 'Aktif' | 'Mutasi' | 'Lulus' | 'Keluar' = 'Aktif'): Student {
   if (!raw || typeof raw !== 'object') {
     return {
@@ -1299,6 +1329,7 @@ export function normalizeStudentObject(raw: any, defaultStatus: 'Aktif' | 'Mutas
   }
 
   return {
+    ...raw,
     id,
     nama,
     nisn,
@@ -1326,47 +1357,47 @@ export function normalizeStudentObject(raw: any, defaultStatus: 'Aktif' | 'Mutas
     skhun: getVal('skhun', 'SKHUN', 'No SKHUN', 'No. SKHUN', 'Nomor SKHUN'),
     penerimaKps: getVal('penerimaKps', 'Penerima KPS', 'Penerima KPS/PKH', 'KPS'),
     noKps: getVal('noKps', 'No. KPS', 'No KPS', 'Nomor KPS', 'Nomor KPS/PKH'),
-    namaAyah: getVal('namaAyah', 'Nama Ayah', 'Nama Ayah Kandung'),
-    tahunLahirAyah: getVal('tahunLahirAyah', 'Tahun Lahir Ayah'),
-    jenjangPendidikanAyah: getVal('jenjangPendidikanAyah', 'Jenjang Pendidikan Ayah', 'Pendidikan Ayah'),
-    pekerjaanAyah: getVal('pekerjaanAyah', 'Pekerjaan Ayah'),
-    penghasilanAyah: getVal('penghasilanAyah', 'Penghasilan Ayah'),
-    nikAyah: getVal('nikAyah', 'NIK Ayah', 'NIK ayah'),
-    tahunLahirIbu: getVal('tahunLahirIbu', 'Tahun Lahir Ibu'),
-    jenjangPendidikanIbu: getVal('jenjangPendidikanIbu', 'Jenjang Pendidikan Ibu', 'Pendidikan Ibu'),
-    pekerjaanIbu: getVal('pekerjaanIbu', 'Pekerjaan Ibu'),
-    penghasilanIbu: getVal('penghasilanIbu', 'Penghasilan Ibu'),
-    nikIbu: getVal('nikIbu', 'NIK Ibu', 'NIK ibu'),
-    namaWali: getVal('namaWali', 'Nama Wali'),
-    tahunLahirWali: getVal('tahunLahirWali', 'Tahun Lahir Wali'),
-    jenjangPendidikanWali: getVal('jenjangPendidikanWali', 'Jenjang Pendidikan Wali', 'Pendidikan Wali'),
-    pekerjaanWali: getVal('pekerjaanWali', 'Pekerjaan Wali'),
-    penghasilanWali: getVal('penghasilanWali', 'Penghasilan Wali'),
-    nikWali: getVal('nikWali', 'NIK Wali', 'NIK wali'),
-    rombelSaatIni: getVal('rombelSaatIni', 'Rombel Saat Ini') || rombel,
-    noPesertaUn: getVal('noPesertaUn', 'No Peserta Ujian Nasional', 'No Peserta UN', 'Nomor Peserta UN', 'No. Peserta UN', 'Nomor Peserta Ujian Nasional'),
-    noSeriIjazah: getVal('noSeriIjazah', 'No Seri Ijazah', 'No. Seri Ijazah', 'Nomor Ijazah', 'No Ijazah', 'Nomor Seri Ijazah'),
-    penerimaKip: getVal('penerimaKip', 'Penerima KIP', 'KIP', 'Penerima KIP (Ya/Tidak)'),
-    nomorKip: getVal('nomorKip', 'Nomor KIP', 'No KIP', 'No. KIP', 'Nomor Kartu Indonesia Pintar'),
-    namaDiKip: getVal('namaDiKip', 'Nama di KIP', 'Nama Di KIP', 'Nama Tertera di KIP', 'Nama Pada KIP', 'Nama Siswa di KIP'),
-    nomorKks: getVal('nomorKks', 'Nomor KKS', 'No KKS', 'No. KKS'),
-    noRegistrasiAktaLahir: getVal('noRegistrasiAktaLahir', 'No Registrasi Akta Lahir', 'No. Registrasi Akta Lahir', 'No Registrasi Akta Kelahiran', 'No Akta Lahir', 'Nomor Akta Lahir'),
+    namaAyah: getVal('namaAyah', 'Nama Ayah', 'Nama Ayah Kandung', 'nama_ayah'),
+    tahunLahirAyah: getVal('tahunLahirAyah', 'Tahun Lahir Ayah', 'Tahun Lahir (Ayah)', 'Tahun Lahir', 'Thn Lahir Ayah', 'tahun_lahir_ayah'),
+    jenjangPendidikanAyah: getVal('jenjangPendidikanAyah', 'Jenjang Pendidikan Ayah', 'Pendidikan Ayah', 'Jenjang Pendidikan (Ayah)', 'Pendidikan Terakhir Ayah', 'jenjang_pendidikan_ayah'),
+    pekerjaanAyah: getVal('pekerjaanAyah', 'Pekerjaan Ayah', 'Pekerjaan (Ayah)', 'pekerjaan_ayah'),
+    penghasilanAyah: getVal('penghasilanAyah', 'Penghasilan Ayah', 'Penghasilan (Ayah)', 'Penghasilan Bulanan Ayah', 'penghasilan_ayah'),
+    nikAyah: getVal('nikAyah', 'NIK Ayah', 'NIK ayah', 'No KTP Ayah', 'nik_ayah'),
+    tahunLahirIbu: getVal('tahunLahirIbu', 'Tahun Lahir Ibu', 'Tahun Lahir (Ibu)', 'Thn Lahir Ibu', 'tahun_lahir_ibu'),
+    jenjangPendidikanIbu: getVal('jenjangPendidikanIbu', 'Jenjang Pendidikan Ibu', 'Pendidikan Ibu', 'Jenjang Pendidikan (Ibu)', 'Pendidikan Terakhir Ibu', 'jenjang_pendidikan_ibu'),
+    pekerjaanIbu: getVal('pekerjaanIbu', 'Pekerjaan Ibu', 'Pekerjaan (Ibu)', 'pekerjaan_ibu'),
+    penghasilanIbu: getVal('penghasilanIbu', 'Penghasilan Ibu', 'Penghasilan (Ibu)', 'penghasilan_ibu'),
+    nikIbu: getVal('nikIbu', 'NIK Ibu', 'NIK ibu', 'No KTP Ibu', 'nik_ibu'),
+    namaWali: getVal('namaWali', 'Nama Wali', 'nama_wali'),
+    tahunLahirWali: getVal('tahunLahirWali', 'Tahun Lahir Wali', 'Tahun Lahir (Wali)', 'Thn Lahir Wali', 'tahun_lahir_wali'),
+    jenjangPendidikanWali: getVal('jenjangPendidikanWali', 'Jenjang Pendidikan Wali', 'Pendidikan Wali', 'jenjang_pendidikan_wali'),
+    pekerjaanWali: getVal('pekerjaanWali', 'Pekerjaan Wali', 'Pekerjaan (Wali)', 'pekerjaan_wali'),
+    penghasilanWali: getVal('penghasilanWali', 'Penghasilan Wali', 'Penghasilan (Wali)', 'penghasilan_wali'),
+    nikWali: getVal('nikWali', 'NIK Wali', 'NIK wali', 'No KTP Wali', 'nik_wali'),
+    rombelSaatIni: getVal('rombelSaatIni', 'Rombel Saat Ini', 'rombel_saat_ini') || rombel,
+    noPesertaUn: getVal('noPesertaUn', 'No Peserta Ujian Nasional', 'No Peserta UN', 'Nomor Peserta UN', 'No. Peserta UN', 'Nomor Peserta Ujian Nasional', 'no_peserta_un'),
+    noSeriIjazah: getVal('noSeriIjazah', 'No Seri Ijazah', 'No. Seri Ijazah', 'Nomor Ijazah', 'No Ijazah', 'Nomor Seri Ijazah', 'no_seri_ijazah'),
+    penerimaKip: getVal('penerimaKip', 'Penerima KIP', 'KIP', 'Penerima KIP (Ya/Tidak)', 'penerima_kip'),
+    nomorKip: getVal('nomorKip', 'Nomor KIP', 'No KIP', 'No. KIP', 'Nomor Kartu Indonesia Pintar', 'nomor_kip', 'no_kip'),
+    namaDiKip: getVal('namaDiKip', 'Nama di KIP', 'Nama Di KIP', 'Nama Tertera di KIP', 'Nama Siswa di KIP', 'Nama Pada KIP', 'nama_di_kip'),
+    nomorKks: getVal('nomorKks', 'Nomor KKS', 'No KKS', 'No. KKS', 'nomor_kks', 'no_kks'),
+    noRegistrasiAktaLahir: getVal('noRegistrasiAktaLahir', 'No Registrasi Akta Lahir', 'No. Registrasi Akta Lahir', 'No Registrasi Akta Kelahiran', 'No Akta Lahir', 'Nomor Akta Lahir', 'no_registrasi_akta_lahir'),
     bank: getVal('bank', 'Bank', 'Nama Bank', 'Bank Penyalur'),
-    nomorRekeningBank: getVal('nomorRekeningBank', 'Nomor Rekening Bank', 'No Rekening Bank', 'No Rekening', 'Nomor Rekening', 'No. Rekening'),
-    rekeningAtasNama: getVal('rekeningAtasNama', 'Rekening Atas Nama', 'Nama Rekening', 'Atas Nama Rekening', 'Nama Pemilik Rekening'),
-    layakPip: getVal('layakPip', 'Layak PIP (usulan dari sekolah)', 'Layak PIP (Usulan Sekolah)', 'Layak PIP', 'Usulan PIP', 'Status PIP'),
-    alasanLayakPip: getVal('alasanLayakPip', 'Alasan Layak PIP', 'Alasan PIP', 'Alasan Menerima PIP'),
-    kebutuhanKhusus: getVal('kebutuhanKhusus', 'Kebutuhan Khusus', 'Berkebutuhan Khusus'),
-    sekolahAsal: getVal('sekolahAsal', 'Sekolah Asal', 'Asal Sekolah', 'Nama Sekolah Asal', 'Nama Asal Sekolah', 'Asal SD', 'SD Asal', 'Asal SMP', 'SMP Asal', 'Sekolah Sebelumnya'),
-    anakKeBerapa: getVal('anakKeBerapa', 'Anak ke-berapa', 'Anak Ke-berapa', 'Anak Keberapa', 'Anak Ke', 'Anak ke', 'Anak ke-', 'Anak Ke-', 'Anak Ke (dari)'),
+    nomorRekeningBank: getVal('nomorRekeningBank', 'Nomor Rekening Bank', 'No Rekening Bank', 'No Rekening', 'Nomor Rekening', 'No. Rekening', 'nomor_rekening_bank'),
+    rekeningAtasNama: getVal('rekeningAtasNama', 'Rekening Atas Nama', 'Nama Rekening', 'Atas Nama Rekening', 'Nama Pemilik Rekening', 'rekening_atas_nama'),
+    layakPip: getVal('layakPip', 'Layak PIP (usulan dari sekolah)', 'Layak PIP (Usulan Sekolah)', 'Layak PIP', 'Usulan PIP', 'Status PIP', 'layak_pip'),
+    alasanLayakPip: getVal('alasanLayakPip', 'Alasan Layak PIP', 'Alasan PIP', 'Alasan Menerima PIP', 'alasan_layak_pip'),
+    kebutuhanKhusus: getVal('kebutuhanKhusus', 'Kebutuhan Khusus', 'Berkebutuhan Khusus', 'kebutuhan_khusus'),
+    sekolahAsal: getVal('sekolahAsal', 'Sekolah Asal', 'Asal Sekolah', 'Nama Sekolah Asal', 'Nama Asal Sekolah', 'Asal SD', 'SD Asal', 'Asal SMP', 'SMP Asal', 'Sekolah Sebelumnya', 'sekolah_asal'),
+    anakKeBerapa: getVal('anakKeBerapa', 'Anak ke-berapa', 'Anak Ke-berapa', 'Anak Keberapa', 'Anak Ke', 'Anak ke', 'Anak ke-', 'Anak Ke-', 'Anak Ke (dari)', 'anak_ke_berapa'),
     lintang,
     bujur,
-    noKk: getVal('noKk', 'No KK', 'Nomor KK', 'No. KK', 'No Kartu Keluarga', 'Nomor Kartu Keluarga', 'No. Kartu Keluarga', 'No KK (Kartu Keluarga)', 'Kartu Keluarga'),
-    beratBadan: getVal('beratBadan', 'Berat Badan', 'Berat Badan (kg)', 'BB', 'BB (kg)'),
-    tinggiBadan: getVal('tinggiBadan', 'Tinggi Badan', 'Tinggi Badan (cm)', 'TB', 'TB (cm)'),
-    lingkarKepala: getVal('lingkarKepala', 'Lingkar Kepala', 'Lingkar Kepala (cm)', 'LK', 'LK (cm)'),
-    jmlSaudaraKandung: getVal('jmlSaudaraKandung', 'Jml. Saudara Kandung', 'Jml Saudara Kandung', 'Jumlah Saudara Kandung', 'Jumlah Saudara', 'Jml Saudara', 'Jml. Saudara', 'Saudara Kandung', 'Total Saudara'),
-    jarakRumahKeSekolah: getVal('jarakRumahKeSekolah', 'Jarak Rumah Ke Sekolah (KM)', 'Jarak Rumah ke Sekolah', 'Jarak ke Sekolah', 'Jarak', 'Jarak (KM)'),
+    noKk: getVal('noKk', 'No KK', 'Nomor KK', 'No. KK', 'No Kartu Keluarga', 'Nomor Kartu Keluarga', 'No. Kartu Keluarga', 'No KK (Kartu Keluarga)', 'Kartu Keluarga', 'no_kk'),
+    beratBadan: getVal('beratBadan', 'Berat Badan', 'Berat Badan (kg)', 'BB', 'BB (kg)', 'berat_badan'),
+    tinggiBadan: getVal('tinggiBadan', 'Tinggi Badan', 'Tinggi Badan (cm)', 'TB', 'TB (cm)', 'tinggi_badan'),
+    lingkarKepala: getVal('lingkarKepala', 'Lingkar Kepala', 'Lingkar Kepala (cm)', 'LK', 'LK (cm)', 'lingkar_kepala'),
+    jmlSaudaraKandung: getVal('jmlSaudaraKandung', 'Jml. Saudara Kandung', 'Jml Saudara Kandung', 'Jumlah Saudara Kandung', 'Jumlah Saudara', 'Jml Saudara', 'Jml. Saudara', 'Saudara Kandung', 'Total Saudara', 'jml_saudara_kandung'),
+    jarakRumahKeSekolah: getVal('jarakRumahKeSekolah', 'Jarak Rumah Ke Sekolah (KM)', 'Jarak Rumah ke Sekolah', 'Jarak ke Sekolah', 'Jarak', 'Jarak (KM)', 'jarak_rumah_ke_sekolah'),
     alasanKeluar,
     tahunLulus
   };
@@ -1638,37 +1669,98 @@ export async function syncToGoogleSheets(
       return s === 'lulus' || s === 'alumni';
     };
 
+    const formatStudentPayload = (s: Student) => ({
+      id: s.id || '',
+      nisn: s.nisn || '',
+      nik: s.nik || '',
+      nama: s.nama || '',
+      jenisKelamin: s.jenisKelamin || 'L',
+      tempatLahir: s.tempatLahir || '',
+      tanggalLahir: s.tanggalLahir || '',
+      rombel: s.rombel || '',
+      namaIbu: s.namaIbu || '',
+      alamat: s.alamat || '',
+      status: s.status || 'Aktif',
+      agama: s.agama || 'Islam',
+      nis: s.nis || '',
+      rt: s.rt || '',
+      rw: s.rw || '',
+      dusun: s.dusun || '',
+      kelurahan: s.kelurahan || '',
+      kecamatan: s.kecamatan || '',
+      kodePos: s.kodePos || '',
+      jenisTinggal: s.jenisTinggal || '',
+      alatTransportasi: s.alatTransportasi || '',
+      telepon: s.telepon || '',
+      hp: s.hp || '',
+      email: s.email || '',
+      skhun: s.skhun || '',
+      penerimaKps: s.penerimaKps || 'Tidak',
+      noKps: s.noKps || '',
+      namaAyah: s.namaAyah || '',
+      tahunLahirAyah: s.tahunLahirAyah || '',
+      jenjangPendidikanAyah: s.jenjangPendidikanAyah || '',
+      pekerjaanAyah: s.pekerjaanAyah || '',
+      penghasilanAyah: s.penghasilanAyah || '',
+      nikAyah: s.nikAyah || '',
+      tahunLahirIbu: s.tahunLahirIbu || '',
+      jenjangPendidikanIbu: s.jenjangPendidikanIbu || '',
+      pekerjaanIbu: s.pekerjaanIbu || '',
+      penghasilanIbu: s.penghasilanIbu || '',
+      nikIbu: s.nikIbu || '',
+      namaWali: s.namaWali || '',
+      tahunLahirWali: s.tahunLahirWali || '',
+      jenjangPendidikanWali: s.jenjangPendidikanWali || '',
+      pekerjaanWali: s.pekerjaanWali || '',
+      penghasilanWali: s.penghasilanWali || '',
+      nikWali: s.nikWali || '',
+      rombelSaatIni: s.rombelSaatIni || s.rombel || '',
+      noPesertaUn: s.noPesertaUn || '',
+      noSeriIjazah: s.noSeriIjazah || '',
+      penerimaKip: s.penerimaKip || 'Tidak',
+      nomorKip: s.nomorKip || '',
+      namaDiKip: s.namaDiKip || '',
+      nomorKks: s.nomorKks || '',
+      noRegistrasiAktaLahir: s.noRegistrasiAktaLahir || '',
+      bank: s.bank || '',
+      nomorRekeningBank: s.nomorRekeningBank || '',
+      rekeningAtasNama: s.rekeningAtasNama || '',
+      layakPip: s.layakPip || 'Tidak',
+      alasanLayakPip: s.alasanLayakPip || '',
+      kebutuhanKhusus: s.kebutuhanKhusus || '',
+      sekolahAsal: s.sekolahAsal || '',
+      anakKeBerapa: s.anakKeBerapa || '',
+      lintang: s.lintang || '',
+      bujur: s.bujur || '',
+      noKk: s.noKk || '',
+      beratBadan: s.beratBadan || '',
+      tinggiBadan: s.tinggiBadan || '',
+      lingkarKepala: s.lingkarKepala || '',
+      jmlSaudaraKandung: s.jmlSaudaraKandung || '',
+      jarakRumahKeSekolah: s.jarakRumahKeSekolah || '',
+      alasanKeluar: s.alasanKeluar || '',
+      tahunLulus: s.tahunLulus || ''
+    });
+
     const siswaAktif = (data.siswa || []).filter(s => !isKeluar(s.status) && !isLulus(s.status, s.tahunLulus));
     const siswaKeluar = (data.siswa || []).filter(s => isKeluar(s.status));
     const siswaAlumni = (data.siswa || []).filter(s => isLulus(s.status, s.tahunLulus));
 
     const payload = {
       type: 'SYNC_ALL',
-      siswa: siswaAktif.map(s => {
-        const { alasanKeluar, ...rest } = s;
-        return {
-          ...rest,
-          alasanKeluar: alasanKeluar || '',
-          tahunLulus: s.tahunLulus || ''
-        };
-      }),
-      siswaKeluar: siswaKeluar.map(s => {
-        const { alasanKeluar, ...rest } = s;
-        return {
-          ...rest,
-          alasanKeluar: alasanKeluar || s.status || 'Mutasi'
-        };
-      }),
-      alumni: siswaAlumni.map(s => {
-        const { alasanKeluar, ...rest } = s;
-        return {
-          ...rest,
-          status: 'Lulus',
-          alasanKeluar: alasanKeluar || 'Lulus',
-          tahunLulus: s.tahunLulus || '2024/2025',
-          noSeriIjazah: s.noSeriIjazah || ''
-        };
-      }),
+      headers: HEADERS_MAP,
+      siswa: siswaAktif.map(s => formatStudentPayload(s)),
+      siswaKeluar: siswaKeluar.map(s => ({
+        ...formatStudentPayload(s),
+        status: s.status || 'Mutasi',
+        alasanKeluar: s.alasanKeluar || s.status || 'Mutasi'
+      })),
+      alumni: siswaAlumni.map(s => ({
+        ...formatStudentPayload(s),
+        status: 'Lulus',
+        alasanKeluar: s.alasanKeluar || 'Lulus',
+        tahunLulus: s.tahunLulus || '2024/2025'
+      })),
       ptk: data.ptk || [],
       sarpras: data.sarpras || [],
       kibB: (data.kibB || []).map((item, idx) => ({

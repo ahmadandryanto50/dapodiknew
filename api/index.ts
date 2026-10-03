@@ -470,6 +470,41 @@ app.post("/api/load-sheets", async (req, res) => {
     const deletedSet = new Set(deletedFileIds.map(id => String(id)));
 
     if (data && data.status === 'success') {
+      try {
+        const toSave = safeReadJSON(DATA_FILE, {});
+        if (Array.isArray(data.siswa) && data.siswa.length > 0) {
+          const existingStudents: any[] = Array.isArray(toSave.students) ? toSave.students : [];
+          const existingMap = new Map();
+          for (const es of existingStudents) {
+            if (es && es.id) existingMap.set(String(es.id), es);
+            if (es && es.nisn) existingMap.set(`nisn_${String(es.nisn)}`, es);
+          }
+          const mergedSiswa = data.siswa.map((s: any) => {
+            const matched = existingMap.get(String(s.id)) || (s.nisn ? existingMap.get(`nisn_${String(s.nisn)}`) : undefined);
+            if (!matched) return s;
+            const merged: any = { ...matched, ...s };
+            for (const [k, v] of Object.entries(matched)) {
+              if (v !== undefined && v !== null && String(v).trim() !== '' && (merged[k] === undefined || merged[k] === null || String(merged[k]).trim() === '')) {
+                merged[k] = v;
+              }
+            }
+            return merged;
+          });
+          const loadedIds = new Set(mergedSiswa.map((s: any) => String(s.id)));
+          const loadedNisns = new Set(mergedSiswa.filter((s: any) => s.nisn).map((s: any) => String(s.nisn)));
+          for (const es of existingStudents) {
+            if (es && es.id && !loadedIds.has(String(es.id)) && (!es.nisn || !loadedNisns.has(String(es.nisn)))) {
+              mergedSiswa.push(es);
+              loadedIds.add(String(es.id));
+              if (es.nisn) loadedNisns.add(String(es.nisn));
+            }
+          }
+          toSave.students = mergedSiswa;
+          data.siswa = mergedSiswa;
+        }
+        safeWriteJSON(DATA_FILE, toSave);
+      } catch (e) {}
+
       if (deletedFileIds.length > 0 && Array.isArray(data.berkas)) {
         data.berkas = data.berkas.filter((b: any) => b && b.id && !deletedSet.has(String(b.id)));
       }

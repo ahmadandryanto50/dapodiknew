@@ -49,7 +49,7 @@ import { NotificationDrawer } from './components/NotificationDrawer';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { SafeImage } from './components/SafeImage';
 import { formatDateIndonesian, cleanLeadingZerosCode } from './utils/dateUtils';
-import { loadFromGoogleSheets, syncToGoogleSheets, syncKibBToGoogleSheets, syncBangunanToGoogleSheets, syncRuangToGoogleSheets, syncAplikasiToGoogleSheets, normalizeWebAppUrl } from './services/googleSheetsService';
+import { loadFromGoogleSheets, syncToGoogleSheets, syncKibBToGoogleSheets, syncBangunanToGoogleSheets, syncRuangToGoogleSheets, syncAplikasiToGoogleSheets, normalizeWebAppUrl, normalizeStudentObject } from './services/googleSheetsService';
 
 const SHARED_CONTAINER_URL = "https://ais-pre-rl7bj4twi2wve75vqpw7yr-169174220206.asia-east1.run.app";
 import { 
@@ -295,34 +295,17 @@ export default function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
   
   const [students, setStudents] = useState<Student[]>(() => {
-    // Purge obsolete offline cache from localStorage so all browsers and mobile devices synchronize immediately
+    // Purge obsolete offline cache flag check safely without wiping existing student data
     const CLEAN_OFFLINE_VER = 'dapodik_offline_clean_v2026_09_22_empty_mutasi_alumni_v2';
     if (typeof window !== 'undefined' && localStorage.getItem(CLEAN_OFFLINE_VER) !== 'true') {
-      localStorage.setItem('dapodik_students', JSON.stringify(initialStudents));
-      localStorage.setItem('dapodik_teachers', JSON.stringify(initialTeachers));
-      localStorage.setItem('dapodik_sarpras', JSON.stringify(initialSarpras));
-      localStorage.setItem('dapodik_kib_b', JSON.stringify(initialKibB));
-      localStorage.setItem('dapodik_reports', JSON.stringify(initialReports));
-      
-      // Clean any cached school-specific student keys that had obsolete mutasi/alumni mock data
-      try {
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          if (key && key.startsWith('dapodik_students_')) {
-            const val = localStorage.getItem(key);
-            if (val) {
-              const parsed = JSON.parse(val);
-              if (Array.isArray(parsed)) {
-                const filtered = parsed.filter((s: any) => s && s.status !== 'Mutasi' && s.status !== 'Lulus' && s.status !== 'Keluar');
-                localStorage.setItem(key, JSON.stringify(filtered));
-              }
-            }
-          }
-        }
-      } catch (e) {
-        // ignore
+      const existing = localStorage.getItem('dapodik_students');
+      if (!existing) {
+        localStorage.setItem('dapodik_students', JSON.stringify(initialStudents));
+        localStorage.setItem('dapodik_teachers', JSON.stringify(initialTeachers));
+        localStorage.setItem('dapodik_sarpras', JSON.stringify(initialSarpras));
+        localStorage.setItem('dapodik_kib_b', JSON.stringify(initialKibB));
+        localStorage.setItem('dapodik_reports', JSON.stringify(initialReports));
       }
-
       localStorage.setItem(CLEAN_OFFLINE_VER, 'true');
     }
     const saved = localStorage.getItem('dapodik_students');
@@ -641,6 +624,8 @@ export default function App() {
   ) => {
     if (!isInitialized) return;
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
       await fetch(getApiUrl('/api/app-data'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -660,10 +645,12 @@ export default function App() {
           deletedNotifIds: customDeletedNotifIds,
           schoolAccounts: customSchoolAccounts,
           schoolFiles: customSchoolFiles
-        })
+        }),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
     } catch (err) {
-      console.error('Failed to save data cache to server:', err);
+      console.warn('Background server cache sync skipped:', (err as any)?.message || err);
     }
   };
 
@@ -675,23 +662,33 @@ export default function App() {
     };
     try {
       // 1. Save to local deployment API
+      const controller1 = new AbortController();
+      const timeoutId1 = setTimeout(() => controller1.abort(), 6000);
       await fetch(getApiUrl('/api/sync-config'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(normalizedConfig)
+        body: JSON.stringify(normalizedConfig),
+        signal: controller1.signal
       });
+      clearTimeout(timeoutId1);
     } catch (err) {
-      console.warn('Failed to save sync config to local server:', err);
+      console.warn('Failed to save sync config to local server:', (err as any)?.message || err);
     }
     try {
-      // 2. Also save to central shared container API so it is shared across Vercel, HP, and Laptop permanently
-      await fetch(`${SHARED_CONTAINER_URL}/api/sync-config`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(normalizedConfig)
-      });
+      // 2. Also save to central shared container API if different host so it is shared across Vercel, HP, and Laptop permanently
+      if (typeof window !== 'undefined' && !window.location.origin.includes('ais-pre-rl7bj4twi2wve75vqpw7yr')) {
+        const controller2 = new AbortController();
+        const timeoutId2 = setTimeout(() => controller2.abort(), 6000);
+        await fetch(`${SHARED_CONTAINER_URL}/api/sync-config`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(normalizedConfig),
+          signal: controller2.signal
+        });
+        clearTimeout(timeoutId2);
+      }
     } catch (err) {
-      console.warn('Failed to save sync config to central shared server:', err);
+      console.warn('Failed to save sync config to central shared server:', (err as any)?.message || err);
     }
   };
 
@@ -700,7 +697,20 @@ export default function App() {
     try {
       if (npsn === '40203578') {
         const sS = localStorage.getItem('dapodik_students');
-        setStudents(sS ? sanitizeStudentDates(JSON.parse(sS)) : initialStudents);
+        let parsedStudents: Student[] = initialStudents;
+        if (sS) {
+          try {
+            const rawParsed = JSON.parse(sS);
+            if (Array.isArray(rawParsed)) {
+              parsedStudents = rawParsed.map(s => normalizeStudentObject(s));
+            }
+          } catch (e) {
+            console.error('[loadSchoolWorkspaceData] Failed to parse dapodik_students:', e);
+          }
+        }
+        const cleanStudents = sanitizeStudentDates(parsedStudents);
+        console.info(`[loadSchoolWorkspaceData] NPSN ${npsn}: Loaded & verified ${cleanStudents.length} students across 66-column schema from localStorage.`);
+        setStudents(cleanStudents);
 
         const sT = localStorage.getItem('dapodik_teachers');
         setTeachers(sT ? sanitizeTeacherDates(JSON.parse(sT)) : initialTeachers);
@@ -768,7 +778,20 @@ export default function App() {
         const activeSch = schoolAccounts.find(s => s.npsn === npsn);
 
         const sS = localStorage.getItem(`dapodik_students_${npsn}`);
-        setStudents(sS ? sanitizeStudentDates(JSON.parse(sS)) : []);
+        let parsedStudents: Student[] = [];
+        if (sS) {
+          try {
+            const rawParsed = JSON.parse(sS);
+            if (Array.isArray(rawParsed)) {
+              parsedStudents = rawParsed.map(s => normalizeStudentObject(s));
+            }
+          } catch (e) {
+            console.error(`[loadSchoolWorkspaceData] Failed to parse dapodik_students_${npsn}:`, e);
+          }
+        }
+        const cleanStudents = sanitizeStudentDates(parsedStudents);
+        console.info(`[loadSchoolWorkspaceData] NPSN ${npsn}: Loaded & verified ${cleanStudents.length} students across 66-column schema from localStorage.`);
+        setStudents(cleanStudents);
 
         const sT = localStorage.getItem(`dapodik_teachers_${npsn}`);
         setTeachers(sT ? sanitizeTeacherDates(JSON.parse(sT)) : []);
@@ -1142,8 +1165,8 @@ export default function App() {
           isSyncingFromServerRef.current = true;
 
           if (Array.isArray(siswa)) {
-            // Merge with local students to prevent losing "Mutasi" (Siswa Keluar) and "Alumni" data or column attributes
-            const localStudentsStr = localStorage.getItem(getStorageKey('dapodik_students'));
+            // Merge with local students & current state to prevent losing any student columns across devices
+            const localStudentsStr = localStorage.getItem(getStorageKey('dapodik_students')) || localStorage.getItem('dapodik_students');
             let localStudents: Student[] = [];
             if (localStudentsStr) {
               try {
@@ -1153,14 +1176,18 @@ export default function App() {
               }
             }
             
-            // Build map of local students by ID and NISN for safe deep property preservation
+            // Build map of existing students from both local storage AND current state
             const localMap = new Map<string, Student>();
-            for (const ls of localStudents) {
+            for (const ls of [...students, ...localStudents]) {
               if (ls && ls.id) localMap.set(ls.id, ls);
               if (ls && ls.nisn) localMap.set(`nisn_${ls.nisn}`, ls);
             }
 
             // Merge loaded students with local student fields to ensure complete data retention
+            let preservedFieldsCount = 0;
+            let overwrittenCount = 0;
+            const dataLossWarnings: string[] = [];
+
             const mergedStudents = siswa.map(s => {
               const matchedLocal = localMap.get(s.id) || (s.nisn ? localMap.get(`nisn_${s.nisn}`) : undefined);
               if (!matchedLocal) return s;
@@ -1168,18 +1195,36 @@ export default function App() {
               const merged: any = { ...matchedLocal, ...s };
               // Ensure fields with existing non-empty values in local state are never overwritten by empty spreadsheet cells
               for (const [k, v] of Object.entries(matchedLocal)) {
-                if (v !== undefined && v !== null && String(v).trim() !== '' && (merged[k] === undefined || merged[k] === null || String(merged[k]).trim() === '')) {
-                  merged[k] = v;
+                if (v !== undefined && v !== null && String(v).trim() !== '') {
+                  if (merged[k] === undefined || merged[k] === null || String(merged[k]).trim() === '') {
+                    merged[k] = v;
+                    preservedFieldsCount++;
+                  }
                 }
               }
+
+              // Audit check: Verify no fields were lost in merge
+              for (const [k, v] of Object.entries(matchedLocal)) {
+                if (v !== undefined && v !== null && String(v).trim() !== '' && (merged[k] === undefined || merged[k] === null || String(merged[k]).trim() === '')) {
+                  dataLossWarnings.push(`Student "${matchedLocal.nama || matchedLocal.id}": Field "${k}" had value "${v}" but was lost in merge!`);
+                  overwrittenCount++;
+                }
+              }
+
               return merged as Student;
             });
+
+            if (dataLossWarnings.length > 0) {
+              console.warn(`[Merge Audit Warning] Potential data loss detected across ${overwrittenCount} fields during sheets pull:`, dataLossWarnings);
+            } else {
+              console.info(`[Merge Audit Success] Successfully merged ${mergedStudents.length} students. Retained ${preservedFieldsCount} non-empty local fields without any data loss.`);
+            }
 
             const loadedIds = new Set(mergedStudents.map(s => s.id));
             const loadedNisns = new Set(mergedStudents.filter(s => s.nisn).map(s => s.nisn));
             
             // For any student in the local state but not in the loaded state, preserve them if non-active (Mutasi/Alumni)
-            for (const localStudent of localStudents) {
+            for (const localStudent of [...students, ...localStudents]) {
               if (localStudent && localStudent.id && !loadedIds.has(localStudent.id) && (!localStudent.nisn || !loadedNisns.has(localStudent.nisn))) {
                 // Ignore initial mock students so they don't pollute real Google Spreadsheet data
                 if (localStudent.id.startsWith('std-imp-1789398207')) {
@@ -1189,6 +1234,8 @@ export default function App() {
                 const isNonActive = localStudent.status && localStudent.status !== 'Aktif';
                 if (isNonActive) {
                   mergedStudents.push(localStudent);
+                  loadedIds.add(localStudent.id);
+                  if (localStudent.nisn) loadedNisns.add(localStudent.nisn);
                 }
               }
             }
@@ -1196,6 +1243,7 @@ export default function App() {
             const clean = sanitizeStudentDates(mergedStudents);
             setStudents(clean);
             localStorage.setItem(getStorageKey('dapodik_students'), JSON.stringify(clean));
+            localStorage.setItem('dapodik_students', JSON.stringify(clean));
           }
           if (Array.isArray(ptk)) {
             const clean = sanitizeTeacherDates(ptk);
@@ -1505,6 +1553,7 @@ export default function App() {
                 const clean = sanitizeStudentDates(serverData.students);
                 setStudents(clean);
                 localStorage.setItem('dapodik_students', JSON.stringify(clean));
+                localStorage.setItem(getStorageKey('dapodik_students'), JSON.stringify(clean));
               }
               if (Array.isArray(serverData.teachers) && serverData.teachers.length > 0) {
                 const clean = sanitizeTeacherDates(serverData.teachers);
@@ -2162,6 +2211,7 @@ export default function App() {
     const updated = sanitizeStudentDates([std, ...students]);
     setStudents(updated);
     localStorage.setItem('dapodik_students', JSON.stringify(updated));
+    localStorage.setItem(getStorageKey('dapodik_students'), JSON.stringify(updated));
     showToast(`Siswa "${std.nama}" ditambahkan...`);
     triggerAutoSync(
       updated,
@@ -2186,6 +2236,7 @@ export default function App() {
     const updated = sanitizeStudentDates(students.map(s => s.id === std.id ? std : s));
     setStudents(updated);
     localStorage.setItem('dapodik_students', JSON.stringify(updated));
+    localStorage.setItem(getStorageKey('dapodik_students'), JSON.stringify(updated));
     showToast(`Data siswa "${std.nama}" diperbarui...`);
     triggerAutoSync(
       updated,
@@ -2211,6 +2262,7 @@ export default function App() {
     const updated = sanitizeStudentDates(students.filter(s => s.id !== id));
     setStudents(updated);
     localStorage.setItem('dapodik_students', JSON.stringify(updated));
+    localStorage.setItem(getStorageKey('dapodik_students'), JSON.stringify(updated));
     showToast('Data siswa dihapus...');
     triggerAutoSync(
       updated,
@@ -2351,6 +2403,7 @@ export default function App() {
     }
     setStudents(updated);
     localStorage.setItem('dapodik_students', JSON.stringify(updated));
+    localStorage.setItem(getStorageKey('dapodik_students'), JSON.stringify(updated));
     showToast('Tersimpan');
     triggerAutoSync(
       updated,

@@ -7,6 +7,7 @@ import {
   Search, 
   Download, 
   Upload, 
+  Edit,
   Edit3, 
   Trash2, 
   FileSpreadsheet, 
@@ -51,6 +52,119 @@ export const normalizeTahunLulus = (val?: any): string => {
     return parts[parts.length - 1] || parts[0] || '2025';
   }
   return str;
+};
+
+export const getStudentField = (student: any, ...aliases: string[]): string => {
+  if (!student || typeof student !== 'object') return '';
+  for (const alias of aliases) {
+    if (student[alias] !== undefined && student[alias] !== null && String(student[alias]).trim() !== '') {
+      return String(student[alias]).trim();
+    }
+  }
+  const objKeys = Object.keys(student);
+  for (const alias of aliases) {
+    const cleanTarget = alias.toLowerCase().replace(/[^a-z0-9]/g, '');
+    for (const ok of objKeys) {
+      if (ok.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanTarget) {
+        if (student[ok] !== undefined && student[ok] !== null && String(student[ok]).trim() !== '') {
+          return String(student[ok]).trim();
+        }
+      }
+    }
+  }
+  return '';
+};
+
+export const normalizeStudentFullData = (student: any): Student => {
+  if (!student) return student;
+  let lintang = getStudentField(student, 'lintang', 'Lintang', 'Titik Lintang', 'Latitude', 'Lat');
+  let bujur = getStudentField(student, 'bujur', 'Bujur', 'Titik Bujur', 'Longitude', 'Long', 'Lng');
+  if (!lintang || !bujur) {
+    const coord = getStudentField(student, 'titikKoordinat', 'Titik Koordinat', 'Koordinat', 'Lintang, Bujur', 'Titik Koordinat (Lintang, Bujur)', 'Koordinat (Lintang, Bujur)');
+    if (coord && coord.includes(',')) {
+      const parts = coord.split(',');
+      if (!lintang && parts[0]) lintang = parts[0].trim();
+      if (!bujur && parts[1]) bujur = parts[1].trim();
+    }
+  }
+
+  const genderRaw = getStudentField(student, 'jenisKelamin', 'Jenis Kelamin', 'JK', 'J/P', 'L/P', 'gender');
+  const jenisKelamin: 'L' | 'P' = (genderRaw.toUpperCase().startsWith('P') || genderRaw.toLowerCase().includes('perempuan')) ? 'P' : 'L';
+  const rombel = getStudentField(student, 'rombel', 'Kelas', 'Rombel') || 'Kelas 7A';
+
+  return {
+    ...student,
+    id: student.id || `std-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    nama: getStudentField(student, 'nama', 'Nama', 'Nama Siswa', 'Nama Lengkap', 'Nama Peserta Didik'),
+    nisn: getStudentField(student, 'nisn', 'NISN', 'Nisn'),
+    nik: getStudentField(student, 'nik', 'NIK', 'Nik', 'No KTP'),
+    nis: getStudentField(student, 'nis', 'NIS', 'Nis', 'NIPD', 'Nomor Induk'),
+    jenisKelamin,
+    tempatLahir: getStudentField(student, 'tempatLahir', 'Tempat Lahir', 'tempat_lahir'),
+    tanggalLahir: getStudentField(student, 'tanggalLahir', 'Tanggal Lahir', 'Tgl Lahir', 'tanggal_lahir'),
+    rombel,
+    rombelSaatIni: getStudentField(student, 'rombelSaatIni', 'Rombel Saat Ini', 'rombel_saat_ini') || rombel,
+    namaIbu: getStudentField(student, 'namaIbu', 'Nama Ibu', 'Nama Ibu Kandung', 'nama_ibu'),
+    alamat: getStudentField(student, 'alamat', 'Alamat', 'Alamat Jalan', 'Alamat Rumah'),
+    status: (getStudentField(student, 'status', 'Status', 'Status Siswa') as any) || 'Aktif',
+    agama: getStudentField(student, 'agama', 'Agama') || 'Islam',
+    rt: getStudentField(student, 'rt', 'RT'),
+    rw: getStudentField(student, 'rw', 'RW'),
+    dusun: getStudentField(student, 'dusun', 'Dusun', 'Nama Dusun'),
+    kelurahan: getStudentField(student, 'kelurahan', 'Kelurahan', 'Desa/Kelurahan', 'Desa'),
+    kecamatan: getStudentField(student, 'kecamatan', 'Kecamatan'),
+    kodePos: getStudentField(student, 'kodePos', 'Kode Pos', 'kode_pos'),
+    jenisTinggal: getStudentField(student, 'jenisTinggal', 'Jenis Tinggal') || 'Bersama orang tua',
+    alatTransportasi: getStudentField(student, 'alatTransportasi', 'Alat Transportasi', 'Transportasi'),
+    telepon: getStudentField(student, 'telepon', 'Telepon', 'No Telepon', 'Telepon Rumah'),
+    hp: getStudentField(student, 'hp', 'HP', 'No HP', 'Nomor HP', 'Handphone'),
+    email: getStudentField(student, 'email', 'Email', 'E-Mail', 'Surel'),
+    skhun: getStudentField(student, 'skhun', 'SKHUN', 'No SKHUN', 'Nomor SKHUN'),
+    penerimaKps: getStudentField(student, 'penerimaKps', 'Penerima KPS', 'KPS') || 'Tidak',
+    noKps: getStudentField(student, 'noKps', 'No. KPS', 'No KPS', 'Nomor KPS'),
+    namaAyah: getStudentField(student, 'namaAyah', 'Nama Ayah', 'Nama Ayah Kandung'),
+    tahunLahirAyah: getStudentField(student, 'tahunLahirAyah', 'Tahun Lahir Ayah', 'Tahun Lahir', 'Thn Lahir Ayah'),
+    jenjangPendidikanAyah: getStudentField(student, 'jenjangPendidikanAyah', 'Jenjang Pendidikan Ayah', 'Pendidikan Ayah'),
+    pekerjaanAyah: getStudentField(student, 'pekerjaanAyah', 'Pekerjaan Ayah'),
+    penghasilanAyah: getStudentField(student, 'penghasilanAyah', 'Penghasilan Ayah'),
+    nikAyah: getStudentField(student, 'nikAyah', 'NIK Ayah', 'NIK ayah', 'No KTP Ayah'),
+    tahunLahirIbu: getStudentField(student, 'tahunLahirIbu', 'Tahun Lahir Ibu', 'Tahun Lahir', 'Thn Lahir Ibu'),
+    jenjangPendidikanIbu: getStudentField(student, 'jenjangPendidikanIbu', 'Jenjang Pendidikan Ibu', 'Pendidikan Ibu'),
+    pekerjaanIbu: getStudentField(student, 'pekerjaanIbu', 'Pekerjaan Ibu'),
+    penghasilanIbu: getStudentField(student, 'penghasilanIbu', 'Penghasilan Ibu'),
+    nikIbu: getStudentField(student, 'nikIbu', 'NIK Ibu', 'NIK ibu', 'No KTP Ibu'),
+    namaWali: getStudentField(student, 'namaWali', 'Nama Wali'),
+    tahunLahirWali: getStudentField(student, 'tahunLahirWali', 'Tahun Lahir Wali', 'Thn Lahir Wali'),
+    jenjangPendidikanWali: getStudentField(student, 'jenjangPendidikanWali', 'Jenjang Pendidikan Wali', 'Pendidikan Wali'),
+    pekerjaanWali: getStudentField(student, 'pekerjaanWali', 'Pekerjaan Wali'),
+    penghasilanWali: getStudentField(student, 'penghasilanWali', 'Penghasilan Wali'),
+    nikWali: getStudentField(student, 'nikWali', 'NIK Wali', 'NIK wali'),
+    noPesertaUn: getStudentField(student, 'noPesertaUn', 'No Peserta Ujian Nasional', 'No Peserta UN', 'Nomor Peserta UN', 'Nomor Peserta Ujian Nasional'),
+    noSeriIjazah: getStudentField(student, 'noSeriIjazah', 'No Seri Ijazah', 'No. Seri Ijazah', 'Nomor Ijazah', 'No Ijazah', 'Nomor Seri Ijazah'),
+    penerimaKip: getStudentField(student, 'penerimaKip', 'Penerima KIP', 'KIP', 'Penerima KIP (Ya/Tidak)') || 'Tidak',
+    nomorKip: getStudentField(student, 'nomorKip', 'Nomor KIP', 'No KIP', 'No. KIP', 'Nomor Kartu Indonesia Pintar'),
+    namaDiKip: getStudentField(student, 'namaDiKip', 'Nama di KIP', 'Nama Di KIP', 'Nama Tertera di KIP', 'Nama Siswa di KIP'),
+    nomorKks: getStudentField(student, 'nomorKks', 'Nomor KKS', 'No KKS', 'No. KKS'),
+    noRegistrasiAktaLahir: getStudentField(student, 'noRegistrasiAktaLahir', 'No Registrasi Akta Lahir', 'No. Registrasi Akta Lahir', 'No Registrasi Akta Kelahiran', 'No Akta Lahir'),
+    bank: getStudentField(student, 'bank', 'Bank', 'Nama Bank', 'Bank Penyalur') || 'BRI',
+    nomorRekeningBank: getStudentField(student, 'nomorRekeningBank', 'Nomor Rekening Bank', 'No Rekening Bank', 'No Rekening', 'Nomor Rekening', 'No. Rekening'),
+    rekeningAtasNama: getStudentField(student, 'rekeningAtasNama', 'Rekening Atas Nama', 'Nama Rekening', 'Atas Nama Rekening', 'Nama Pemilik Rekening'),
+    layakPip: getStudentField(student, 'layakPip', 'Layak PIP (usulan dari sekolah)', 'Layak PIP (Usulan Sekolah)', 'Layak PIP', 'Usulan PIP') || 'Tidak',
+    alasanLayakPip: getStudentField(student, 'alasanLayakPip', 'Alasan Layak PIP', 'Alasan PIP', 'Alasan Menerima PIP'),
+    kebutuhanKhusus: getStudentField(student, 'kebutuhanKhusus', 'Kebutuhan Khusus', 'Berkebutuhan Khusus') || 'Tidak ada',
+    sekolahAsal: getStudentField(student, 'sekolahAsal', 'Sekolah Asal', 'Asal Sekolah', 'Nama Sekolah Asal', 'Asal SD', 'SD Asal'),
+    anakKeBerapa: getStudentField(student, 'anakKeBerapa', 'Anak ke-berapa', 'Anak Ke-berapa', 'Anak Keberapa', 'Anak Ke', 'Anak ke') || '1',
+    lintang,
+    bujur,
+    noKk: getStudentField(student, 'noKk', 'No KK', 'Nomor KK', 'No. KK', 'No Kartu Keluarga', 'Nomor Kartu Keluarga'),
+    beratBadan: getStudentField(student, 'beratBadan', 'Berat Badan', 'Berat Badan (kg)', 'BB', 'BB (kg)'),
+    tinggiBadan: getStudentField(student, 'tinggiBadan', 'Tinggi Badan', 'Tinggi Badan (cm)', 'TB', 'TB (cm)'),
+    lingkarKepala: getStudentField(student, 'lingkarKepala', 'Lingkar Kepala', 'Lingkar Kepala (cm)', 'LK', 'LK (cm)'),
+    jmlSaudaraKandung: getStudentField(student, 'jmlSaudaraKandung', 'Jml. Saudara Kandung', 'Jml Saudara Kandung', 'Jumlah Saudara Kandung', 'Jumlah Saudara', 'Saudara Kandung') || '1',
+    jarakRumahKeSekolah: getStudentField(student, 'jarakRumahKeSekolah', 'Jarak Rumah Ke Sekolah (KM)', 'Jarak Rumah ke Sekolah', 'Jarak ke Sekolah', 'Jarak') || '1',
+    alasanKeluar: getStudentField(student, 'alasanKeluar', 'Alasan Keluar', 'Alasan Keluar / Mutasi', 'Alasan Mutasi'),
+    tahunLulus: getStudentField(student, 'tahunLulus', 'Tahun Lulus', 'Tahun Kelulusan')
+  };
 };
 
 interface StudentModuleProps {
@@ -391,12 +505,14 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
       lingkarKepala: '52',
       jmlSaudaraKandung: '2',
       jarakRumahKeSekolah: '1.5',
-      tahunLulus: ''
+      tahunLulus: '',
+      alasanKeluar: ''
     });
     setIsModalOpen(true);
   };
 
-  const handleOpenEditModal = (student: Student) => {
+  const handleOpenEditModal = (rawStudent: Student) => {
+    const student = normalizeStudentFullData(rawStudent);
     setEditingStudent(student);
     setFormActiveTab('biodata');
     setFormData({
@@ -428,13 +544,13 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
       noKps: student.noKps || '',
       namaAyah: student.namaAyah || '',
       tahunLahirAyah: student.tahunLahirAyah || '',
-      jenjangPendidikanAyah: student.jenjangPendidikanAyah || 'SMA',
-      pekerjaanAyah: student.pekerjaanAyah || 'Wiraswasta',
+      jenjangPendidikanAyah: student.jenjangPendidikanAyah || '',
+      pekerjaanAyah: student.pekerjaanAyah || '',
       penghasilanAyah: student.penghasilanAyah || '',
       nikAyah: student.nikAyah || '',
       tahunLahirIbu: student.tahunLahirIbu || '',
-      jenjangPendidikanIbu: student.jenjangPendidikanIbu || 'SMA',
-      pekerjaanIbu: student.pekerjaanIbu || 'Ibu Rumah Tangga',
+      jenjangPendidikanIbu: student.jenjangPendidikanIbu || '',
+      pekerjaanIbu: student.pekerjaanIbu || '',
       penghasilanIbu: student.penghasilanIbu || '',
       nikIbu: student.nikIbu || '',
       namaWali: student.namaWali || '',
@@ -467,7 +583,8 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
       lingkarKepala: student.lingkarKepala || '',
       jmlSaudaraKandung: student.jmlSaudaraKandung || '1',
       jarakRumahKeSekolah: student.jarakRumahKeSekolah || '1',
-      tahunLulus: student.tahunLulus || ''
+      tahunLulus: student.tahunLulus || '',
+      alasanKeluar: student.alasanKeluar || ''
     });
     setIsModalOpen(true);
   };
@@ -486,6 +603,7 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
 
     if (editingStudent) {
       onUpdateStudent({
+        ...editingStudent,
         ...cleanedFormData,
         id: editingStudent.id
       });
@@ -1204,7 +1322,7 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
                                   onClick={() => {
                                     setOpenActionId(null);
                                     setActionMenuPos(null);
-                                    setSelectedStudentForDetail(student);
+                                    setSelectedStudentForDetail(normalizeStudentFullData(student));
                                   }}
                                   className="w-full text-left px-3.5 py-2 hover:bg-sky-50 text-slate-700 hover:text-sky-700 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
                                 >
@@ -1486,12 +1604,26 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
                   </p>
                 </div>
               </div>
-              <button 
-                onClick={() => setSelectedStudentForDetail(null)}
-                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const studentToEdit = selectedStudentForDetail;
+                    setSelectedStudentForDetail(null);
+                    handleOpenEditModal(studentToEdit);
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Edit className="w-3.5 h-3.5" />
+                  <span>Edit Biodata</span>
+                </button>
+                <button 
+                  onClick={() => setSelectedStudentForDetail(null)}
+                  className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             <div className="p-4 flex-1 overflow-y-auto space-y-4 text-xs text-slate-700">
@@ -1521,6 +1653,10 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
                   <div>
                     <span className="text-slate-500 block text-[10px]">No Handphone / HP</span>
                     <span className="font-semibold text-slate-900">{selectedStudentForDetail.hp || '-'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[10px]">Telepon Rumah</span>
+                    <span className="font-semibold text-slate-900">{selectedStudentForDetail.telepon || '-'}</span>
                   </div>
                   <div>
                     <span className="text-slate-500 block text-[10px]">E-Mail Siswa</span>
@@ -1696,15 +1832,43 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
                     <span className="text-slate-500 block text-[10px]">No Seri Ijazah</span>
                     <span className="font-semibold text-slate-900 font-mono">{selectedStudentForDetail.noSeriIjazah || '-'}</span>
                   </div>
-                  <div className="sm:col-span-2">
+                  <div>
                     <span className="text-slate-500 block text-[10px]">SKHUN</span>
                     <span className="font-semibold text-slate-900 font-mono">{selectedStudentForDetail.skhun || '-'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[10px]">Rombel Saat Ini</span>
+                    <span className="font-semibold text-slate-900">{selectedStudentForDetail.rombelSaatIni || selectedStudentForDetail.rombel || '-'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[10px]">Status Siswa</span>
+                    <span className="font-semibold text-slate-900">{selectedStudentForDetail.status || 'Aktif'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[10px]">Tahun Lulus</span>
+                    <span className="font-semibold text-slate-900 font-mono">{selectedStudentForDetail.tahunLulus || '-'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[10px]">Alasan Keluar / Mutasi</span>
+                    <span className="font-semibold text-slate-900">{selectedStudentForDetail.alasanKeluar || '-'}</span>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const studentToEdit = selectedStudentForDetail;
+                  setSelectedStudentForDetail(null);
+                  handleOpenEditModal(studentToEdit);
+                }}
+                className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+              >
+                <Edit className="w-3.5 h-3.5" />
+                <span>Edit Biodata Lengkap</span>
+              </button>
               <button
                 onClick={() => setSelectedStudentForDetail(null)}
                 className="px-5 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs transition-colors"
