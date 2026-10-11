@@ -271,9 +271,9 @@ app.post("/api/upload-file", async (req, res) => {
     currentData.schoolFiles = updatedFiles;
     safeWriteJSON(DATA_FILE, currentData);
 
-    // Sync to Google Spreadsheet (Data_Berkas)
+    // Sync to Google Spreadsheet (Data_Berkas) hanya jika belum otomatis tercatat oleh UPLOAD_FILE_TO_DRIVE
     const webAppUrl = getEffectiveWebAppUrl();
-    if (webAppUrl) {
+    if (webAppUrl && !isDriveSynced) {
       try {
         const syncPayload = {
           type: "SYNC_BERKAS",
@@ -688,38 +688,36 @@ app.get("/api/app-data", async (req, res) => {
       } catch (e: any) {}
     }
 
-    const localFiles = Array.isArray(data.schoolFiles) ? data.schoolFiles : [];
-    const fileMap = new Map<string, any>();
-    
-    for (let idx = 0; idx < spreadsheetFiles.length; idx++) {
-      const f = spreadsheetFiles[idx];
-      if (f && (f.id || f["Nama Berkas"] || f.name || f["Link Drive"] || f.driveFileUrl)) {
-        const fileId = String(f.id || f.fileId || `BRK-S-${idx}`);
-        fileMap.set(fileId, {
-          id: fileId,
-          name: f["Nama Berkas"] || f.name || f.Name || "Berkas Dokumen",
-          category: f["Kategori"] || f.category || f.Category || "Umum",
-          fileSize: Number(f["Ukuran File"] || f.fileSize || f.FileSize || f.size || 0),
-          fileType: f.fileType || f.FileType || "application/octet-stream",
-          fileExtension: f.fileExtension || f.FileExtension || "",
-          uploadedAt: f["Tanggal"] || f.uploadedAt || f.UploadedAt || "",
-          uploadedBy: f["Nama Pengirim/Orang Tua"] || f.uploadedBy || f.UploadedBy || "Tamu / Orang Tua",
-          uploadedByRole: f.uploadedByRole || f.UploadedByRole || "Tamu / Umum",
-          driveFileUrl: f["Link Drive"] || f.driveFileUrl || f.DriveFileUrl || f.url || "",
-          driveFolderId: f.driveFolderId || f.DriveFolderId || "",
-          privacy: f.privacy || f.Privacy || "Public",
-          description: f.description || f.Description || ""
-        });
+    let mergedFiles: any[] = [];
+    if (spreadsheetFiles.length > 0) {
+      // Live Google Spreadsheet is the source of truth
+      for (let idx = 0; idx < spreadsheetFiles.length; idx++) {
+        const f = spreadsheetFiles[idx];
+        if (f && (f.id || f["Nama Berkas"] || f.name || f["Link Drive"] || f.driveFileUrl)) {
+          const fileId = String(f.id || f.fileId || `BRK-S-${idx}`);
+          if (!deletedSet.has(fileId)) {
+            mergedFiles.push({
+              id: fileId,
+              name: f["Nama Berkas"] || f.name || f.Name || "Berkas Dokumen",
+              category: f["Kategori"] || f.category || f.Category || "Umum",
+              fileSize: Number(f["Ukuran File"] || f.fileSize || f.FileSize || f.size || 0),
+              fileType: f.fileType || f.FileType || "application/octet-stream",
+              fileExtension: f.fileExtension || f.FileExtension || "",
+              uploadedAt: f["Tanggal"] || f.uploadedAt || f.UploadedAt || "",
+              uploadedBy: f["Nama Pengirim/Orang Tua"] || f.uploadedBy || f.UploadedBy || "Tamu / Orang Tua",
+              uploadedByRole: f.uploadedByRole || f.UploadedByRole || "Tamu / Umum",
+              driveFileUrl: f["Link Drive"] || f.driveFileUrl || f.DriveFileUrl || f.url || "",
+              driveFolderId: f.driveFolderId || f.DriveFolderId || "",
+              privacy: f.privacy || f.Privacy || "Public",
+              description: f.description || f.Description || ""
+            });
+          }
+        }
       }
+    } else {
+      const localFiles = Array.isArray(data.schoolFiles) ? data.schoolFiles : [];
+      mergedFiles = localFiles.filter(f => f && f.id && !deletedSet.has(String(f.id)));
     }
-    
-    for (const f of localFiles) {
-      if (f && f.id) {
-        fileMap.set(String(f.id), f);
-      }
-    }
-    
-    let mergedFiles = Array.from(fileMap.values());
     if (deletedSet.size > 0) {
       mergedFiles = mergedFiles.filter(f => f && f.id && !deletedSet.has(String(f.id)));
     }

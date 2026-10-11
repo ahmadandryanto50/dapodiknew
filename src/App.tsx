@@ -1326,7 +1326,7 @@ export default function App() {
             localStorage.setItem(getStorageKey('dapodik_school_profile'), JSON.stringify(cleanProf));
           }
 
-          if (Array.isArray(pulledBerkas) && pulledBerkas.length > 0) {
+          if (Array.isArray(pulledBerkas)) {
             localStorage.setItem('dapodik_school_files', JSON.stringify(pulledBerkas));
           }
 

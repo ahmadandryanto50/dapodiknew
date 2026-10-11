@@ -245,7 +245,7 @@ async function startServer() {
         if (webAppUrl) {
           try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 45000);
+            const timeoutId = setTimeout(() => controller.abort(), 20000);
 
             const scriptRes = await fetch(webAppUrl, {
               method: "POST",
@@ -323,9 +323,9 @@ async function startServer() {
       currentData.schoolFiles = updatedFiles;
       safeWriteJSON(DATA_FILE, currentData);
 
-      // SINKRONISASI KE GOOGLE SPREADSHEET (Data_Berkas Sheet)
+      // SINKRONISASI KE GOOGLE SPREADSHEET (Hanya jika belum otomatis tercatat oleh UPLOAD_FILE_TO_DRIVE)
       const webAppUrl = getEffectiveWebAppUrl();
-      if (webAppUrl) {
+      if (webAppUrl && !isDriveSynced) {
         try {
           const syncPayload = {
             type: "SYNC_BERKAS",
@@ -358,8 +358,6 @@ async function startServer() {
           
           if (sheetsSyncRes.ok) {
             console.log(`Successfully synced uploaded file "${newItem.name}" metadata to Google Sheets Data_Berkas.`);
-          } else {
-            console.warn(`Failed to sync uploaded file metadata to Google Sheets. Status: ${sheetsSyncRes.status}`);
           }
         } catch (syncErr: any) {
           console.warn("Spreadsheet file sync error in upload-file:", syncErr?.message || syncErr);
@@ -615,14 +613,31 @@ async function startServer() {
           if (Array.isArray(data.notifikasi)) toSave.notifications = data.notifikasi;
           if (Array.isArray(data.schoolAccounts) && data.schoolAccounts.length > 0) toSave.schoolAccounts = data.schoolAccounts;
           if (Array.isArray(data.berkas)) {
-            const existingFiles: any[] = Array.isArray(toSave.schoolFiles) ? toSave.schoolFiles : [];
-            const existingMap = new Map(existingFiles.map((f: any) => [String(f.id), f]));
-            for (const b of data.berkas) {
-              if (b && b.id && !deletedSet.has(String(b.id))) {
-                existingMap.set(String(b.id), { ...existingMap.get(String(b.id)), ...b });
-              }
-            }
-            toSave.schoolFiles = Array.from(existingMap.values());
+            // Google Spreadsheet Data_Berkas is the authoritative database for files.
+            // If rows were deleted from Google Spreadsheet, update schoolFiles to match the live sheet.
+            const incomingBerkasNormalized = data.berkas
+              .filter((b: any) => b && (b.id || b.name || b['Nama Berkas'] || b['Link Drive'] || b.driveFileUrl))
+              .map((b: any, idx: number) => {
+                const bId = String(b.id || b.fileId || b['Link Drive'] || b['Nama Berkas'] || `berkas-${idx}`);
+                return {
+                  id: bId,
+                  name: b.name || b['Nama Berkas'] || b.Name || 'Berkas Dokumen',
+                  category: b.category || b['Kategori'] || b.Category || 'Umum',
+                  fileSize: Number(b.fileSize || b['Ukuran File'] || b.FileSize || b.size || 0),
+                  fileType: b.fileType || b.FileType || 'application/octet-stream',
+                  fileExtension: b.fileExtension || b.FileExtension || '',
+                  uploadedAt: b.uploadedAt || b['Tanggal'] || b.UploadedAt || '',
+                  uploadedBy: b.uploadedBy || b['Nama Pengirim/Orang Tua'] || b.UploadedBy || 'Tamu / Orang Tua',
+                  uploadedByRole: b.uploadedByRole || b.UploadedByRole || 'Tamu / Umum',
+                  driveFileUrl: b.driveFileUrl || b['Link Drive'] || b.DriveFileUrl || b.url || '',
+                  driveFolderId: b.driveFolderId || b.DriveFolderId || '',
+                  privacy: b.privacy || b.Privacy || 'Public',
+                  description: b.description || b.Description || ''
+                };
+              })
+              .filter((b: any) => !deletedSet.has(String(b.id)) && !deletedSet.has(String(b.name)) && !deletedSet.has(String(b.driveFileUrl)));
+
+            toSave.schoolFiles = incomingBerkasNormalized;
           }
           safeWriteJSON(DATA_FILE, toSave);
         } catch (saveErr) {
@@ -901,44 +916,35 @@ async function startServer() {
         }
       }
 
-      // Handle schoolFiles with smart merging by ID across multiple devices & browsers
+      // Handle schoolFiles: if incoming.schoolFiles is provided, adopt it directly; otherwise keep current
       let mergedFiles: any[] = [];
       const delFileSet = new Set<string>(mergedDeletedFiles);
-      const currentFilesList: any[] = Array.isArray(currentData.schoolFiles) ? currentData.schoolFiles : (Array.isArray(currentData.files) ? currentData.files : []);
-      
-      const fileMap = new Map<string, any>();
-      for (const f of currentFilesList) {
-        if (f && f.id && !delFileSet.has(String(f.id))) {
-          fileMap.set(String(f.id), f);
-        }
-      }
-      const incFiles = Array.isArray(incoming.schoolFiles) ? incoming.schoolFiles : (Array.isArray(incoming.berkas) ? incoming.berkas : (Array.isArray(incoming.files) ? incoming.files : []));
-      if (incFiles.length > 0) {
-        for (let idx = 0; idx < incFiles.length; idx++) {
-          const f = incFiles[idx];
-          if (f && (f.id || f.name || f["Nama Berkas"] || f.driveFileUrl || f["Link Drive"])) {
+      if (incoming.schoolFiles !== undefined || incoming.berkas !== undefined) {
+        const incFiles = Array.isArray(incoming.schoolFiles) ? incoming.schoolFiles : (Array.isArray(incoming.berkas) ? incoming.berkas : []);
+        mergedFiles = incFiles
+          .filter((f: any) => f && f.id && !delFileSet.has(String(f.id)))
+          .map((f: any, idx: number) => {
             const fileId = String(f.id || f.fileId || `BRK-I-${idx}`);
-            if (!delFileSet.has(fileId)) {
-              fileMap.set(fileId, {
-                id: fileId,
-                name: f.name || f["Nama Berkas"] || f.Name || "Berkas Dokumen",
-                category: f.category || f["Kategori"] || f.Category || "Umum",
-                fileSize: Number(f.fileSize || f["Ukuran File"] || f.FileSize || f.size || 0),
-                fileType: f.fileType || f.FileType || "application/octet-stream",
-                fileExtension: f.fileExtension || f.FileExtension || "",
-                uploadedAt: f.uploadedAt || f["Tanggal"] || f.UploadedAt || "",
-                uploadedBy: f.uploadedBy || f["Nama Pengirim/Orang Tua"] || f.UploadedBy || "Tamu / Orang Tua",
-                uploadedByRole: f.uploadedByRole || f.UploadedByRole || "Tamu / Umum",
-                driveFileUrl: f.driveFileUrl || f["Link Drive"] || f.DriveFileUrl || f.url || "",
-                driveFolderId: f.driveFolderId || f.DriveFolderId || "",
-                privacy: f.privacy || f.Privacy || "Public",
-                description: f.description || f.Description || ""
-              });
-            }
-          }
-        }
+            return {
+              id: fileId,
+              name: f.name || f["Nama Berkas"] || f.Name || "Berkas Dokumen",
+              category: f.category || f["Kategori"] || f.Category || "Umum",
+              fileSize: Number(f.fileSize || f["Ukuran File"] || f.FileSize || f.size || 0),
+              fileType: f.fileType || f.FileType || "application/octet-stream",
+              fileExtension: f.fileExtension || f.FileExtension || "",
+              uploadedAt: f.uploadedAt || f["Tanggal"] || f.UploadedAt || "",
+              uploadedBy: f.uploadedBy || f["Nama Pengirim/Orang Tua"] || f.UploadedBy || "Tamu / Orang Tua",
+              uploadedByRole: f.uploadedByRole || f.UploadedByRole || "Tamu / Umum",
+              driveFileUrl: f.driveFileUrl || f["Link Drive"] || f.DriveFileUrl || f.url || "",
+              driveFolderId: f.driveFolderId || f.DriveFolderId || "",
+              privacy: f.privacy || f.Privacy || "Public",
+              description: f.description || f.Description || ""
+            };
+          });
+      } else {
+        const currentFilesList: any[] = Array.isArray(currentData.schoolFiles) ? currentData.schoolFiles : (Array.isArray(currentData.files) ? currentData.files : []);
+        mergedFiles = currentFilesList.filter((f: any) => f && f.id && !delFileSet.has(String(f.id)));
       }
-      mergedFiles = Array.from(fileMap.values());
       mergedFiles.sort((a: any, b: any) => {
         const timeA = a.uploadedAt ? new Date(a.uploadedAt).getTime() : 0;
         const timeB = b.uploadedAt ? new Date(b.uploadedAt).getTime() : 0;

@@ -418,7 +418,7 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
       } catch (e) {}
 
       // 1. Resolve active Google Apps Script & Spreadsheet URLs (Priority: localStorage > /api/sync-config)
-      let targetWebAppUrl = "https://script.google.com/macros/s/AKfycbwOjTnhqqQFCvRGK_5NPVICqUbK-yHUTq1b0CwX3aXqcYjOITfoaogfBWDS3I1bdL6hZA/exec";
+      let targetWebAppUrl = "https://script.google.com/macros/s/AKfycbzUjSFWKd2esZ0qgApuYzT1P4oJQklgiS3rvELTY1z0nxzXrwth5v_Xb5uAeEUmTzm8/exec";
       let targetSpreadsheetUrl = "";
 
       try {
@@ -436,12 +436,12 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
 
       try {
         const ctrl = new AbortController();
-        const tid = setTimeout(() => ctrl.abort(), 4000);
+        const tid = setTimeout(() => ctrl.abort(), 2500);
         const configRes = await fetch('/api/sync-config', { signal: ctrl.signal });
         clearTimeout(tid);
         if (configRes.ok) {
           const configData = await configRes.json();
-          if (configData?.webAppUrl && (!targetWebAppUrl || targetWebAppUrl.includes('AKfycbwOjTnhqqQFCvRGK_5NPVICqUbK-yHUTq1b0CwX3aXqcYjOITfoaogfBWDS3I1bdL6hZA'))) {
+          if (configData?.webAppUrl) {
             targetWebAppUrl = configData.webAppUrl;
           }
           if (configData?.spreadsheetUrl && !targetSpreadsheetUrl) {
@@ -450,63 +450,40 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
         }
       } catch (cfgErr) {}
 
-      // 2. Fetch from server cache (/api/app-data) with 6s timeout
-      try {
-        const ctrl = new AbortController();
-        const tid = setTimeout(() => ctrl.abort(), 6000);
-        const res = await fetch(`/api/app-data?t=${Date.now()}`, { signal: ctrl.signal });
-        clearTimeout(tid);
-        if (res.ok) {
-          const serverData = await res.json();
-          if (serverData && Array.isArray(serverData.schoolFiles) && serverData.schoolFiles.length > 0) {
-            loadedFiles = serverData.schoolFiles;
-          } else if (serverData && Array.isArray(serverData.berkas) && serverData.berkas.length > 0) {
-            loadedFiles = serverData.berkas;
-          }
-        }
-      } catch (e) {
-        console.warn('Failed to fetch file history from server endpoint:', e);
-      }
-
-      // 3. Fallback or Sync Direct from Google Apps Script Spreadsheet if server cache is empty
-      if (!loadedFiles || loadedFiles.length === 0) {
-        if (targetWebAppUrl) {
-          try {
-            const ctrl = new AbortController();
-            const tid = setTimeout(() => ctrl.abort(), 12000);
-            const loadRes = await fetch('/api/load-sheets', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ webAppUrl: targetWebAppUrl, spreadsheetUrl: targetSpreadsheetUrl }),
-              signal: ctrl.signal
-            });
-            clearTimeout(tid);
-            if (loadRes.ok) {
-              const loadData = await loadRes.json();
-              const berkasArr =
-                loadData &&
-                (loadData.berkas ||
-                  loadData.data?.berkas ||
-                  loadData.data?.payload?.berkas ||
-                  loadData["Data_Berkas"] ||
-                  loadData.data?.["Data_Berkas"] ||
-                  loadData["Data Berkas"] ||
-                  loadData.data?.["Data Berkas"] ||
-                  loadData.schoolFiles ||
-                  loadData.data?.schoolFiles ||
-                  loadData.files ||
-                  loadData.data?.files);
-              if (Array.isArray(berkasArr) && berkasArr.length > 0) {
-                loadedFiles = berkasArr;
-              }
+      // 2. Fetch live data from Google Sheets database (Google Spreadsheet is the single source of truth)
+      let fetchedFromSheets = false;
+      if (targetWebAppUrl) {
+        try {
+          const ctrl = new AbortController();
+          const tid = setTimeout(() => ctrl.abort(), 8000);
+          const loadRes = await fetch('/api/load-sheets', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ webAppUrl: targetWebAppUrl, spreadsheetUrl: targetSpreadsheetUrl }),
+            signal: ctrl.signal
+          });
+          clearTimeout(tid);
+          if (loadRes.ok) {
+            const loadData = await loadRes.json();
+            const berkasArr =
+              loadData &&
+              (loadData.berkas !== undefined ? loadData.berkas :
+                loadData["Data_Berkas"] !== undefined ? loadData["Data_Berkas"] :
+                loadData.schoolFiles !== undefined ? loadData.schoolFiles :
+                loadData.data?.berkas !== undefined ? loadData.data?.berkas :
+                loadData.data?.["Data_Berkas"] !== undefined ? loadData.data?.["Data_Berkas"] :
+                null);
+            if (Array.isArray(berkasArr)) {
+              loadedFiles = berkasArr;
+              fetchedFromSheets = true;
             }
-          } catch (gasErr) {
-            console.warn('Fetch from Google Sheets via /api/load-sheets proxy failed:', gasErr);
           }
+        } catch (gasErr) {
+          console.warn('Fetch from Google Sheets via /api/load-sheets failed:', gasErr);
         }
 
-        // 4. Direct Client-Side GET fallback from Google Apps Script if proxy failed or timed out (Vercel protection)
-        if ((!loadedFiles || loadedFiles.length === 0) && targetWebAppUrl) {
+        // Direct client-side GET fallback from Google Apps Script if proxy failed or timed out
+        if (!fetchedFromSheets && targetWebAppUrl) {
           try {
             let directUrl = targetWebAppUrl;
             if (targetSpreadsheetUrl) {
@@ -514,7 +491,7 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
               directUrl = `${directUrl}${sep}spreadsheetUrl=${encodeURIComponent(targetSpreadsheetUrl)}&spreadsheetId=${encodeURIComponent(targetSpreadsheetUrl)}`;
             }
             const ctrl = new AbortController();
-            const tid = setTimeout(() => ctrl.abort(), 12000);
+            const tid = setTimeout(() => ctrl.abort(), 8000);
             const directRes = await fetch(directUrl, { method: 'GET', redirect: 'follow', signal: ctrl.signal });
             clearTimeout(tid);
             if (directRes.ok) {
@@ -522,14 +499,14 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
               const directData = JSON.parse(directText);
               const berkasDirect =
                 directData &&
-                (directData.berkas ||
-                  directData.data?.berkas ||
-                  directData["Data_Berkas"] ||
-                  directData["Data Berkas"] ||
-                  directData.schoolFiles ||
-                  directData.files);
-              if (Array.isArray(berkasDirect) && berkasDirect.length > 0) {
+                (directData.berkas !== undefined ? directData.berkas :
+                  directData["Data_Berkas"] !== undefined ? directData["Data_Berkas"] :
+                  directData.schoolFiles !== undefined ? directData.schoolFiles :
+                  directData.data?.berkas !== undefined ? directData.data?.berkas :
+                  null);
+              if (Array.isArray(berkasDirect)) {
                 loadedFiles = berkasDirect;
+                fetchedFromSheets = true;
               }
             }
           } catch (directErr) {
@@ -538,37 +515,64 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
         }
       }
 
-      // 5. Normalize, Filter Deleted, & Sort History Items
-      if (Array.isArray(loadedFiles) && loadedFiles.length > 0) {
-        const normalized = loadedFiles
-          .filter((f: any) => f && (f.id || f.name || f['Nama Berkas'] || f['Link Drive'] || f.driveFileUrl))
-          .map((f: any, idx: number) => {
-            const rawId = f.id || f.fileId || f['Link Drive'] || f['Nama Berkas'] || `file-idx-${idx}`;
-            return {
-              ...f,
-              id: String(rawId),
-              name: f.name || f['Nama Berkas'] || f.Name || 'Berkas Dokumen',
-              uploadedBy: f.uploadedBy || f['Nama Pengirim/Orang Tua'] || f.UploadedBy || 'Tamu / Orang Tua',
-              category: f.category || f['Kategori'] || f.Category || 'Umum',
-              uploadedAt: f.uploadedAt || f['Tanggal'] || f.UploadedAt || '',
-              driveFileUrl: f.driveFileUrl || f['Link Drive'] || f.DriveFileUrl || f.url || '',
-              fileSize: Number(f.fileSize || f['Ukuran File'] || f.FileSize || f.size || 0)
-            };
-          })
-          .filter((f: any) => !deletedSet.has(String(f.id)) && !deletedSet.has(String(f.name)) && !deletedSet.has(String(f.driveFileUrl)));
-
-        const sorted = normalized.sort((a, b) => {
-          const timeA = a.uploadedAt ? new Date(String(a.uploadedAt).replace(/-/g, '/')).getTime() : 0;
-          const timeB = b.uploadedAt ? new Date(String(b.uploadedAt).replace(/-/g, '/')).getTime() : 0;
-          return timeB - timeA;
-        });
+      // 3. Fallback to server cache (/api/app-data) ONLY if Google Sheets could not be reached
+      if (!fetchedFromSheets) {
         try {
-          localStorage.setItem('dapodik_school_files', JSON.stringify(sorted));
+          const ctrl = new AbortController();
+          const tid = setTimeout(() => ctrl.abort(), 4000);
+          const res = await fetch(`/api/app-data?t=${Date.now()}`, { signal: ctrl.signal });
+          clearTimeout(tid);
+          if (res.ok) {
+            const serverData = await res.json();
+            if (serverData && Array.isArray(serverData.schoolFiles)) {
+              loadedFiles = serverData.schoolFiles;
+            } else if (serverData && Array.isArray(serverData.berkas)) {
+              loadedFiles = serverData.berkas;
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to fetch file history from server endpoint:', e);
+        }
+      }
+
+      // 4. Normalize, Filter Deleted, & Sort History Items
+      const normalized = (Array.isArray(loadedFiles) ? loadedFiles : [])
+        .filter((f: any) => f && (f.id || f.name || f['Nama Berkas'] || f['Link Drive'] || f.driveFileUrl))
+        .map((f: any, idx: number) => {
+          const rawId = f.id || f.fileId || f['Link Drive'] || f['Nama Berkas'] || `file-idx-${idx}`;
+          return {
+            ...f,
+            id: String(rawId),
+            name: f.name || f['Nama Berkas'] || f.Name || 'Berkas Dokumen',
+            uploadedBy: f.uploadedBy || f['Nama Pengirim/Orang Tua'] || f.UploadedBy || 'Tamu / Orang Tua',
+            category: f.category || f['Kategori'] || f.Category || 'Umum',
+            uploadedAt: f.uploadedAt || f['Tanggal'] || f.UploadedAt || '',
+            driveFileUrl: f.driveFileUrl || f['Link Drive'] || f.DriveFileUrl || f.url || '',
+            fileSize: Number(f.fileSize || f['Ukuran File'] || f.FileSize || f.size || 0)
+          };
+        })
+        .filter((f: any) => !deletedSet.has(String(f.id)) && !deletedSet.has(String(f.name)) && !deletedSet.has(String(f.driveFileUrl)));
+
+      const sorted = normalized.sort((a, b) => {
+        const timeA = a.uploadedAt ? new Date(String(a.uploadedAt).replace(/-/g, '/')).getTime() : 0;
+        const timeB = b.uploadedAt ? new Date(String(b.uploadedAt).replace(/-/g, '/')).getTime() : 0;
+        return timeB - timeA;
+      });
+
+      try {
+        localStorage.setItem('dapodik_school_files', JSON.stringify(sorted));
+      } catch (e) {}
+      setHistoryFiles(sorted);
+
+      // If fetched directly from Google Sheets, keep server app_data cache in sync
+      if (fetchedFromSheets) {
+        try {
+          fetch('/api/app-data', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ schoolFiles: sorted })
+          }).catch(() => {});
         } catch (e) {}
-        setHistoryFiles(sorted);
-      } else {
-        // If loadedFiles was empty, keep existing state if any
-        setHistoryFiles((prev) => (prev.length > 0 ? prev : []));
       }
     } catch (outerErr) {
       console.error('Error in fetchHistory:', outerErr);
@@ -768,17 +772,23 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
         resolve(file);
         return;
       }
+      // If image is already lightweight (<= 300KB), skip canvas encoding for instant speed
+      if (file.size <= 300 * 1024) {
+        resolve(file);
+        return;
+      }
 
       const img = new Image();
-      img.src = URL.createObjectURL(file);
+      const objectUrl = URL.createObjectURL(file);
+      img.src = objectUrl;
       
       img.onload = () => {
         try {
-          URL.revokeObjectURL(img.src);
+          URL.revokeObjectURL(objectUrl);
           
-          // Max dimension of 1600px is perfect for clear readable school documents
-          const MAX_WIDTH = 1600;
-          const MAX_HEIGHT = 1600;
+          // Max dimension 1280px is ideal for crystal clear text documents while keeping payload tiny (< 150KB)
+          const MAX_WIDTH = 1280;
+          const MAX_HEIGHT = 1280;
           let width = img.width;
           let height = img.height;
 
@@ -806,7 +816,7 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
 
           canvas.toBlob(
             (blob) => {
-              if (blob) {
+              if (blob && blob.size < file.size) {
                 const compressedFile = new File([blob], file.name, {
                   type: 'image/jpeg',
                   lastModified: Date.now(),
@@ -818,7 +828,7 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
               }
             },
             'image/jpeg',
-            0.8
+            0.78
           );
         } catch (err) {
           console.error('Error during image compression:', err);
@@ -827,7 +837,7 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
       };
 
       img.onerror = () => {
-        URL.revokeObjectURL(img.src);
+        URL.revokeObjectURL(objectUrl);
         resolve(file);
       };
     });
@@ -842,7 +852,7 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
 
     // Update state to uploading
     setQueue((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, status: 'uploading', progress: 15 } : item))
+      prev.map((item) => (item.id === id ? { ...item, status: 'uploading', progress: 20 } : item))
     );
 
     let fileToUpload = file;
@@ -855,7 +865,7 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
     const { base64Pure, mimeType } = await readAsBase64(fileToUpload);
     
     setQueue((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, progress: 45 } : item))
+      prev.map((item) => (item.id === id ? { ...item, progress: 50 } : item))
     );
 
     const customTitle = (queuedItem.customTitle || '').trim();
@@ -867,7 +877,6 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
     const targetFolder = batchTitle || customTitle || 'Umum';
 
     // Final file name:
-    // Retain exact original document name (file.name) unless single file upload with explicit customTitle without batchTitle
     let finalFileName = file.name;
     const defaultTitle = dotIndex > -1 ? file.name.substring(0, dotIndex) : file.name;
     if (!batchTitle && customTitle && customTitle !== defaultTitle && queue.length === 1) {
@@ -878,141 +887,44 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
       }
     }
 
-    // Load active webAppUrl dynamically from sync-config (Priority: localStorage > /api/sync-config)
-    let targetWebAppUrl = "https://script.google.com/macros/s/AKfycbwOjTnhqqQFCvRGK_5NPVICqUbK-yHUTq1b0CwX3aXqcYjOITfoaogfBWDS3I1bdL6hZA/exec";
-    let targetSpreadsheetUrl = "";
-
-    try {
-      const localCfgRaw = localStorage.getItem('dapodik_sync_config');
-      if (localCfgRaw) {
-        const localCfg = JSON.parse(localCfgRaw);
-        if (localCfg?.webAppUrl && String(localCfg.webAppUrl).startsWith('http')) {
-          targetWebAppUrl = localCfg.webAppUrl;
-        }
-        if (localCfg?.spreadsheetUrl) {
-          targetSpreadsheetUrl = localCfg.spreadsheetUrl;
-        }
-      }
-    } catch (e) {}
-
-    try {
-      const configRes = await fetch('/api/sync-config');
-      if (configRes.ok) {
-        const configData = await configRes.json();
-        if (configData && configData.webAppUrl) {
-          targetWebAppUrl = configData.webAppUrl;
-        }
-        if (configData && configData.spreadsheetUrl && !targetSpreadsheetUrl) {
-          targetSpreadsheetUrl = configData.spreadsheetUrl;
-        }
-      }
-    } catch (configErr) {
-      console.warn('Could not fetch dynamic sync-config, using default:', configErr);
-    }
-
-    let directDriveUrl = '';
-    let directDriveId = '';
-    let isDirectSuccess = false;
-
-    // Step A: Attempt direct client-side upload to Google Drive for 100% reliability
-    try {
-      console.log('Attempting super-reliable direct client-side upload to:', targetWebAppUrl);
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 45000);
-
-      const directUploadRes = await fetch(targetWebAppUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'text/plain;charset=utf-8'
-        },
-        body: JSON.stringify({
-          type: "UPLOAD_FILE_TO_DRIVE",
-          fileName: finalFileName,
-          mimeType: mimeType || "application/octet-stream",
-          base64Data: base64Pure,
-          folderName: targetFolder,
-          uploadedBy: uploader,
-          uploadedByRole: 'Tamu / Umum',
-          description: `Berkas tamu diunggah oleh ${uploader} via Portal Berkas (Direct Browser)`,
-          parentFolderId: "1OFVFI1xhsk45_ONTihtuSHeBVvEOr44m",
-          spreadsheetUrl: targetSpreadsheetUrl
-        }),
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (directUploadRes.ok) {
-        const directText = await directUploadRes.text();
-        const parsedDirect = JSON.parse(directText);
-        if (parsedDirect && parsedDirect.status === 'success') {
-          directDriveUrl = parsedDirect.webViewLink || `https://drive.google.com/file/d/${parsedDirect.id}/view`;
-          directDriveId = parsedDirect.id;
-          isDirectSuccess = true;
-          console.log('Direct client-side upload to Google Drive succeeded!', directDriveUrl);
-        }
-      }
-    } catch (directErr) {
-      console.warn('Direct upload was interrupted or blocked, falling back to server-side upload:', directErr);
-    }
-
-    setQueue((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, progress: 75 } : item))
-    );
-
-    // Step B: Send file or file-metadata to the server to record it in app_data.json/history
+    // Direct, ultra-fast upload via server endpoint (handles Google Drive sync & local storage in parallel)
     const res = await fetch('/api/upload-file', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: finalFileName,
         mimeType,
-        base64Data: isDirectSuccess ? undefined : base64Pure, // Skip sending heavy binary data to server if direct upload succeeded
+        base64Data: base64Pure,
         category: targetFolder,
         uploadedBy: uploader,
         uploadedByRole: 'Tamu / Umum',
         description: `Berkas tamu diunggah oleh ${uploader} via Portal Berkas`,
         privacy: 'Public',
         folderName: targetFolder,
-        onlySaveMetadata: isDirectSuccess,
-        driveFileUrl: directDriveUrl || undefined,
-        driveFolderId: directDriveId || undefined,
         fileSize: fileToUpload.size
       })
     });
 
     if (!res.ok) {
-      // If direct upload succeeded but server save failed, we still treat it as successful
-      if (isDirectSuccess && directDriveUrl) {
-        setQueue((prev) =>
-          prev.map((item) => (item.id === id ? { 
-            ...item, 
-            status: 'success', 
-            progress: 100,
-            driveUrl: directDriveUrl 
-          } : item))
-        );
-        return { driveUrl: directDriveUrl, isDriveSynced: true };
-      }
       const errData = await res.json().catch(() => ({}));
       throw new Error(errData.message || `Gagal mengunggah berkas ${file.name}`);
     }
 
     const json = await res.json();
-    if (!json.success && !isDirectSuccess) {
+    if (!json.success) {
       throw new Error(json.message || `Gagal menyimpan berkas ${file.name}`);
     }
 
-    const finalDriveUrl = json.file?.driveFileUrl || directDriveUrl;
+    const finalDriveUrl = json.file?.driveFileUrl || json.file?.fileUrl || '';
 
     // Optimistically prepend to historyFiles so it is immediately visible in Riwayat Berkas Tersimpan
     const newHistoryItem = {
-      id: json.file?.id || directDriveId || `BRK-${Date.now().toString(36).toUpperCase()}`,
+      id: json.file?.id || `BRK-${Date.now().toString(36).toUpperCase()}`,
       name: finalFileName,
       uploadedBy: uploader,
       category: targetFolder,
-      uploadedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
-      driveFileUrl: finalDriveUrl || directDriveUrl || '',
+      uploadedAt: json.file?.uploadedAt || new Date().toISOString().replace('T', ' ').substring(0, 16),
+      driveFileUrl: finalDriveUrl,
       fileSize: fileToUpload.size
     };
 
@@ -1029,14 +941,14 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
       prev.map((item) => (item.id === id ? { 
         ...item, 
         status: 'success', 
-        progress: 100,
+        progress: 100, 
         driveUrl: finalDriveUrl 
       } : item))
     );
 
     return { 
       driveUrl: finalDriveUrl, 
-      isDriveSynced: Boolean(json.isDriveSynced || isDirectSuccess),
+      isDriveSynced: Boolean(json.isDriveSynced),
       syncWarning: json.syncWarning 
     };
   };
@@ -1065,31 +977,31 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
     const uploader = senderName.trim();
     const batchCat = sharedCategoryName.trim();
 
-    for (let i = 0; i < queue.length; i++) {
-      const item = queue[i];
-      if (item.status === 'success') {
-        successCount++;
-        continue; // skip already uploaded files
-      }
+    // Fast concurrent upload for all pending queue items
+    const pendingItems = queue.filter((item) => item.status !== 'success');
+    successCount += (queue.length - pendingItems.length);
 
-      try {
-        const uploadRes = await uploadSingleFile(item, uploader, batchCat);
-        if (!uploadRes.isDriveSynced && uploadRes.syncWarning) {
-          hasSyncWarning = true;
-          syncWarningText = uploadRes.syncWarning;
+    await Promise.all(
+      pendingItems.map(async (item) => {
+        try {
+          const uploadRes = await uploadSingleFile(item, uploader, batchCat);
+          if (!uploadRes.isDriveSynced && uploadRes.syncWarning) {
+            hasSyncWarning = true;
+            syncWarningText = uploadRes.syncWarning;
+          }
+          successCount++;
+        } catch (err: any) {
+          console.error('File upload error in queue:', err);
+          const errMsg = err?.message || 'Gagal mengunggah';
+          if (!firstErrorMessage) {
+            firstErrorMessage = errMsg;
+          }
+          setQueue((prev) =>
+            prev.map((q) => (q.id === item.id ? { ...q, status: 'error', errorMsg: errMsg } : q))
+          );
         }
-        successCount++;
-      } catch (err: any) {
-        console.error('File upload error in queue:', err);
-        const errMsg = err?.message || 'Gagal mengunggah';
-        if (!firstErrorMessage) {
-          firstErrorMessage = errMsg;
-        }
-        setQueue((prev) =>
-          prev.map((q) => (q.id === item.id ? { ...q, status: 'error', errorMsg: errMsg } : q))
-        );
-      }
-    }
+      })
+    );
 
     setIsUploadingAll(false);
     fetchHistory(); // Refresh history immediately after upload operations complete
@@ -1103,7 +1015,7 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
       // Clear queue shortly after success
       setTimeout(() => {
         setQueue([]);
-      }, 7000);
+      }, 5000);
     } else if (successCount > 0) {
       setGlobalError(`Berhasil mengunggah ${successCount} dari ${queue.length} berkas. Beberapa berkas mengalami kegagalan: ${firstErrorMessage}`);
     } else {
