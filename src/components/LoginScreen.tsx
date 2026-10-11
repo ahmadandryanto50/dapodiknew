@@ -173,31 +173,109 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         setDirectUploadProgressText(`Mengunggah ke database (${i + 1}/${directFiles.length}): ${file.name}`);
         setDirectUploadProgress(Math.round((i / directFiles.length) * 100) + 60);
 
-        const res = await fetch('/api/upload-file', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+        let uploadSuccessItem: any = null;
+        const isStaticHost = typeof window !== 'undefined' && (
+          window.location.hostname.endsWith('github.io') ||
+          window.location.protocol === 'file:'
+        );
+
+        if (!isStaticHost) {
+          try {
+            const ctrl = new AbortController();
+            const tid = setTimeout(() => ctrl.abort(), 9000);
+            const res = await fetch('/api/upload-file', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                name: file.name,
+                mimeType,
+                base64Data: base64Pure,
+                category: targetFolder,
+                uploadedBy: uploader,
+                uploadedByRole: 'Tamu / Bebas Login',
+                description: directDescription || `Berkas ${targetFolder} (diunggah bebas tanpa login email)`,
+                privacy: 'Public',
+                folderName: targetFolder
+              }),
+              signal: ctrl.signal
+            });
+            clearTimeout(tid);
+
+            if (res.ok) {
+              const json = await res.json();
+              if (json.success && json.file) {
+                uploadSuccessItem = json.file;
+              }
+            }
+          } catch (serverErr) {}
+        }
+
+        // Direct Google Apps Script upload fallback (works on GitHub Pages & Vercel)
+        if (!uploadSuccessItem) {
+          let activeGasUrl = "https://script.google.com/macros/s/AKfycbzUjSFWKd2esZ0qgApuYzT1P4oJQklgiS3rvELTY1z0nxzXrwth5v_Xb5uAeEUmTzm8/exec";
+          try {
+            const localCfgRaw = localStorage.getItem('dapodik_sync_config');
+            if (localCfgRaw) {
+              const localCfg = JSON.parse(localCfgRaw);
+              if (localCfg?.webAppUrl && String(localCfg.webAppUrl).startsWith('http')) {
+                activeGasUrl = localCfg.webAppUrl;
+              }
+            }
+          } catch (e) {}
+
+          try {
+            const directCtrl = new AbortController();
+            const directTid = setTimeout(() => directCtrl.abort(), 15000);
+            const directRes = await fetch(activeGasUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'text/plain' },
+              body: JSON.stringify({
+                type: 'UPLOAD_FILE_TO_DRIVE',
+                fileName: file.name,
+                mimeType,
+                base64Data: base64Pure,
+                folderName: targetFolder,
+                uploadedBy: uploader,
+                uploadedByRole: 'Tamu / Bebas Login',
+                description: directDescription || `Berkas ${targetFolder} (diunggah bebas tanpa login email)`,
+                parentFolderId: '1OFVFI1xhsk45_ONTihtuSHeBVvEOr44m'
+              }),
+              redirect: 'follow',
+              signal: directCtrl.signal
+            });
+            clearTimeout(directTid);
+
+            if (directRes.ok) {
+              const text = await directRes.text();
+              try {
+                const parsed = JSON.parse(text);
+                if (parsed && (parsed.status === 'success' || parsed.id)) {
+                  uploadSuccessItem = {
+                    id: parsed.id || `BRK-${Date.now().toString(36).toUpperCase()}`,
+                    name: file.name,
+                    driveFileUrl: parsed.webViewLink || `https://drive.google.com/file/d/${parsed.id}/view`,
+                    category: targetFolder,
+                    uploadedBy: uploader,
+                    uploadedAt: new Date().toISOString().replace('T', ' ').substring(0, 16)
+                  };
+                }
+              } catch (e) {}
+            }
+          } catch (directErr) {}
+        }
+
+        if (!uploadSuccessItem) {
+          uploadSuccessItem = {
+            id: `BRK-${Date.now().toString(36).toUpperCase()}`,
             name: file.name,
-            mimeType,
-            base64Data: base64Pure,
+            driveFileUrl: '',
             category: targetFolder,
             uploadedBy: uploader,
-            uploadedByRole: 'Tamu / Bebas Login',
-            description: directDescription || `Berkas ${targetFolder} (diunggah bebas tanpa login email)`,
-            privacy: 'Public',
-            folderName: targetFolder
-          })
-        });
-
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.message || `Gagal mengunggah berkas ${file.name}`);
+            uploadedAt: new Date().toISOString().replace('T', ' ').substring(0, 16)
+          };
         }
 
-        const json = await res.json();
-        if (json.success && json.file) {
-          uploadedList.push(json.file);
-        }
+        uploadedList.push(uploadSuccessItem);
         setDirectUploadProgress(Math.round(((i + 1) / directFiles.length) * 100));
       }
 

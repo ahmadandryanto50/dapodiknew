@@ -1158,43 +1158,51 @@ async function callProxyOrDirectPost(rawWebAppUrl: string, payload: any): Promis
   }
 
   // 1. Try server-side proxy endpoint first (bypasses browser CORS & mobile browser restrictions)
-  try {
-    const isWeb = typeof window !== 'undefined' && window.location.protocol.startsWith('http');
-    const proxyUrl = isWeb ? '/api/sync-sheets' : 'https://ais-pre-rl7bj4twi2wve75vqpw7yr-169174220206.asia-east1.run.app/api/sync-sheets';
+  // On static hosts (e.g. GitHub Pages), skip proxy directly since no Node backend exists
+  const isStaticHost = typeof window !== 'undefined' && (
+    window.location.hostname.endsWith('github.io') ||
+    window.location.protocol === 'file:'
+  );
 
-    const proxyCtrl = new AbortController();
-    const proxyTimer = setTimeout(() => proxyCtrl.abort(), 8500);
+  if (!isStaticHost) {
+    try {
+      const isWeb = typeof window !== 'undefined' && window.location.protocol.startsWith('http');
+      const proxyUrl = '/api/sync-sheets';
 
-    const proxyRes = await fetch(proxyUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ webAppUrl, payload }),
-      signal: proxyCtrl.signal
-    });
-    clearTimeout(proxyTimer);
+      const proxyCtrl = new AbortController();
+      const proxyTimer = setTimeout(() => proxyCtrl.abort(), 6500);
 
-    if (proxyRes.ok) {
-      const json = await proxyRes.json();
-      if (json && json.success) {
-        return {
-          success: true,
-          message: 'Data berhasil dikirim & disinkronkan ke Database Spreadsheet!',
-          data: json.data
-        };
-      } else if (json && json.message && (json.message.includes('HTML/Login') || json.message.includes('Google Accounts'))) {
-        return {
-          success: false,
-          message: json.message,
-          data: json.data
-        };
+      const proxyRes = await fetch(proxyUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ webAppUrl, payload }),
+        signal: proxyCtrl.signal
+      });
+      clearTimeout(proxyTimer);
+
+      if (proxyRes.ok) {
+        const json = await proxyRes.json();
+        if (json && json.success) {
+          return {
+            success: true,
+            message: 'Data berhasil dikirim & disinkronkan ke Database Spreadsheet!',
+            data: json.data
+          };
+        } else if (json && json.message && (json.message.includes('HTML/Login') || json.message.includes('Google Accounts'))) {
+          return {
+            success: false,
+            message: json.message,
+            data: json.data
+          };
+        } else {
+          console.warn('Proxy returned non-success, falling back to direct browser post:', json?.message);
+        }
       } else {
-        console.warn('Proxy returned non-success, falling back to direct browser post:', json?.message);
+        console.warn('Proxy status not OK, falling back to direct browser post:', proxyRes.status, proxyRes.statusText);
       }
-    } else {
-      console.warn('Proxy status not OK, falling back to direct browser post:', proxyRes.status, proxyRes.statusText);
+    } catch (proxyErr) {
+      console.warn('Proxy connection failed or timed out, falling back to direct browser post:', proxyErr);
     }
-  } catch (proxyErr) {
-    console.warn('Proxy connection failed or timed out, falling back to direct browser post:', proxyErr);
   }
 
   // 2. Direct browser fetch with mode: 'no-cors' fallback
@@ -2197,36 +2205,43 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
 
   const isWeb = typeof window !== 'undefined' && window.location.protocol.startsWith('http');
   const baseOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+  const isStaticHost = typeof window !== 'undefined' && (
+    window.location.hostname.endsWith('github.io') ||
+    window.location.protocol === 'file:'
+  );
 
   // 1. Try server-side proxy endpoint first (Fast & avoids mobile browser CORS issues)
-  try {
-    const proxyEndpoint = isWeb ? `/api/load-sheets?t=${Date.now()}` : `${baseOrigin}/api/load-sheets?t=${Date.now()}`;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s for Google Apps Script data retrieval
+  // Skip on static hosts (e.g. GitHub Pages) where /api/load-sheets does not exist
+  if (!isStaticHost) {
+    try {
+      const proxyEndpoint = isWeb ? `/api/load-sheets?t=${Date.now()}` : `${baseOrigin}/api/load-sheets?t=${Date.now()}`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6500); // 6.5s (before Vercel 10s cutoff)
 
-    const proxyRes = await fetch(proxyEndpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        webAppUrl: normalizedWebAppUrl,
-        spreadsheetUrl: getFullSpreadsheetUrl(config.spreadsheetUrl || ''),
-        spreadsheetId: getFullSpreadsheetUrl(config.spreadsheetUrl || '')
-      }),
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
+      const proxyRes = await fetch(proxyEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          webAppUrl: normalizedWebAppUrl,
+          spreadsheetUrl: getFullSpreadsheetUrl(config.spreadsheetUrl || ''),
+          spreadsheetId: getFullSpreadsheetUrl(config.spreadsheetUrl || '')
+        }),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
 
-    if (proxyRes.ok) {
-      const result = await proxyRes.json();
-      if (result && result.status === 'success') {
-        return parseSheetsResult(result);
+      if (proxyRes.ok) {
+        const result = await proxyRes.json();
+        if (result && result.status === 'success') {
+          return parseSheetsResult(result);
+        }
       }
+    } catch (proxyErr) {
+      // Proxy request error or abort
     }
-  } catch (proxyErr) {
-    // Proxy request error or abort
   }
 
-  // 2. Fallback to direct client-side fetch with fast abort controller
+  // 2. Direct client-side fetch from Google Apps Script (Fast native Google CORS support)
   try {
     let getUrl = config.webAppUrl;
     if (config.spreadsheetUrl) {
@@ -2236,7 +2251,7 @@ export async function loadFromGoogleSheets(config: SyncConfig): Promise<{
     }
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 seconds fallback
+    const timeoutId = setTimeout(() => controller.abort(), 12000); // 12 seconds
 
     const directRes = await fetch(getUrl, {
       method: 'GET',

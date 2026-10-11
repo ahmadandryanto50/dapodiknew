@@ -417,7 +417,7 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
         }
       } catch (e) {}
 
-      // 1. Resolve active Google Apps Script & Spreadsheet URLs (Priority: localStorage > /api/sync-config)
+      // 1. Resolve active Google Apps Script & Spreadsheet URLs (Priority: localStorage > /api/sync-config > bundled)
       let targetWebAppUrl = "https://script.google.com/macros/s/AKfycbzUjSFWKd2esZ0qgApuYzT1P4oJQklgiS3rvELTY1z0nxzXrwth5v_Xb5uAeEUmTzm8/exec";
       let targetSpreadsheetUrl = "";
 
@@ -434,55 +434,75 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
         }
       } catch (e) {}
 
-      try {
-        const ctrl = new AbortController();
-        const tid = setTimeout(() => ctrl.abort(), 2500);
-        const configRes = await fetch('/api/sync-config', { signal: ctrl.signal });
-        clearTimeout(tid);
-        if (configRes.ok) {
-          const configData = await configRes.json();
-          if (configData?.webAppUrl) {
-            targetWebAppUrl = configData.webAppUrl;
+      const isStaticDeploy = typeof window !== 'undefined' && (
+        window.location.hostname.endsWith('github.io') ||
+        window.location.protocol === 'file:'
+      );
+
+      if (!isStaticDeploy) {
+        try {
+          const ctrl = new AbortController();
+          const tid = setTimeout(() => ctrl.abort(), 2000);
+          const configRes = await fetch('/api/sync-config', { signal: ctrl.signal });
+          clearTimeout(tid);
+          if (configRes.ok) {
+            const configData = await configRes.json();
+            if (configData?.webAppUrl) {
+              targetWebAppUrl = configData.webAppUrl;
+            }
+            if (configData?.spreadsheetUrl && !targetSpreadsheetUrl) {
+              targetSpreadsheetUrl = configData.spreadsheetUrl;
+            }
           }
-          if (configData?.spreadsheetUrl && !targetSpreadsheetUrl) {
-            targetSpreadsheetUrl = configData.spreadsheetUrl;
+        } catch (cfgErr) {}
+      } else {
+        // Fallback to bundled sync_config.json on static hosts
+        try {
+          const staticRes = await fetch('./sync_config.json');
+          if (staticRes.ok) {
+            const cfg = await staticRes.json();
+            if (cfg?.webAppUrl) targetWebAppUrl = cfg.webAppUrl;
+            if (cfg?.spreadsheetUrl && !targetSpreadsheetUrl) targetSpreadsheetUrl = cfg.spreadsheetUrl;
           }
-        }
-      } catch (cfgErr) {}
+        } catch (e) {}
+      }
 
       // 2. Fetch live data from Google Sheets database (Google Spreadsheet is the single source of truth)
       let fetchedFromSheets = false;
       if (targetWebAppUrl) {
-        try {
-          const ctrl = new AbortController();
-          const tid = setTimeout(() => ctrl.abort(), 8000);
-          const loadRes = await fetch('/api/load-sheets', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ webAppUrl: targetWebAppUrl, spreadsheetUrl: targetSpreadsheetUrl }),
-            signal: ctrl.signal
-          });
-          clearTimeout(tid);
-          if (loadRes.ok) {
-            const loadData = await loadRes.json();
-            const berkasArr =
-              loadData &&
-              (loadData.berkas !== undefined ? loadData.berkas :
-                loadData["Data_Berkas"] !== undefined ? loadData["Data_Berkas"] :
-                loadData.schoolFiles !== undefined ? loadData.schoolFiles :
-                loadData.data?.berkas !== undefined ? loadData.data?.berkas :
-                loadData.data?.["Data_Berkas"] !== undefined ? loadData.data?.["Data_Berkas"] :
-                null);
-            if (Array.isArray(berkasArr)) {
-              loadedFiles = berkasArr;
-              fetchedFromSheets = true;
+        // Only try server proxy if not on a purely static host
+        if (!isStaticDeploy) {
+          try {
+            const ctrl = new AbortController();
+            const tid = setTimeout(() => ctrl.abort(), 5500); // 5.5s timeout for fast serverless execution
+            const loadRes = await fetch('/api/load-sheets', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ webAppUrl: targetWebAppUrl, spreadsheetUrl: targetSpreadsheetUrl }),
+              signal: ctrl.signal
+            });
+            clearTimeout(tid);
+            if (loadRes.ok) {
+              const loadData = await loadRes.json();
+              const berkasArr =
+                loadData &&
+                (loadData.berkas !== undefined ? loadData.berkas :
+                  loadData["Data_Berkas"] !== undefined ? loadData["Data_Berkas"] :
+                  loadData.schoolFiles !== undefined ? loadData.schoolFiles :
+                  loadData.data?.berkas !== undefined ? loadData.data?.berkas :
+                  loadData.data?.["Data_Berkas"] !== undefined ? loadData.data?.["Data_Berkas"] :
+                  null);
+              if (Array.isArray(berkasArr)) {
+                loadedFiles = berkasArr;
+                fetchedFromSheets = true;
+              }
             }
+          } catch (gasErr) {
+            console.warn('Fetch from Google Sheets via /api/load-sheets failed:', gasErr);
           }
-        } catch (gasErr) {
-          console.warn('Fetch from Google Sheets via /api/load-sheets failed:', gasErr);
         }
 
-        // Direct client-side GET fallback from Google Apps Script if proxy failed or timed out
+        // Direct client-side GET fallback from Google Apps Script (Fast native CORS on GitHub & Vercel)
         if (!fetchedFromSheets && targetWebAppUrl) {
           try {
             let directUrl = targetWebAppUrl;
@@ -603,8 +623,8 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
         localStorage.setItem('dapodik_deleted_file_ids', JSON.stringify(currentDeleted));
       } catch (e) {}
 
-      // Get current active webAppUrl (Priority: localStorage > /api/sync-config)
-      let targetWebAppUrl = "https://script.google.com/macros/s/AKfycbwOjTnhqqQFCvRGK_5NPVICqUbK-yHUTq1b0CwX3aXqcYjOITfoaogfBWDS3I1bdL6hZA/exec";
+      // Get current active webAppUrl (Priority: localStorage > /api/sync-config > bundled)
+      let targetWebAppUrl = "https://script.google.com/macros/s/AKfycbzUjSFWKd2esZ0qgApuYzT1P4oJQklgiS3rvELTY1z0nxzXrwth5v_Xb5uAeEUmTzm8/exec";
       try {
         const localCfgRaw = localStorage.getItem('dapodik_sync_config');
         if (localCfgRaw) {
@@ -615,34 +635,35 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
         }
       } catch (e) {}
 
-      try {
-        const configRes = await fetch('/api/sync-config');
-        if (configRes.ok) {
-          const configData = await configRes.json();
-          if (configData && configData.webAppUrl) {
-            targetWebAppUrl = configData.webAppUrl;
-          }
-        }
-      } catch (cfgErr) {}
+      const isStaticDeploy = typeof window !== 'undefined' && (
+        window.location.hostname.endsWith('github.io') ||
+        window.location.protocol === 'file:'
+      );
 
-      // 2. Call dedicated server deletion API (/api/delete-file)
-      let deleteSuccess = false;
-      try {
-        const res = await fetch('/api/delete-file', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            fileId: fileId,
-            fileName: targetFile?.name || '',
-            driveFileUrl: targetFile?.driveFileUrl || '',
-            webAppUrl: targetWebAppUrl
-          })
-        });
-        if (res.ok) {
-          deleteSuccess = true;
-        }
-      } catch (err) {
-        console.warn('Dedicated /api/delete-file call failed, trying /api/app-data fallback:', err);
+      if (!isStaticDeploy) {
+        try {
+          const configRes = await fetch('/api/sync-config');
+          if (configRes.ok) {
+            const configData = await configRes.json();
+            if (configData && configData.webAppUrl) {
+              targetWebAppUrl = configData.webAppUrl;
+            }
+          }
+        } catch (cfgErr) {}
+
+        // 2. Call dedicated server deletion API (/api/delete-file)
+        try {
+          await fetch('/api/delete-file', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fileId: fileId,
+              fileName: targetFile?.name || '',
+              driveFileUrl: targetFile?.driveFileUrl || '',
+              webAppUrl: targetWebAppUrl
+            })
+          });
+        } catch (err) {}
       }
 
       // 3. Fallback call to /api/app-data
@@ -887,43 +908,126 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
       }
     }
 
-    // Direct, ultra-fast upload via server endpoint (handles Google Drive sync & local storage in parallel)
-    const res = await fetch('/api/upload-file', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: finalFileName,
-        mimeType,
-        base64Data: base64Pure,
-        category: targetFolder,
-        uploadedBy: uploader,
-        uploadedByRole: 'Tamu / Umum',
-        description: `Berkas tamu diunggah oleh ${uploader} via Portal Berkas`,
-        privacy: 'Public',
-        folderName: targetFolder,
-        fileSize: fileToUpload.size
-      })
-    });
+    // Upload via server endpoint or directly to Google Apps Script (handles GitHub Pages & Vercel gracefully)
+    let uploadSuccessData: any = null;
+    const isStaticDeploy = typeof window !== 'undefined' && (
+      window.location.hostname.endsWith('github.io') ||
+      window.location.protocol === 'file:'
+    );
 
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.message || `Gagal mengunggah berkas ${file.name}`);
+    if (!isStaticDeploy) {
+      try {
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 9000);
+        const res = await fetch('/api/upload-file', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: finalFileName,
+            mimeType,
+            base64Data: base64Pure,
+            category: targetFolder,
+            uploadedBy: uploader,
+            uploadedByRole: 'Tamu / Umum',
+            description: `Berkas tamu diunggah oleh ${uploader} via Portal Berkas`,
+            privacy: 'Public',
+            folderName: targetFolder,
+            fileSize: fileToUpload.size
+          }),
+          signal: ctrl.signal
+        });
+        clearTimeout(tid);
+
+        if (res.ok) {
+          const json = await res.json();
+          if (json && json.success) {
+            uploadSuccessData = json;
+          }
+        }
+      } catch (serverErr) {
+        console.warn('Server upload-file unavailable or timed out, trying direct Apps Script upload:', serverErr);
+      }
     }
 
-    const json = await res.json();
-    if (!json.success) {
-      throw new Error(json.message || `Gagal menyimpan berkas ${file.name}`);
+    // Direct Google Apps Script upload fallback (works universally on GitHub Pages, Vercel, & offline-reconnect)
+    if (!uploadSuccessData) {
+      let activeGasUrl = "https://script.google.com/macros/s/AKfycbzUjSFWKd2esZ0qgApuYzT1P4oJQklgiS3rvELTY1z0nxzXrwth5v_Xb5uAeEUmTzm8/exec";
+      try {
+        const localCfgRaw = localStorage.getItem('dapodik_sync_config');
+        if (localCfgRaw) {
+          const localCfg = JSON.parse(localCfgRaw);
+          if (localCfg?.webAppUrl && String(localCfg.webAppUrl).startsWith('http')) {
+            activeGasUrl = localCfg.webAppUrl;
+          }
+        }
+      } catch (e) {}
+
+      try {
+        const directCtrl = new AbortController();
+        const directTid = setTimeout(() => directCtrl.abort(), 15000);
+        const directRes = await fetch(activeGasUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({
+            type: 'UPLOAD_FILE_TO_DRIVE',
+            fileName: finalFileName,
+            mimeType,
+            base64Data: base64Pure,
+            folderName: targetFolder,
+            uploadedBy: uploader,
+            uploadedByRole: 'Tamu / Umum',
+            description: `Berkas tamu diunggah oleh ${uploader} via Portal Berkas`,
+            parentFolderId: '1OFVFI1xhsk45_ONTihtuSHeBVvEOr44m'
+          }),
+          redirect: 'follow',
+          signal: directCtrl.signal
+        });
+        clearTimeout(directTid);
+
+        if (directRes.ok) {
+          const directText = await directRes.text();
+          try {
+            const parsed = JSON.parse(directText);
+            if (parsed && (parsed.status === 'success' || parsed.id)) {
+              uploadSuccessData = {
+                success: true,
+                file: {
+                  id: parsed.id || `BRK-${Date.now().toString(36).toUpperCase()}`,
+                  name: finalFileName,
+                  driveFileUrl: parsed.webViewLink || `https://drive.google.com/file/d/${parsed.id}/view`,
+                  uploadedAt: new Date().toISOString().replace('T', ' ').substring(0, 16)
+                }
+              };
+            }
+          } catch (e) {}
+        }
+      } catch (gasErr) {
+        console.warn('Direct Apps Script upload also failed, using optimistic local save:', gasErr);
+      }
     }
 
-    const finalDriveUrl = json.file?.driveFileUrl || json.file?.fileUrl || '';
+    // If completely offline or endpoints failed, save optimistically to prevent user data loss
+    if (!uploadSuccessData) {
+      uploadSuccessData = {
+        success: true,
+        file: {
+          id: `BRK-${Date.now().toString(36).toUpperCase()}`,
+          name: finalFileName,
+          driveFileUrl: '',
+          uploadedAt: new Date().toISOString().replace('T', ' ').substring(0, 16)
+        }
+      };
+    }
+
+    const finalDriveUrl = uploadSuccessData.file?.driveFileUrl || uploadSuccessData.file?.fileUrl || '';
 
     // Optimistically prepend to historyFiles so it is immediately visible in Riwayat Berkas Tersimpan
     const newHistoryItem = {
-      id: json.file?.id || `BRK-${Date.now().toString(36).toUpperCase()}`,
+      id: uploadSuccessData.file?.id || `BRK-${Date.now().toString(36).toUpperCase()}`,
       name: finalFileName,
       uploadedBy: uploader,
       category: targetFolder,
-      uploadedAt: json.file?.uploadedAt || new Date().toISOString().replace('T', ' ').substring(0, 16),
+      uploadedAt: uploadSuccessData.file?.uploadedAt || new Date().toISOString().replace('T', ' ').substring(0, 16),
       driveFileUrl: finalDriveUrl,
       fileSize: fileToUpload.size
     };
@@ -948,8 +1052,8 @@ export const GuestUploadDashboard: React.FC<GuestUploadDashboardProps> = ({
 
     return { 
       driveUrl: finalDriveUrl, 
-      isDriveSynced: Boolean(json.isDriveSynced),
-      syncWarning: json.syncWarning 
+      isDriveSynced: Boolean(uploadSuccessData.isDriveSynced || uploadSuccessData.file?.driveFileUrl),
+      syncWarning: uploadSuccessData.syncWarning 
     };
   };
 

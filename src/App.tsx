@@ -51,7 +51,7 @@ import { SafeImage } from './components/SafeImage';
 import { formatDateIndonesian, cleanLeadingZerosCode } from './utils/dateUtils';
 import { loadFromGoogleSheets, syncToGoogleSheets, syncKibBToGoogleSheets, syncBangunanToGoogleSheets, syncRuangToGoogleSheets, syncAplikasiToGoogleSheets, normalizeWebAppUrl, normalizeStudentObject } from './services/googleSheetsService';
 
-const SHARED_CONTAINER_URL = "https://ais-pre-rl7bj4twi2wve75vqpw7yr-169174220206.asia-east1.run.app";
+const DEFAULT_FALLBACK_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzUjSFWKd2esZ0qgApuYzT1P4oJQklgiS3rvELTY1z0nxzXrwth5v_Xb5uAeEUmTzm8/exec";
 import { 
   Home, 
   School,
@@ -595,13 +595,7 @@ export default function App() {
   };
 
   const getApiUrl = (path: string) => {
-    // If running in a standard web browser environment (HTTP/HTTPS), always use relative paths
-    // so it automatically resolves to the correct server (Dev or Production/Shared container) without CORS issues
-    if (window.location.protocol.startsWith('http')) {
-      return path;
-    }
-    // Only use the hardcoded fallback if opened as a local static file (e.g. file://)
-    return `${SHARED_CONTAINER_URL}${path}`;
+    return path;
   };
 
   // Save application data cache to server so that it is shared across all browsers/devices
@@ -623,9 +617,13 @@ export default function App() {
     customRuang = ruangRef.current
   ) => {
     if (!isInitialized) return;
+    // On static hosts (e.g. GitHub Pages), skip server POST since there is no Node backend
+    if (typeof window !== 'undefined' && window.location.hostname.endsWith('github.io')) {
+      return;
+    }
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
       await fetch(getApiUrl('/api/app-data'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -650,7 +648,7 @@ export default function App() {
       });
       clearTimeout(timeoutId);
     } catch (err) {
-      console.warn('Background server cache sync skipped:', (err as any)?.message || err);
+      // Silently skip if server endpoint is offline
     }
   };
 
@@ -660,10 +658,13 @@ export default function App() {
       ...newConfig,
       webAppUrl: normalizeWebAppUrl(newConfig.webAppUrl)
     };
+    if (typeof window !== 'undefined' && window.location.hostname.endsWith('github.io')) {
+      return;
+    }
     try {
-      // 1. Save to local deployment API
+      // Save to local deployment API
       const controller1 = new AbortController();
-      const timeoutId1 = setTimeout(() => controller1.abort(), 6000);
+      const timeoutId1 = setTimeout(() => controller1.abort(), 4000);
       await fetch(getApiUrl('/api/sync-config'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -672,23 +673,7 @@ export default function App() {
       });
       clearTimeout(timeoutId1);
     } catch (err) {
-      console.warn('Failed to save sync config to local server:', (err as any)?.message || err);
-    }
-    try {
-      // 2. Also save to central shared container API if different host so it is shared across Vercel, HP, and Laptop permanently
-      if (typeof window !== 'undefined' && !window.location.origin.includes('ais-pre-rl7bj4twi2wve75vqpw7yr')) {
-        const controller2 = new AbortController();
-        const timeoutId2 = setTimeout(() => controller2.abort(), 6000);
-        await fetch(`${SHARED_CONTAINER_URL}/api/sync-config`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(normalizedConfig),
-          signal: controller2.signal
-        });
-        clearTimeout(timeoutId2);
-      }
-    } catch (err) {
-      console.warn('Failed to save sync config to central shared server:', (err as any)?.message || err);
+      // Silently skip if server endpoint is offline
     }
   };
 
@@ -1519,19 +1504,17 @@ export default function App() {
             console.warn('Local sync-config load skipped:', e);
           }
 
-          // 2. Fallback to Central Shared Container if local is empty/default
+          // 2. Fallback to bundled public/sync_config.json if local /api endpoint is not available (e.g. GitHub Pages)
           if (!serverConfig) {
             try {
-              const sharedConfigRes = await fetch(`${SHARED_CONTAINER_URL}/api/sync-config?t=${Date.now()}`);
-              if (sharedConfigRes.ok) {
-                const resJson = await sharedConfigRes.json();
+              const staticRes = await fetch(`./sync_config.json?t=${Date.now()}`);
+              if (staticRes.ok) {
+                const resJson = await staticRes.json();
                 if (resJson && resJson.webAppUrl) {
                   serverConfig = resJson;
                 }
               }
-            } catch (e) {
-              console.warn('Central sync-config fallback skipped:', e);
-            }
+            } catch (e) {}
           }
 
           if (serverConfig && serverConfig.webAppUrl) {
@@ -1653,9 +1636,9 @@ export default function App() {
 
         if (!serverConfig) {
           try {
-            const sharedConfigRes = await fetch(`${SHARED_CONTAINER_URL}/api/sync-config?t=${Date.now()}`);
-            if (sharedConfigRes.ok) {
-              const resJson = await sharedConfigRes.json();
+            const staticRes = await fetch(`./sync_config.json?t=${Date.now()}`);
+            if (staticRes.ok) {
+              const resJson = await staticRes.json();
               if (resJson && resJson.webAppUrl) {
                 serverConfig = resJson;
               }

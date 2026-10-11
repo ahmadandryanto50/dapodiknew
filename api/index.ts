@@ -93,7 +93,7 @@ function getEffectiveWebAppUrl(incomingUrl?: string): string {
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-app.use("/api", (req, res, next) => {
+app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, PATCH, DELETE");
   res.setHeader("Access-Control-Allow-Headers", "X-Requested-With,content-type,Authorization");
@@ -102,6 +102,10 @@ app.use("/api", (req, res, next) => {
   res.setHeader("Expires", "0");
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
+  }
+  // Ensure route matches whether Vercel rewrite preserved /api prefix or stripped it
+  if (!req.url.startsWith("/api") && !req.url.startsWith("/_")) {
+    req.url = "/api" + req.url;
   }
   next();
 });
@@ -433,10 +437,10 @@ app.post("/api/load-sheets", async (req, res) => {
       getUrl = `${getUrl}${separator}spreadsheetUrl=${encodeURIComponent(resolvedSpreadsheetUrl)}`;
     }
 
-    // 1. Try GET first with 7s timeout for Vercel
+    // 1. Try GET with 6.5s timeout to guarantee response within Vercel's 10s cutoff
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 7000);
+      const timeoutId = setTimeout(() => controller.abort(), 6500);
       const response = await fetch(getUrl, {
         method: "GET",
         redirect: "follow",
@@ -447,11 +451,11 @@ app.post("/api/load-sheets", async (req, res) => {
       data = JSON.parse(text);
     } catch (getErr) {}
 
-    // 2. If GET did not return valid status === 'success', try POST fallback
+    // 2. Only if GET completely failed and we still have time, try quick POST fallback
     if (!data || data.status !== 'success') {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 7000);
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
         const postRes = await fetch(webAppUrl, {
           method: "POST",
           headers: { "Content-Type": "text/plain" },
@@ -502,6 +506,16 @@ app.post("/api/load-sheets", async (req, res) => {
           toSave.students = mergedSiswa;
           data.siswa = mergedSiswa;
         }
+        if (Array.isArray(data.ptk) && data.ptk.length > 0) toSave.teachers = data.ptk;
+        if (Array.isArray(data.sarpras)) toSave.sarpras = data.sarpras;
+        if (Array.isArray(data.bangunan) && data.bangunan.length > 0) toSave.bangunan = data.bangunan;
+        if (Array.isArray(data.ruang) && data.ruang.length > 0) toSave.ruang = data.ruang;
+        if (Array.isArray(data.kibB)) toSave.kibB = cleanKibB(data.kibB);
+        if (Array.isArray(data.rapor)) toSave.reports = data.rapor;
+        if (Array.isArray(data.administrator) && data.administrator.length > 0) toSave.administrators = data.administrator;
+        if (Array.isArray(data.aplikasi) && data.aplikasi.length > 0) toSave.aplikasiLinks = data.aplikasi;
+        if (Array.isArray(data.notifikasi)) toSave.notifications = data.notifikasi;
+        if (Array.isArray(data.schoolAccounts) && data.schoolAccounts.length > 0) toSave.schoolAccounts = data.schoolAccounts;
         safeWriteJSON(DATA_FILE, toSave);
       } catch (e) {}
 
