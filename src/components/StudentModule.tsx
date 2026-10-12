@@ -30,8 +30,10 @@ import {
   ChevronDown,
   RotateCcw,
   GraduationCap,
-  Calendar
+  Calendar,
+  FileText
 } from 'lucide-react';
+import { SuratPindahModal } from './SuratPindahModal';
 import { Student } from '../types';
 import { formatDateIndonesian, formatDateForInput } from '../utils/dateUtils';
 import { exportToCSV } from '../services/googleSheetsService';
@@ -216,6 +218,7 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [selectedStudentForCard, setSelectedStudentForCard] = useState<Student | null>(null);
+  const [selectedStudentForSuratPindah, setSelectedStudentForSuratPindah] = useState<Student | null>(null);
   const [selectedStudentForDetail, setSelectedStudentForDetail] = useState<Student | null>(null);
   const [deletingStudent, setDeletingStudent] = useState<{ id: string; name: string } | null>(null);
   const [openActionId, setOpenActionId] = useState<string | null>(null);
@@ -1347,6 +1350,25 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
                                   <span>Cetak Kartu Pelajar</span>
                                 </button>
 
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenActionId(null);
+                                    setActionMenuPos(null);
+                                    setSelectedStudentForSuratPindah(normalizeStudentFullData(student));
+                                  }}
+                                  className="w-full text-left px-3.5 py-2 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 flex items-center gap-2.5 font-medium transition-colors cursor-pointer"
+                                  title="Cetak Surat Keterangan Pindah Sekolah"
+                                >
+                                  <div className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center shrink-0 border border-indigo-200">
+                                    <FileText className="w-3.5 h-3.5" />
+                                  </div>
+                                  <div className="flex flex-col">
+                                    <span className="font-semibold text-slate-800">Surat Pindah (Mutasi)</span>
+                                    <span className="text-[10px] text-slate-400">Edit Nomor, Sekolah & PDF</span>
+                                  </div>
+                                </button>
+
                                 {activeSubTab === 'aktif' && (
                                   <>
                                     <button
@@ -1856,19 +1878,34 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
               </div>
             </div>
 
-            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  const studentToEdit = selectedStudentForDetail;
-                  setSelectedStudentForDetail(null);
-                  handleOpenEditModal(studentToEdit);
-                }}
-                className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
-              >
-                <Edit className="w-3.5 h-3.5" />
-                <span>Edit Biodata Lengkap</span>
-              </button>
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const studentForSurat = selectedStudentForDetail;
+                    setSelectedStudentForDetail(null);
+                    setSelectedStudentForSuratPindah(studentForSurat);
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                  title="Buat dan cetak Surat Keterangan Pindah Sekolah"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Cetak Surat Pindah</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const studentToEdit = selectedStudentForDetail;
+                    setSelectedStudentForDetail(null);
+                    handleOpenEditModal(studentToEdit);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                >
+                  <Edit className="w-3.5 h-3.5" />
+                  <span>Edit Biodata Lengkap</span>
+                </button>
+              </div>
               <button
                 onClick={() => setSelectedStudentForDetail(null)}
                 className="px-5 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs transition-colors"
@@ -2771,6 +2808,21 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
                   ))}
                 </div>
               </div>
+
+              <div className="pt-2 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const studentForSurat = normalizeStudentFullData(movingStudent);
+                    setMovingStudent(null);
+                    setSelectedStudentForSuratPindah(studentForSurat);
+                  }}
+                  className="w-full py-2.5 px-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                >
+                  <FileText className="w-4 h-4 text-indigo-600" />
+                  <span>Buat & Cetak Surat Pindah Sekolah</span>
+                </button>
+              </div>
             </div>
 
             <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end">
@@ -2893,6 +2945,22 @@ export const StudentModule: React.FC<StudentModuleProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal Surat Keterangan Pindah Sekolah */}
+      {selectedStudentForSuratPindah && (
+        <SuratPindahModal
+          isOpen={Boolean(selectedStudentForSuratPindah)}
+          onClose={() => setSelectedStudentForSuratPindah(null)}
+          student={selectedStudentForSuratPindah}
+          schoolProfile={schoolProfile}
+          displayConfig={displayConfig}
+          onMarkMutasi={(studentId, reason) => {
+            if (onMoveToStudentKeluar) {
+              onMoveToStudentKeluar(studentId, reason as any);
+            }
+          }}
+        />
       )}
     </div>
   );

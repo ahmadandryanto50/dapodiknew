@@ -85,7 +85,7 @@ export function exportCompleteRekapToExcel({
 
   const schoolName = schoolProfile?.namaSekolah || 'SMP NEGERI 11 PALU';
   const schoolNpsn = schoolProfile?.npsn || '40203578';
-  const schoolAddress = schoolProfile?.alamat || 'Jl. Sintuvu No. 11, Palu Barat, Kota Palu, Sulawesi Tengah';
+  const schoolAddress = schoolProfile?.alamat || 'Jl. Sintuvu No. 11, Tatanga, Kota Palu, Sulawesi Tengah';
   const currentDateFormatted = formatDateIndonesian(new Date().toISOString());
 
   const activeStudents = allStudents.filter(s => s && (!s.status || s.status === 'Aktif'));

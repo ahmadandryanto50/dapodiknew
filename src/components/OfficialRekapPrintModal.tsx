@@ -66,7 +66,7 @@ export const OfficialRekapPrintModal: React.FC<OfficialRekapPrintModalProps> = (
 
   const schoolName = schoolProfile?.namaSekolah || 'SMP NEGERI 11 PALU';
   const schoolNpsn = schoolProfile?.npsn || '40203578';
-  const schoolAddress = schoolProfile?.alamat || 'Jl. Sintuvu No. 11, Palu Barat, Kota Palu, Sulawesi Tengah';
+  const schoolAddress = schoolProfile?.alamat || 'Jl. Sintuvu No. 11, Tatanga, Kota Palu, Sulawesi Tengah';
   const logoUrl = formatImageUrl(displayConfig?.logoCustomUrl || schoolProfile?.logoSekolah, '/logo_smpn11palu.jpg');
   const currentDateFormatted = formatDateIndonesian(new Date().toISOString());
 
@@ -300,7 +300,7 @@ export const OfficialRekapPrintModal: React.FC<OfficialRekapPrintModalProps> = (
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-md overflow-y-auto animate-fadeIn">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 pt-16 sm:pt-4 bg-slate-900/60 backdrop-blur-md overflow-y-auto animate-fadeIn">
       {/* Modal Container */}
       <div className="bg-white text-slate-900 rounded-3xl w-full max-w-5xl max-h-[94vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden my-auto">
         

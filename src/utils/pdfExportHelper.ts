@@ -4,6 +4,21 @@ import { Student, TeacherStaff, SarprasItem, StudentReport, SchoolProfile, AppDi
 import { formatDateIndonesian } from './dateUtils';
 import { getPtkBreakdown } from './ptkClassification';
 
+export function toTitleCase(str: string): string {
+  if (!str) return '';
+  let cleaned = str.toLowerCase().replace(/(?:^|\s)\S/g, (a) => a.toUpperCase());
+  cleaned = cleaned
+    .replace(/\bs\.?\s*pd\.?/gi, 'S.Pd.')
+    .replace(/\bm\.?\s*pd\.?/gi, 'M.Pd.')
+    .replace(/\bs\.?\s*kom\.?/gi, 'S.Kom.')
+    .replace(/\bm\.?\s*kom\.?/gi, 'M.Kom.')
+    .replace(/\bdr\.?/gi, 'Dr.')
+    .replace(/\bdrs\.?/gi, 'Drs.')
+    .replace(/\bhj\.?/gi, 'Hj.')
+    .replace(/\bh\.?/gi, 'H.');
+  return cleaned;
+}
+
 export interface ExportPdfOptions {
   students: Student[];
   teachers: TeacherStaff[];
@@ -83,9 +98,9 @@ export function generateOfficialRekapPdf({
     const schoolName = (schoolProfile?.namaSekolah || 'SMP NEGERI 11 PALU').toUpperCase();
     const schoolNpsn = schoolProfile?.npsn || '40203578';
     const schoolAkreditasi = schoolProfile?.akreditasi || 'A (Unggul)';
-    const schoolAddress = schoolProfile?.alamat || 'Jl. Sintuvu No. 11, Palu Barat, Kota Palu, Sulawesi Tengah';
+    const schoolAddress = schoolProfile?.alamat || 'Jl. Sintuvu No. 11, Tatanga, Kota Palu, Sulawesi Tengah';
     const schoolEmail = schoolProfile?.email || 'smpnegeri11palu@gmail.com';
-    const kepalaSekolah = schoolProfile?.kepalaSekolah || 'Sunardiyanto, S.Pd., M.Pd.';
+    const kepalaSekolah = (schoolProfile?.kepalaSekolah || 'Sunardiyanto, S.Pd., M.Pd.').replace(/S\.PD/gi, 'S.Pd');
     const nipKepsek = (schoolProfile as any)?.nipKepsek || '196805121994121003';
     const operatorSekolah = schoolProfile?.operatorSekolah || 'Ahmad Andryanto, S.Kom.';
     const nipOperator = (schoolProfile as any)?.nipOperator || '199208142022031008';
@@ -515,6 +530,239 @@ export function generateOfficialRekapPdf({
   }
 }
 
+export interface SuratPindahPdfData {
+  namaSekolah?: string;
+  npsnSekolah?: string;
+  alamatSekolah?: string;
+  emailSekolah?: string;
+  akreditasiSekolah?: string;
+  kepalaSekolah?: string;
+  nipKepalaSekolah?: string;
+  kotaSurat?: string;
+  nomorSurat?: string;
+  tanggalSurat?: string;
+  tanggalPermohonan?: string;
+  tanggalEfektif?: string;
+  namaSiswa?: string;
+  nis?: string;
+  nisn?: string;
+  jenisKelamin?: string;
+  tempatTanggalLahir?: string;
+  kelasAsal?: string;
+  namaOrangTua?: string;
+  pekerjaanOrangTua?: string;
+  alamatOrangTua?: string;
+  sekolahTujuan?: string;
+  kabKotaTujuan?: string;
+  kelasTujuan?: string;
+  alasanPindah?: string;
+  catatanKelengkapan?: string;
+}
+
+/**
+ * Generates and downloads official Surat Keterangan Pindah Sekolah instantly with jsPDF.
+ * High quality vector typography, zero freeze, instant download.
+ */
+export function generateSuratPindahPdf(data: SuratPindahPdfData, autoPrint: boolean = false): boolean {
+  try {
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4',
+    });
+
+    const marginX = 20;
+    const pageWidth = 210;
+    const contentWidth = pageWidth - (marginX * 2);
+
+    const namaSekolah = (data.namaSekolah || 'SMP NEGERI 11 PALU').toUpperCase();
+    const alamatSekolah = data.alamatSekolah || 'Jl. Sintuvu No. 11, Tatanga, Kota Palu, Sulawesi Tengah';
+    const npsnSekolah = data.npsnSekolah || '40203578';
+    const emailSekolah = data.emailSekolah || 'smpnegeri11palu@gmail.com';
+    const akreditasiSekolah = data.akreditasiSekolah || 'A';
+    const kepalaSekolah = (data.kepalaSekolah || 'Sunardiyanto, S.Pd., M.Pd.').replace(/S\.PD/gi, 'S.Pd');
+    const nipKepalaSekolah = data.nipKepalaSekolah || '196805121994121003';
+    const kotaSurat = data.kotaSurat || 'Palu';
+    const nomorSurat = data.nomorSurat || '421.2 / 582 / SMPN.11 / 2026';
+    const tanggalSurat = data.tanggalSurat || formatDateIndonesian(new Date().toISOString());
+    const tanggalPermohonan = data.tanggalPermohonan || tanggalSurat;
+    const tanggalEfektif = data.tanggalEfektif || tanggalSurat;
+
+    // Kop Surat Resmi
+    let y = 18;
+    doc.setFont('times', 'bold');
+    doc.setFontSize(12);
+    doc.setTextColor(0, 0, 0);
+    doc.text('PEMERINTAH KOTA PALU', pageWidth / 2, y, { align: 'center' });
+
+    y += 5.5;
+    doc.setFontSize(11);
+    doc.text('DINAS PENDIDIKAN DAN KEBUDAYAAN', pageWidth / 2, y, { align: 'center' });
+
+    y += 6.5;
+    doc.setFontSize(15);
+    doc.text(namaSekolah, pageWidth / 2, y, { align: 'center' });
+
+    y += 5;
+    doc.setFont('times', 'normal');
+    doc.setFontSize(9);
+    doc.text(alamatSekolah, pageWidth / 2, y, { align: 'center' });
+
+    y += 4.5;
+    doc.setFontSize(8.5);
+    doc.text(`NPSN: ${npsnSekolah}  •  Email: ${emailSekolah}  •  Akreditasi: ${akreditasiSekolah}`, pageWidth / 2, y, { align: 'center' });
+
+    // Double horizontal separator line
+    y += 3.5;
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.8);
+    doc.line(marginX, y, pageWidth - marginX, y);
+    doc.setLineWidth(0.2);
+    doc.line(marginX, y + 1.2, pageWidth - marginX, y + 1.2);
+
+    // Judul Surat
+    y += 9;
+    doc.setFont('times', 'bold');
+    doc.setFontSize(12.5);
+    const titleText = 'SURAT KETERANGAN PINDAH SEKOLAH';
+    doc.text(titleText, pageWidth / 2, y, { align: 'center' });
+    const titleWidth = doc.getTextWidth(titleText);
+    doc.setLineWidth(0.4);
+    doc.line((pageWidth - titleWidth) / 2, y + 1, (pageWidth + titleWidth) / 2, y + 1);
+
+    y += 6;
+    doc.setFont('times', 'normal');
+    doc.setFontSize(10.5);
+    doc.text(`Nomor : ${nomorSurat}`, pageWidth / 2, y, { align: 'center' });
+
+    // Paragraf Pembuka
+    y += 8;
+    doc.setFontSize(11);
+    const pembukaText = `Yang bertanda tangan di bawah ini, Kepala ${namaSekolah}, Kecamatan Tatanga, Kota Palu, Provinsi Sulawesi Tengah, dengan ini menerangkan bahwa:`;
+    const pembukaLines = doc.splitTextToSize(pembukaText, contentWidth);
+    doc.text(pembukaLines, marginX, y);
+    y += pembukaLines.length * 5 + 3;
+
+    // Helper untuk baris data
+    const drawDataRow = (numLabel: string, value: string, isBoldVal: boolean = false, isItalicVal: boolean = false) => {
+      doc.setFont('times', 'normal');
+      doc.text(numLabel, marginX + 3, y);
+      doc.text(':', marginX + 52, y);
+
+      if (isBoldVal) {
+        doc.setFont('times', 'bold');
+      } else if (isItalicVal) {
+        doc.setFont('times', 'italic');
+      } else {
+        doc.setFont('times', 'normal');
+      }
+
+      const valLines = doc.splitTextToSize(value || '-', contentWidth - 56);
+      doc.text(valLines, marginX + 56, y);
+      y += Math.max(5.2, valLines.length * 4.8);
+    };
+
+    // Identitas Siswa
+    drawDataRow('1. Nama Peserta Didik', toTitleCase(data.namaSiswa || '............................................................'), true);
+    drawDataRow('2. NIS / NISN', `${data.nis || '-'} / ${data.nisn || '....................................'}`);
+    drawDataRow('3. Jenis Kelamin', data.jenisKelamin || '-');
+    drawDataRow('4. Tempat, Tanggal Lahir', toTitleCase(data.tempatTanggalLahir || '-'));
+    drawDataRow('5. Tingkat / Kelas Asal', data.kelasAsal || '-');
+    drawDataRow('6. Nama Orang Tua / Wali', toTitleCase(data.namaOrangTua || '............................................................'));
+    drawDataRow('7. Pekerjaan Orang Tua', data.pekerjaanOrangTua || '............................................................');
+    drawDataRow('8. Alamat Orang Tua / Siswa', data.alamatOrangTua || '..........................................................................................');
+
+    y += 2;
+    // Paragraf Keterangan Pindah
+    doc.setFont('times', 'normal');
+    const keteranganPindah = `Sesuai dengan surat permohonan pindah sekolah dari Orang Tua / Wali Siswa tertanggal ${tanggalPermohonan}, peserta didik tersebut di atas terhitung mulai tanggal ${tanggalEfektif} dinyatakan pindah sekolah ke:`;
+    const ketLines = doc.splitTextToSize(keteranganPindah, contentWidth);
+    doc.text(ketLines, marginX, y);
+    y += ketLines.length * 5 + 2.5;
+
+    // Detail Pindah
+    const tujuanText = data.sekolahTujuan 
+      ? toTitleCase(`${data.sekolahTujuan}${data.kabKotaTujuan ? ` (${data.kabKotaTujuan})` : ''}`)
+      : '..........................................................................................';
+    drawDataRow('Sekolah Tujuan', tujuanText);
+    drawDataRow('Diterima di Kelas', data.kelasTujuan || '............................................................');
+    drawDataRow('Alasan Kepindahan', data.alasanPindah || 'Mengikuti Orang Tua / Pindah Domisili');
+    drawDataRow('Catatan Kelengkapan', data.catatanKelengkapan || 'Buku Laporan Hasil Belajar (Raport) dan Surat Keterangan Kelakuan Baik telah diserahkan.', false, true);
+
+    y += 2.5;
+    // Paragraf Penutup
+    doc.setFont('times', 'normal');
+    const penutupText = 'Demikian Surat Keterangan Pindah Sekolah ini dibuat dengan sebenarnya atas permintaan orang tua / wali siswa yang bersangkutan untuk dapat dipergunakan sebagaimana mestinya.';
+    const penutupLines = doc.splitTextToSize(penutupText, contentWidth);
+    doc.text(penutupLines, marginX, y);
+    y += penutupLines.length * 5 + 7;
+
+    // Tanda Tangan 2 Kolom
+    const colLeftX = marginX + 5;
+    const colRightX = marginX + 105;
+
+    doc.setFont('times', 'normal');
+    doc.setFontSize(10.5);
+
+    // Kiri: Orang Tua
+    doc.text('Mengetahui / Mengajukan,', colLeftX, y);
+    doc.text('Orang Tua / Wali Siswa,', colLeftX, y + 5);
+
+    // Kanan: Kepala Sekolah
+    doc.text(`${kotaSurat}, ${tanggalSurat}`, colRightX, y);
+    doc.text('Kepala Sekolah,', colRightX, y + 5);
+    doc.text(namaSekolah, colRightX, y + 9.5);
+
+    y += 32;
+
+    // Nama Penandatangan
+    doc.setFont('times', 'bold');
+    const namaOrtuFormatted = `( ${toTitleCase(data.namaOrangTua || '................................................')} )`;
+    doc.text(namaOrtuFormatted, colLeftX, y);
+
+    const kepsekFormatted = toTitleCase(kepalaSekolah);
+    doc.text(kepsekFormatted, colRightX, y);
+    const kepsekWidth = doc.getTextWidth(kepsekFormatted);
+    doc.setLineWidth(0.3);
+    doc.line(colRightX, y + 0.8, colRightX + kepsekWidth, y + 0.8);
+
+    doc.setFont('times', 'normal');
+    doc.setFontSize(9.5);
+    doc.text(`NIP. ${nipKepalaSekolah}`, colRightX, y + 5);
+
+    const cleanStudent = (data.namaSiswa || 'Siswa').replace(/[^a-zA-Z0-9]/g, '_');
+    const filename = `Surat_Keterangan_Pindah_${cleanStudent}_${data.nisn || ''}.pdf`;
+
+    if (autoPrint) {
+      doc.autoPrint();
+    }
+
+    // 1. Direct save via jsPDF
+    doc.save(filename);
+
+    // 2. Direct blob trigger for sandbox browsers
+    try {
+      const blob = doc.output('blob');
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => {
+        if (link.parentNode) link.parentNode.removeChild(link);
+        URL.revokeObjectURL(blobUrl);
+      }, 2000);
+    } catch (_) {}
+
+    return true;
+  } catch (error) {
+    console.error('Error generating Surat Pindah PDF:', error);
+    return false;
+  }
+}
+
 /**
  * Generates a clean 2-page Rapor Kurikulum Merdeka PDF for a single student instantly with jsPDF
  */
@@ -798,7 +1046,7 @@ export function generateSingleStudentReportPdf(
 
     currentY += 16;
 
-    const kepsek = report.namaKepalaSekolah || schoolProfile?.kepalaSekolah || 'Martha Taewa, S.Pd';
+    const kepsek = (report.namaKepalaSekolah || schoolProfile?.kepalaSekolah || 'Martha Taewa, S.Pd').replace(/S\.PD/gi, 'S.Pd');
     const nipKepsek = report.nipKepalaSekolah || 'NIP 197103192007012011';
     const wali = report.namaWaliKelas || 'RINA, S.Pd., M.Pd';
     const nipWali = report.nipWaliKelas || 'NIP 9740817200932003';
@@ -900,7 +1148,7 @@ export function exportSingleStudentReportToWord(
     const statusKenaikan = report.statusKenaikan || 'Naik ke kelas VIII';
     const tempatTgl = report.tempatTanggalCetak || 'Palu, 22 Juni 2026';
 
-    const kepsek = report.namaKepalaSekolah || schoolProfile?.kepalaSekolah || 'Martha Taewa, S.Pd';
+    const kepsek = (report.namaKepalaSekolah || schoolProfile?.kepalaSekolah || 'Martha Taewa, S.Pd').replace(/S\.PD/gi, 'S.Pd');
     const nipKepsek = report.nipKepalaSekolah || 'NIP 197103192007012011';
     const wali = report.namaWaliKelas || 'RINA, S.Pd., M.Pd';
     const nipWali = report.nipWaliKelas || 'NIP 9740817200932003';

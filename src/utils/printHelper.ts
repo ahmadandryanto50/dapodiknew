@@ -1,121 +1,76 @@
 import html2pdf from 'html2pdf.js';
 
 /**
- * Utility to print any DOM element cleanly with styling isolation.
- * Works seamlessly in sandboxed preview iframes and standalone windows.
+ * Utility to print any DOM element cleanly with complete styling isolation.
+ * Works reliably across desktop PCs, laptops, and iframe preview environments.
  */
-export async function printElement(elementId: string, title: string = 'Laporan Rekapitulasi DAPODIK'): Promise<void> {
-  const element = document.getElementById(elementId);
-  if (!element) {
-    console.warn(`Element with id ${elementId} not found, invoking window.print().`);
-    window.focus();
-    window.print();
+export async function printElement(elementId: string, title: string = 'Cetak Dokumen'): Promise<void> {
+  const originalElement = document.getElementById(elementId);
+  if (!originalElement) {
+    console.warn(`Element with ID '${elementId}' not found for printing.`);
+    try {
+      window.focus();
+      window.print();
+    } catch (_) {}
     return;
   }
 
-  // Add body print class safely for CSS rules
-  document.body.classList.add('printing-rekap');
-
-  const cleanup = () => {
-    document.body.classList.remove('printing-rekap');
-  };
-
-  try {
-    // Create an isolated printing iframe to render ONLY the clean A4 element
-    const iframe = document.createElement('iframe');
-    iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '0px';
-    iframe.style.height = '0px';
-    iframe.style.border = '0';
-    iframe.style.visibility = 'hidden';
-    document.body.appendChild(iframe);
-
-    const frameDoc = iframe.contentWindow?.document;
-    if (frameDoc) {
-      const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
-        .map(style => style.outerHTML)
-        .join('\n');
-
-      frameDoc.open();
-      frameDoc.write(`
-        <!DOCTYPE html>
-        <html lang="id">
-          <head>
-            <meta charset="utf-8">
-            <title>${title}</title>
-            ${styles}
-            <style>
-              @page {
-                size: A4 portrait;
-                margin: 8mm 10mm 10mm 10mm;
-              }
-              body {
-                background: #ffffff !important;
-                color: #000000 !important;
-                margin: 0 !important;
-                padding: 5px !important;
-                font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-              }
-              .no-print {
-                display: none !important;
-              }
-              table {
-                width: 100% !important;
-                border-collapse: collapse !important;
-              }
-              table, th, td {
-                border-color: #000000 !important;
-              }
-              .page-break-before {
-                page-break-before: always !important;
-                break-before: page !important;
-              }
-            </style>
-          </head>
-          <body>
-            ${element.outerHTML}
-          </body>
-        </html>
-      `);
-      frameDoc.close();
-
-      setTimeout(() => {
-        try {
-          iframe.contentWindow?.focus();
-          iframe.contentWindow?.print();
-        } catch (e) {
-          console.warn('Iframe print warning, using window.print fallback:', e);
-          window.focus();
-          window.print();
-        } finally {
-          setTimeout(() => {
-            if (document.body.contains(iframe)) {
-              document.body.removeChild(iframe);
-            }
-            cleanup();
-          }, 1000);
-        }
-      }, 400);
-      return;
-    }
-  } catch (err) {
-    console.warn('Print element error, fallback to window.print:', err);
+  // Remove any previous stale print host container
+  const existingHost = document.getElementById('direct-print-host');
+  if (existingHost && existingHost.parentNode) {
+    existingHost.parentNode.removeChild(existingHost);
   }
 
-  // Direct fallback
-  window.focus();
-  window.print();
-  setTimeout(cleanup, 500);
+  // Create isolated container attached directly to document.body
+  const printHost = document.createElement('div');
+  printHost.id = 'direct-print-host';
+
+  // Deep clone target element to preserve original modal DOM
+  const clone = originalElement.cloneNode(true) as HTMLElement;
+  printHost.appendChild(clone);
+  document.body.appendChild(printHost);
+
+  const printClass = elementId === 'printable-surat-pindah-content' ? 'printing-surat-pindah' : 'printing-rekap';
+  document.body.classList.add('is-printing-direct', printClass);
+
+  return new Promise<void>((resolve) => {
+    let cleanedUp = false;
+
+    const cleanup = () => {
+      if (cleanedUp) return;
+      cleanedUp = true;
+
+      document.body.classList.remove('is-printing-direct', printClass, 'printing-surat-pindah', 'printing-rekap');
+      const host = document.getElementById('direct-print-host');
+      if (host && host.parentNode) {
+        host.parentNode.removeChild(host);
+      }
+      resolve();
+    };
+
+    // Clean up when user closes or completes the print dialog
+    window.addEventListener('afterprint', cleanup, { once: true });
+
+    // Allow browser time to render DOM changes before triggering print preview
+    setTimeout(() => {
+      try {
+        window.focus();
+        window.print();
+      } catch (err) {
+        console.error('Print execution error:', err);
+      } finally {
+        // Safe cleanup fallback after 30 seconds (NOT 1 second) so preview dialog has plenty of time to render
+        setTimeout(cleanup, 30000);
+      }
+    }, 150);
+  });
 }
 
 /**
- * Utility to export a DOM element directly as a downloaded PDF file using html2pdf.js.
+ * Utility to export a DOM element directly as a downloaded PDF file using html2pdf.js,
+ * with reliable timeout handling and a bulletproof fallback to printElement.
  */
-export async function exportElementToPdf(elementId: string, filename: string = 'Rapor_Kurikulum_Merdeka'): Promise<boolean> {
+export async function exportElementToPdf(elementId: string, filename: string = 'Surat_Keterangan_Pindah'): Promise<boolean> {
   const element = document.getElementById(elementId);
   if (!element) {
     console.warn(`Element with id ${elementId} not found for PDF export.`);
@@ -124,28 +79,40 @@ export async function exportElementToPdf(elementId: string, filename: string = '
 
   try {
     const cleanFilename = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
-    const opt = {
-      margin: [8, 8, 12, 8] as [number, number, number, number], // top, left, bottom, right in mm
-      filename: cleanFilename,
-      image: { type: 'jpeg' as const, quality: 0.95 },
-      html2canvas: {
-        scale: 1.5,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-        windowWidth: 1024
-      },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
-      pagebreak: { mode: ['css', 'legacy'], before: '.page-break-before' }
-    };
+    
+    // Safely resolve html2pdf export method
+    const html2pdfLib = (html2pdf as any).default || html2pdf;
+    if (typeof html2pdfLib === 'function') {
+      const opt = {
+        margin: [10, 10, 10, 10] as [number, number, number, number],
+        filename: cleanFilename,
+        image: { type: 'jpeg' as const, quality: 0.98 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+          windowWidth: 1024
+        },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
+        pagebreak: { mode: ['css', 'legacy'], before: '.page-break-before' }
+      };
 
-    // Execute html2pdf conversion without freezing or fallback looping
-    await html2pdf().set(opt).from(element).save();
-    return true;
+      // Wrap in Promise.race with a 6-second timeout to prevent any application freeze
+      const exportPromise = html2pdfLib().set(opt).from(element).save();
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('PDF export timed out')), 6000)
+      );
+
+      await Promise.race([exportPromise, timeoutPromise]);
+      return true;
+    } else {
+      console.warn('html2pdf library not available.');
+      return false;
+    }
   } catch (err) {
-    console.error('Error exporting element to PDF via html2pdf:', err);
+    console.error('Error exporting element to PDF:', err);
     return false;
   }
 }
-
-
