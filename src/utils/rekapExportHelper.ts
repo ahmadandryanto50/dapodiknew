@@ -273,6 +273,98 @@ export function exportCompleteRekapToExcel({
   XLSX.utils.book_append_sheet(wb, ws2, 'Rekap_Siswa_Rombel');
 
   // ==========================================
+  // SHEET 2B: REKAP_AGAMA
+  // ==========================================
+  const agamaStats: Record<string, { male: number; female: number; total: number }> = {
+    'Islam': { male: 0, female: 0, total: 0 },
+    'Kristen': { male: 0, female: 0, total: 0 },
+    'Katholik': { male: 0, female: 0, total: 0 },
+    'Hindu': { male: 0, female: 0, total: 0 },
+    'Buddha': { male: 0, female: 0, total: 0 },
+    'Konghucu': { male: 0, female: 0, total: 0 },
+    'Lainnya': { male: 0, female: 0, total: 0 },
+  };
+
+  activeStudents.forEach(s => {
+    const raw = (s.agama || '').trim().toLowerCase();
+    let key = 'Lainnya';
+    if (raw.includes('islam')) key = 'Islam';
+    else if (raw.includes('kristen') || raw.includes('protestan')) key = 'Kristen';
+    else if (raw.includes('katolik') || raw.includes('katholik')) key = 'Katholik';
+    else if (raw.includes('hindu')) key = 'Hindu';
+    else if (raw.includes('buddha') || raw.includes('budha')) key = 'Buddha';
+    else if (raw.includes('konghucu') || raw.includes('khonghucu')) key = 'Konghucu';
+    else if (raw) key = 'Lainnya';
+    else key = 'Islam';
+
+    if (!agamaStats[key]) {
+      agamaStats[key] = { male: 0, female: 0, total: 0 };
+    }
+    if (s.jenisKelamin === 'L') agamaStats[key].male += 1;
+    else if (s.jenisKelamin === 'P') agamaStats[key].female += 1;
+    agamaStats[key].total += 1;
+  });
+
+  const totalIslam = agamaStats['Islam']?.total || 0;
+  const totalKristen = agamaStats['Kristen']?.total || 0;
+  const totalKatholik = agamaStats['Katholik']?.total || 0;
+  const totalHindu = agamaStats['Hindu']?.total || 0;
+  const totalBuddha = agamaStats['Buddha']?.total || 0;
+  const totalKonghucu = agamaStats['Konghucu']?.total || 0;
+  const totalAgamaLainnya = (agamaStats['Lainnya']?.total || 0) + totalHindu + totalBuddha + totalKonghucu + totalKatholik;
+
+  const sheetAgamaData = [
+    ['REKAPITULASI PESERTA DIDIK BERDASARKAN AGAMA / KEPERCAYAAN'],
+    [schoolName.toUpperCase()],
+    [`Total Siswa Aktif: ${activeStudents.length} (L: ${maleStudents}, P: ${femaleStudents})`],
+    [],
+    ['NO', 'AGAMA / KEPERCAYAAN', 'LAKI-LAKI (L)', 'PEREMPUAN (P)', 'TOTAL SISWA', 'PERSENTASE (%)'],
+    [
+      1 as any,
+      'Islam',
+      agamaStats['Islam'].male as any,
+      agamaStats['Islam'].female as any,
+      totalIslam as any,
+      `${activeStudents.length > 0 ? ((totalIslam / activeStudents.length) * 100).toFixed(1) : 0}%` as any
+    ],
+    [
+      2 as any,
+      'Kristen (Protestan)',
+      agamaStats['Kristen'].male as any,
+      agamaStats['Kristen'].female as any,
+      totalKristen as any,
+      `${activeStudents.length > 0 ? ((totalKristen / activeStudents.length) * 100).toFixed(1) : 0}%` as any
+    ],
+    [
+      3 as any,
+      'Lainnya (Katolik / Hindu / Buddha / Konghucu / Lainnya)',
+      (activeStudents.length - (agamaStats['Islam'].male + agamaStats['Kristen'].male)) as any,
+      (femaleStudents - (agamaStats['Islam'].female + agamaStats['Kristen'].female)) as any,
+      totalAgamaLainnya as any,
+      `${activeStudents.length > 0 ? ((totalAgamaLainnya / activeStudents.length) * 100).toFixed(1) : 0}%` as any
+    ],
+    [
+      'Σ' as any,
+      'TOTAL KESELURUHAN BERAGAMA',
+      maleStudents as any,
+      femaleStudents as any,
+      activeStudents.length as any,
+      '100.0%' as any
+    ]
+  ];
+
+  const wsAgama = XLSX.utils.aoa_to_sheet(sheetAgamaData);
+  wsAgama['!cols'] = [
+    { wch: 6 },
+    { wch: 45 },
+    { wch: 15 },
+    { wch: 15 },
+    { wch: 15 },
+    { wch: 16 },
+  ];
+  XLSX.utils.book_append_sheet(wb, wsAgama, 'Rekap_Agama');
+
+  // ==========================================
   // SHEET 3: REKAP_DEMOGRAFI_KK_USIA
   // ==========================================
   const totalAllPalu_L = usia13_Palu_L + usia14_Palu_L + usia15_Palu_L + usiaUnder13_Palu_L + usiaOver15_Palu_L;

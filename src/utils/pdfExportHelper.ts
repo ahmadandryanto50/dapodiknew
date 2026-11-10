@@ -290,7 +290,7 @@ export function generateOfficialRekapPdf({
       ]);
     });
     // Total Row
-    rombelRows.push(['', 'TOTAL KESELURUHAN', `${sortedRombelKeys.length} Rombel`, maleStudents, femaleStudents, totalStudents, '100%']);
+    rombelRows.push(['', 'TOTAL KESELURUHAN KELAS', `${sortedRombelKeys.length} Rombel`, maleStudents, femaleStudents, totalStudents, '100%']);
 
     autoTable(doc, {
       startY: currentY,
@@ -317,11 +317,89 @@ export function generateOfficialRekapPdf({
       margin: { left: marginX, right: marginX },
     });
 
+    currentY = (doc as any).lastAutoTable.finalY + 5;
+
+    // SECTION II.B: REKAPITULASI BERDASARKAN AGAMA
+    const agamaStats: Record<string, { male: number; female: number; total: number }> = {
+      'Islam': { male: 0, female: 0, total: 0 },
+      'Kristen': { male: 0, female: 0, total: 0 },
+      'Katholik': { male: 0, female: 0, total: 0 },
+      'Hindu': { male: 0, female: 0, total: 0 },
+      'Buddha': { male: 0, female: 0, total: 0 },
+      'Konghucu': { male: 0, female: 0, total: 0 },
+      'Lainnya': { male: 0, female: 0, total: 0 },
+    };
+
+    activeStudents.forEach(s => {
+      const raw = (s.agama || '').trim().toLowerCase();
+      let key = 'Lainnya';
+      if (raw.includes('islam')) key = 'Islam';
+      else if (raw.includes('kristen') || raw.includes('protestan')) key = 'Kristen';
+      else if (raw.includes('katolik') || raw.includes('katholik')) key = 'Katholik';
+      else if (raw.includes('hindu')) key = 'Hindu';
+      else if (raw.includes('buddha') || raw.includes('budha')) key = 'Buddha';
+      else if (raw.includes('konghucu') || raw.includes('khonghucu')) key = 'Konghucu';
+      else if (raw) key = 'Lainnya';
+      else key = 'Islam';
+
+      if (!agamaStats[key]) {
+        agamaStats[key] = { male: 0, female: 0, total: 0 };
+      }
+      if (s.jenisKelamin === 'L') agamaStats[key].male += 1;
+      else if (s.jenisKelamin === 'P') agamaStats[key].female += 1;
+      agamaStats[key].total += 1;
+    });
+
+    const totalIslam = agamaStats['Islam']?.total || 0;
+    const totalKristen = agamaStats['Kristen']?.total || 0;
+    const totalKatholik = agamaStats['Katholik']?.total || 0;
+    const totalHindu = agamaStats['Hindu']?.total || 0;
+    const totalBuddha = agamaStats['Buddha']?.total || 0;
+    const totalKonghucu = agamaStats['Konghucu']?.total || 0;
+    const totalAgamaLainnya = (agamaStats['Lainnya']?.total || 0) + totalHindu + totalBuddha + totalKonghucu + totalKatholik;
+
+    const agamaRows: any[] = [
+      [1, 'Islam', agamaStats['Islam'].male, agamaStats['Islam'].female, totalIslam, totalStudents > 0 ? `${((totalIslam / totalStudents) * 100).toFixed(1)}%` : '0%'],
+      [2, 'Kristen (Protestan)', agamaStats['Kristen'].male, agamaStats['Kristen'].female, totalKristen, totalStudents > 0 ? `${((totalKristen / totalStudents) * 100).toFixed(1)}%` : '0%'],
+      [3, 'Lainnya (Katolik / Hindu / Buddha / Konghucu / Lainnya)', totalStudents - (agamaStats['Islam'].male + agamaStats['Kristen'].male), femaleStudents - (agamaStats['Islam'].female + agamaStats['Kristen'].female), totalAgamaLainnya, totalStudents > 0 ? `${((totalAgamaLainnya / totalStudents) * 100).toFixed(1)}%` : '0%'],
+      ['', 'TOTAL KESELURUHAN BERAGAMA', maleStudents, femaleStudents, totalStudents, '100%']
+    ];
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(30, 41, 59);
+    doc.text('REKAPITULASI PESERTA DIDIK BERDASARKAN AGAMA / KEPERCAYAAN', marginX, currentY);
+    currentY += 2;
+
+    autoTable(doc, {
+      startY: currentY,
+      head: [['No', 'Agama / Kepercayaan', 'L', 'P', 'Total', 'Persentase']],
+      body: agamaRows,
+      theme: 'grid',
+      headStyles: { fillColor: [5, 150, 105], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8, halign: 'center' },
+      bodyStyles: { fontSize: 8, textColor: [30, 41, 59], cellPadding: 2 },
+      columnStyles: {
+        0: { halign: 'center', cellWidth: 10 },
+        1: { cellWidth: 80 },
+        2: { halign: 'center', cellWidth: 18 },
+        3: { halign: 'center', cellWidth: 18 },
+        4: { halign: 'center', cellWidth: 22, fontStyle: 'bold' },
+        5: { halign: 'center', cellWidth: 26 },
+      },
+      didParseCell: (data) => {
+        if (data.row.index === agamaRows.length - 1) {
+          data.cell.styles.fontStyle = 'bold';
+          data.cell.styles.fillColor = [241, 245, 249];
+        }
+      },
+      margin: { left: marginX, right: marginX },
+    });
+
     currentY = (doc as any).lastAutoTable.finalY + 6;
 
     // SECTION III: REKAPITULASI DEMOGRAFI USIA 13-15 TAHUN
     // Check page break needed
-    if (currentY > 220) {
+    if (currentY > 210) {
       doc.addPage();
       currentY = 20;
     }

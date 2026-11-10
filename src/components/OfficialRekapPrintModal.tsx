@@ -118,6 +118,45 @@ export const OfficialRekapPrintModal: React.FC<OfficialRekapPrintModalProps> = (
     a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
   );
 
+  // Rekapitulasi Berdasarkan Agama (Islam, Kristen Protestan, Katolik, Hindu, Buddha, Konghucu, Lainnya)
+  const agamaStats: Record<string, { male: number; female: number; total: number }> = {
+    'Islam': { male: 0, female: 0, total: 0 },
+    'Kristen': { male: 0, female: 0, total: 0 },
+    'Katholik': { male: 0, female: 0, total: 0 },
+    'Hindu': { male: 0, female: 0, total: 0 },
+    'Buddha': { male: 0, female: 0, total: 0 },
+    'Konghucu': { male: 0, female: 0, total: 0 },
+    'Lainnya': { male: 0, female: 0, total: 0 },
+  };
+
+  activeStudents.forEach(s => {
+    const raw = (s.agama || '').trim().toLowerCase();
+    let key = 'Lainnya';
+    if (raw.includes('islam')) key = 'Islam';
+    else if (raw.includes('kristen') || raw.includes('protestan')) key = 'Kristen';
+    else if (raw.includes('katolik') || raw.includes('katholik')) key = 'Katholik';
+    else if (raw.includes('hindu')) key = 'Hindu';
+    else if (raw.includes('buddha') || raw.includes('budha')) key = 'Buddha';
+    else if (raw.includes('konghucu') || raw.includes('khonghucu')) key = 'Konghucu';
+    else if (raw) key = 'Lainnya';
+    else key = 'Islam'; // Default Dapodik fallback if empty
+
+    if (!agamaStats[key]) {
+      agamaStats[key] = { male: 0, female: 0, total: 0 };
+    }
+    if (s.jenisKelamin === 'L') agamaStats[key].male += 1;
+    else if (s.jenisKelamin === 'P') agamaStats[key].female += 1;
+    agamaStats[key].total += 1;
+  });
+
+  const totalIslam = agamaStats['Islam']?.total || 0;
+  const totalKristen = agamaStats['Kristen']?.total || 0;
+  const totalKatholik = agamaStats['Katholik']?.total || 0;
+  const totalHindu = agamaStats['Hindu']?.total || 0;
+  const totalBuddha = agamaStats['Buddha']?.total || 0;
+  const totalKonghucu = agamaStats['Konghucu']?.total || 0;
+  const totalAgamaLainnya = (agamaStats['Lainnya']?.total || 0) + totalHindu + totalBuddha + totalKonghucu + totalKatholik;
+
   // Demografi KK Usia 13-15 helper
   const checkIsPendudukPalu = (s: Student): boolean => {
     const cleanKk = String(s.noKk ?? '').replace(/\D/g, '');
@@ -444,9 +483,9 @@ export const OfficialRekapPrintModal: React.FC<OfficialRekapPrintModalProps> = (
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
                 <div className="p-2.5 rounded-xl border border-slate-200 bg-slate-50">
-                  <div className="text-[10px] font-bold text-slate-500 uppercase">Peserta Didik Aktif</div>
-                  <div className="text-lg font-black text-slate-900 font-mono mt-0.5">{activeStudents.length} <span className="text-[10px] font-normal text-slate-500">Siswa</span></div>
-                  <div className="text-[10px] text-slate-600 mt-0.5">L: {maleStudents} &bull; P: {femaleStudents}</div>
+                  <div className="text-[10px] font-bold text-slate-500 uppercase">Peserta Didik & Rombel</div>
+                  <div className="text-lg font-black text-slate-900 font-mono mt-0.5">{activeStudents.length} <span className="text-[10px] font-normal text-slate-500">Siswa ({sortedClassNames.length} Kelas)</span></div>
+                  <div className="text-[10px] text-slate-600 mt-0.5">Islam: {totalIslam} &bull; Kristen: {totalKristen} {totalAgamaLainnya > 0 ? `• Lain: ${totalAgamaLainnya}` : ''}</div>
                 </div>
 
                 <div className="p-2.5 rounded-xl border border-slate-200 bg-slate-50">
@@ -528,7 +567,7 @@ export const OfficialRekapPrintModal: React.FC<OfficialRekapPrintModalProps> = (
                   <tfoot>
                     <tr className="bg-slate-200 font-black text-slate-900 border-t-2 border-slate-400">
                       <td colSpan={3} className="py-2 px-3 text-right uppercase tracking-wider text-[11px] border-r border-slate-300">
-                        TOTAL KESELURUHAN PESERTA DIDIK:
+                        TOTAL KESELURUHAN KELAS ({sortedClassNames.length} ROMBEL):
                       </td>
                       <td className="py-2 px-3 text-center font-mono text-sky-900 border-r border-slate-300">{maleStudents}</td>
                       <td className="py-2 px-3 text-center font-mono text-rose-900 border-r border-slate-300">{femaleStudents}</td>
@@ -539,6 +578,89 @@ export const OfficialRekapPrintModal: React.FC<OfficialRekapPrintModalProps> = (
                     </tr>
                   </tfoot>
                 </table>
+              </div>
+
+              {/* Rekapitulasi Berdasarkan Agama (Islam, Kristen, dan Lainnya) */}
+              <div className="mt-4 pt-3 border-t border-slate-200">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-600 inline-block"></span>
+                    Rekapitulasi Peserta Didik Berdasarkan Agama
+                  </h4>
+                  <span className="text-[10px] font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                    Total {activeStudents.length} Siswa Terdata
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto border border-slate-300 rounded-xl">
+                  <table className="w-full text-left text-[11px] border-collapse">
+                    <thead>
+                      <tr className="bg-emerald-50/70 text-slate-800 font-bold border-b border-slate-300">
+                        <th className="py-1.5 px-2.5 text-center border-r border-slate-300 w-10">No</th>
+                        <th className="py-1.5 px-3 border-r border-slate-300">Agama / Kepercayaan</th>
+                        <th className="py-1.5 px-3 text-center border-r border-slate-300 text-sky-800 w-20">Laki-laki (L)</th>
+                        <th className="py-1.5 px-3 text-center border-r border-slate-300 text-rose-800 w-20">Perempuan (P)</th>
+                        <th className="py-1.5 px-3 text-center font-bold text-slate-900 border-r border-slate-300 bg-emerald-100/60 w-24">Jumlah</th>
+                        <th className="py-1.5 px-3 text-center w-28">Persentase (%)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      <tr className="hover:bg-slate-50">
+                        <td className="py-1.5 px-2.5 text-center font-mono text-slate-500 border-r border-slate-200">1</td>
+                        <td className="py-1.5 px-3 border-r border-slate-200 font-bold text-slate-900">Islam</td>
+                        <td className="py-1.5 px-3 text-center font-mono text-sky-700 border-r border-slate-200">{agamaStats['Islam'].male}</td>
+                        <td className="py-1.5 px-3 text-center font-mono text-rose-700 border-r border-slate-200">{agamaStats['Islam'].female}</td>
+                        <td className="py-1.5 px-3 text-center font-mono font-black text-slate-900 border-r border-slate-200 bg-slate-50">{totalIslam}</td>
+                        <td className="py-1.5 px-3 text-center font-mono text-[10px] text-slate-700">
+                          {activeStudents.length > 0 ? ((totalIslam / activeStudents.length) * 100).toFixed(1) : 0}%
+                        </td>
+                      </tr>
+                      <tr className="hover:bg-slate-50">
+                        <td className="py-1.5 px-2.5 text-center font-mono text-slate-500 border-r border-slate-200">2</td>
+                        <td className="py-1.5 px-3 border-r border-slate-200 font-bold text-slate-900">Kristen (Protestan)</td>
+                        <td className="py-1.5 px-3 text-center font-mono text-sky-700 border-r border-slate-200">{agamaStats['Kristen'].male}</td>
+                        <td className="py-1.5 px-3 text-center font-mono text-rose-700 border-r border-slate-200">{agamaStats['Kristen'].female}</td>
+                        <td className="py-1.5 px-3 text-center font-mono font-black text-slate-900 border-r border-slate-200 bg-slate-50">{totalKristen}</td>
+                        <td className="py-1.5 px-3 text-center font-mono text-[10px] text-slate-700">
+                          {activeStudents.length > 0 ? ((totalKristen / activeStudents.length) * 100).toFixed(1) : 0}%
+                        </td>
+                      </tr>
+                      <tr className="hover:bg-slate-50">
+                        <td className="py-1.5 px-2.5 text-center font-mono text-slate-500 border-r border-slate-200">3</td>
+                        <td className="py-1.5 px-3 border-r border-slate-200 font-semibold text-slate-800">
+                          Lainnya {totalKatholik > 0 || totalHindu > 0 || totalBuddha > 0 ? `(${[
+                            totalKatholik > 0 ? `Katolik: ${totalKatholik}` : '',
+                            totalHindu > 0 ? `Hindu: ${totalHindu}` : '',
+                            totalBuddha > 0 ? `Buddha: ${totalBuddha}` : '',
+                            totalKonghucu > 0 ? `Konghucu: ${totalKonghucu}` : '',
+                            (agamaStats['Lainnya']?.total || 0) > 0 ? `Lain: ${agamaStats['Lainnya'].total}` : '',
+                          ].filter(Boolean).join(', ')})` : ''}
+                        </td>
+                        <td className="py-1.5 px-3 text-center font-mono text-sky-700 border-r border-slate-200">
+                          {activeStudents.length - (agamaStats['Islam'].male + agamaStats['Kristen'].male)}
+                        </td>
+                        <td className="py-1.5 px-3 text-center font-mono text-rose-700 border-r border-slate-200">
+                          {femaleStudents - (agamaStats['Islam'].female + agamaStats['Kristen'].female)}
+                        </td>
+                        <td className="py-1.5 px-3 text-center font-mono font-black text-slate-900 border-r border-slate-200 bg-slate-50">{totalAgamaLainnya}</td>
+                        <td className="py-1.5 px-3 text-center font-mono text-[10px] text-slate-700">
+                          {activeStudents.length > 0 ? ((totalAgamaLainnya / activeStudents.length) * 100).toFixed(1) : 0}%
+                        </td>
+                      </tr>
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-slate-200 font-black text-slate-900 border-t-2 border-slate-400">
+                        <td colSpan={2} className="py-2 px-3 text-right uppercase tracking-wider text-[11px] border-r border-slate-300">
+                          TOTAL KESELURUHAN SISWA BERAGAMA:
+                        </td>
+                        <td className="py-2 px-3 text-center font-mono text-sky-900 border-r border-slate-300">{maleStudents}</td>
+                        <td className="py-2 px-3 text-center font-mono text-rose-900 border-r border-slate-300">{femaleStudents}</td>
+                        <td className="py-2 px-3 text-center font-mono font-black text-slate-950 bg-slate-300 border-r border-slate-300 text-xs">{activeStudents.length}</td>
+                        <td className="py-2 px-3 text-center font-mono text-[10px] font-bold text-slate-800">100.0%</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
               </div>
             </div>
 
